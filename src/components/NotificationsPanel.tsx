@@ -61,7 +61,16 @@ export default function NotificationsPanel({
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
           >
-            {notifications.map((item, index) => (
+            {notifications.length === 0 ? (
+              <View style={styles.emptyState}>
+                <Ionicons name="notifications-off-outline" size={28} color={colors.textMuted} />
+                <Text style={styles.emptyTitle}>No notifications yet</Text>
+                <Text style={styles.emptyBody}>
+                  New bookings, payments, and confirmations from your live site will show up here.
+                </Text>
+              </View>
+            ) : (
+              notifications.map((item, index) => (
               <Pressable
                 key={item.id}
                 style={[
@@ -87,7 +96,8 @@ export default function NotificationsPanel({
 
                 {item.unread ? <View style={styles.unreadDot} /> : null}
               </Pressable>
-            ))}
+              ))
+            )}
           </ScrollView>
         </View>
       </View>
@@ -150,6 +160,25 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingBottom: 8,
+    flexGrow: 1,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+    paddingVertical: 36,
+    gap: 8,
+  },
+  emptyTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  emptyBody: {
+    color: colors.textMuted,
+    fontSize: 13,
+    lineHeight: 18,
+    textAlign: 'center',
   },
   notificationRow: {
     flexDirection: 'row',

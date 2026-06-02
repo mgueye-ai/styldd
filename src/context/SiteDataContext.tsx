@@ -10,7 +10,7 @@ import { AppointmentDetail } from '../data/appointments';
 import { Client } from '../data/clients';
 import { CalendarEvent } from '../data/calendarEvents';
 import { Period } from '../data/periods';
-import { LinkedSite } from '../lib/linkedSites';
+import { SiteBookingRecord } from '../lib/siteData';
 import {
   getAppointmentById as findAppointmentById,
   getCalendarEventsForDateKey as findCalendarEventsForDateKey,
@@ -40,6 +40,7 @@ type SiteDataContextValue = {
   hasLinkedSite: boolean;
   businessLabel: string;
   appointments: AppointmentDetail[];
+  bookings: SiteBookingRecord[];
   clients: Client[];
   refresh: () => Promise<void>;
   getAppointmentById: (id: string) => AppointmentDetail | undefined;
@@ -96,6 +97,7 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
       hasLinkedSite: Boolean(snapshot.linkedSite?.table_name && user?.id),
       businessLabel: getLinkedBusinessLabel(snapshot),
       appointments: snapshot.appointments,
+      bookings: snapshot.bookings,
       clients: snapshot.clients,
       refresh,
       getAppointmentById: (id: string) => findAppointmentById(snapshot, id),

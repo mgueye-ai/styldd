@@ -1,18 +1,23 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type RefObject } from 'react';
 import {
   ActivityIndicator,
   Alert,
   Image,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
 import ServiceImage from '../ServiceImage';
 import { useServiceCatalog } from '../../context/ServiceCatalogContext';
-import { CatalogService } from '../../data/serviceCatalog';
+import { CatalogService, ServiceVenue } from '../../data/serviceCatalog';
 import { formatStylePrice } from '../../data/siteStyles';
 import { pickSiteImageFromLibrary } from '../../lib/pickSiteImage';
 import { colors } from '../../theme';
@@ -21,27 +26,185 @@ type StyleEditorCardProps = {
   service: CatalogService;
   busy: boolean;
   onBusyChange: (styleId: string | null) => void;
+  onFieldFocus: (fieldRef: View | null) => void;
 };
 
-function StyleEditorCard({ service, busy, onBusyChange }: StyleEditorCardProps) {
-  const {
-    getStyleMeta,
-    getPrice,
-    upsertStyle,
-    deleteStyle,
-    uploadStyleImage,
-  } = useServiceCatalog();
+type SiteStylesEditorProps = {
+  manageKeyboard?: boolean;
+};
+
+const VENUE_COLORS: Record<ServiceVenue, { bg: string; border: string; text: string }> = {
+  studio: {
+    bg: colors.accentPinkMuted,
+    border: colors.accentPinkBorder,
+    text: colors.accentPink,
+  },
+  house: {
+    bg: colors.accentOrangeBadge,
+    border: 'rgba(232, 135, 42, 0.35)',
+    text: colors.accentOrange,
+  },
+  kids: {
+    bg: 'rgba(245, 185, 66, 0.14)',
+    border: 'rgba(245, 185, 66, 0.35)',
+    text: colors.accentGold,
+  },
+};
+
+const PHOTO_WIDTH = 128;
+
+function venueColors(venue: ServiceVenue) {
+  return VENUE_COLORS[venue] ?? VENUE_COLORS.studio;
+}
+
+function VenuePill({ venue, label }: { venue: ServiceVenue; label: string }) {
+  const tone = venueColors(venue);
+  return (
+    <View style={[styles.venuePill, { backgroundColor: tone.bg, borderColor: tone.border }]}>
+      <Text style={[styles.venuePillText, { color: tone.text }]}>{label}</Text>
+    </View>
+  );
+}
+
+function StylePill({
+  service,
+  selected,
+  onPress,
+}: {
+  service: CatalogService;
+  selected: boolean;
+  onPress: () => void;
+}) {
+  const { getPrice, getStyleMeta } = useServiceCatalog();
+  const meta = getStyleMeta(service.id);
+  const title = meta?.title ?? service.name;
+  const price = getPrice(service.id);
+  const tone = venueColors(service.venue);
+
+  return (
+    <Pressable
+      style={[
+        styles.stylePill,
+        selected && styles.stylePillSelected,
+        selected && { borderColor: tone.border, backgroundColor: tone.bg },
+      ]}
+      onPress={onPress}
+    >
+      <ServiceImage styleId={service.id} size={36} radius={18} />
+      <View style={styles.stylePillCopy}>
+        <Text style={styles.stylePillTitle} numberOfLines={1}>
+          {title}
+        </Text>
+        <Text style={[styles.stylePillPrice, { color: tone.text }]}>
+          {formatStylePrice(price)}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
+function StylePhoto({
+  styleId,
+  localUri,
+  onPress,
+  disabled,
+  busy,
+  placeholder,
+}: {
+  styleId?: string;
+  localUri?: string | null;
+  onPress: () => void;
+  disabled?: boolean;
+  busy?: boolean;
+  placeholder?: boolean;
+}) {
+  const { getCoverUrl } = useServiceCatalog();
+  const coverUrl = styleId ? getCoverUrl(styleId) : null;
+  const uri = localUri ?? coverUrl;
+
+  return (
+    <Pressable style={styles.photoArea} onPress={onPress} disabled={disabled || busy}>
+      {uri ? (
+        <Image source={{ uri }} style={styles.photoImage} resizeMode="cover" />
+      ) : (
+        <View style={[styles.photoImage, styles.photoPlaceholder]}>
+          <Ionicons name="image-outline" size={24} color={colors.textMuted} />
+          <Text style={styles.photoPlaceholderText}>
+            {placeholder ? 'Add photo' : 'Photo'}
+          </Text>
+        </View>
+      )}
+      {!placeholder && (
+        <View style={styles.photoOverlay}>
+          {busy ? (
+            <ActivityIndicator color="#fff" size="small" />
+          ) : (
+            <Ionicons name="camera-outline" size={14} color="#fff" />
+          )}
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+function Field({
+  label,
+  value,
+  onChangeText,
+  placeholder,
+  multiline,
+  keyboardType,
+  editable = true,
+  onFocus,
+  fieldRef,
+}: {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder?: string;
+  multiline?: boolean;
+  keyboardType?: 'default' | 'decimal-pad';
+  editable?: boolean;
+  onFocus?: () => void;
+  fieldRef?: RefObject<View | null>;
+}) {
+  return (
+    <View ref={fieldRef} style={styles.field} collapsable={false}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput
+        style={[styles.input, multiline && styles.inputMultiline]}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textMuted}
+        multiline={multiline}
+        keyboardType={keyboardType}
+        editable={editable}
+        onFocus={onFocus}
+      />
+    </View>
+  );
+}
+
+function StyleEditorPanel({ service, busy, onBusyChange, onFieldFocus }: StyleEditorCardProps) {
+  const { getStyleMeta, getPrice, upsertStyle, deleteStyle, uploadStyleImage } = useServiceCatalog();
 
   const meta = getStyleMeta(service.id);
   const [title, setTitle] = useState(meta?.title ?? service.name);
   const [description, setDescription] = useState(meta?.description ?? service.description ?? '');
   const [price, setPrice] = useState(String(getPrice(service.id) || ''));
   const [localImageUri, setLocalImageUri] = useState<string | null>(null);
+  const [savedFlash, setSavedFlash] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flashTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextSave = useRef(true);
   const lastSavedSnapshot = useRef('');
+  const titleRef = useRef<View>(null);
+  const descriptionRef = useRef<View>(null);
+  const priceRef = useRef<View>(null);
 
   const snapshot = `${title}|${description}|${price}`;
+  const parsedPrice = Number(price.replace(/[^0-9.]/g, '')) || 0;
 
   useEffect(() => {
     setTitle(meta?.title ?? service.name);
@@ -53,7 +216,6 @@ function StyleEditorCard({ service, busy, onBusyChange }: StyleEditorCardProps) 
   }, [service.id]);
 
   const saveStyle = useCallback(async () => {
-    const parsedPrice = Number(price.replace(/[^0-9.]/g, ''));
     onBusyChange(service.id);
     try {
       await upsertStyle({
@@ -64,22 +226,22 @@ function StyleEditorCard({ service, busy, onBusyChange }: StyleEditorCardProps) 
         category: meta?.category ?? service.category,
         venue: service.venue,
       });
+      setSavedFlash(true);
+      if (flashTimer.current) clearTimeout(flashTimer.current);
+      flashTimer.current = setTimeout(() => setSavedFlash(false), 1800);
     } catch (err) {
       Alert.alert('Save failed', err instanceof Error ? err.message : 'Could not save style.');
     } finally {
       onBusyChange(null);
     }
-  }, [description, meta?.category, onBusyChange, price, service.category, service.id, service.venue, title, upsertStyle]);
+  }, [description, meta?.category, onBusyChange, parsedPrice, service.category, service.id, service.venue, title, upsertStyle]);
 
   useEffect(() => {
     if (skipNextSave.current) {
       skipNextSave.current = false;
       return;
     }
-
-    if (snapshot === lastSavedSnapshot.current) {
-      return;
-    }
+    if (snapshot === lastSavedSnapshot.current) return;
 
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
@@ -93,6 +255,13 @@ function StyleEditorCard({ service, busy, onBusyChange }: StyleEditorCardProps) 
     };
   }, [snapshot, saveStyle]);
 
+  useEffect(
+    () => () => {
+      if (flashTimer.current) clearTimeout(flashTimer.current);
+    },
+    [],
+  );
+
   const pickImage = async () => {
     const picked = await pickSiteImageFromLibrary(
       'Allow photo library access to upload style images.',
@@ -101,7 +270,6 @@ function StyleEditorCard({ service, busy, onBusyChange }: StyleEditorCardProps) 
 
     setLocalImageUri(picked.uri);
     onBusyChange(service.id);
-
     try {
       await uploadStyleImage(service.id, picked.uri, picked.mimeType);
     } catch (err) {
@@ -113,7 +281,7 @@ function StyleEditorCard({ service, busy, onBusyChange }: StyleEditorCardProps) 
   };
 
   const confirmDelete = () => {
-    Alert.alert('Delete style', `Remove "${title}" from your menu?`, [
+    Alert.alert('Delete style', `Remove "${title.trim() || service.name}" from your menu?`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -133,124 +301,236 @@ function StyleEditorCard({ service, busy, onBusyChange }: StyleEditorCardProps) 
   };
 
   return (
-    <View style={styles.card}>
-      <View style={styles.cardHeader}>
-        <Pressable style={styles.imageButton} onPress={pickImage} disabled={busy}>
-          {localImageUri ? (
-            <Image source={{ uri: localImageUri }} style={styles.thumbnail} />
-          ) : (
-            <ServiceImage styleId={service.id} size={72} radius={14} />
-          )}
-          <View style={styles.imageOverlay}>
-            <Ionicons name="camera-outline" size={16} color="#fff" />
+    <View style={styles.panel}>
+      <View style={styles.panelHeader}>
+        <VenuePill venue={service.venue} label={service.venueLabel} />
+        {savedFlash ? (
+          <View style={styles.savedPill}>
+            <Ionicons name="checkmark-circle" size={14} color={colors.accentPink} />
+            <Text style={styles.savedPillText}>Saved</Text>
           </View>
-        </Pressable>
-        <View style={styles.cardHeaderText}>
-          <Text style={styles.cardMeta}>{service.venueLabel}</Text>
-          {busy ? <ActivityIndicator size="small" color={colors.accentPink} /> : null}
-        </View>
-        <Pressable onPress={confirmDelete} hitSlop={8} disabled={busy}>
+        ) : busy ? (
+          <ActivityIndicator size="small" color={colors.accentPink} />
+        ) : null}
+        <Pressable onPress={confirmDelete} hitSlop={8} disabled={busy} style={styles.deleteIcon}>
           <Ionicons name="trash-outline" size={18} color={colors.textMuted} />
         </Pressable>
       </View>
 
-      <Field label="Title" value={title} onChangeText={setTitle} placeholder="Knotless braids" />
-      <Field
-        label="Description"
-        value={description}
-        onChangeText={setDescription}
-        placeholder="Tell clients what is included"
-        multiline
-      />
-      <Field
-        label="Price"
-        value={price}
-        onChangeText={setPrice}
-        placeholder="150"
-        keyboardType="decimal-pad"
-      />
-      <Text style={styles.priceHint}>
-        {formatStylePrice(Number(price.replace(/[^0-9.]/g, '')) || 0)}
-      </Text>
+      <View style={styles.panelRow}>
+        <StylePhoto
+          styleId={service.id}
+          localUri={localImageUri}
+          onPress={pickImage}
+          busy={busy}
+        />
+
+        <View style={styles.fieldsColumn}>
+          <Field
+            label="Title"
+            value={title}
+            onChangeText={setTitle}
+            placeholder="Knotless braids"
+            fieldRef={titleRef}
+            onFocus={() => onFieldFocus(titleRef.current)}
+          />
+          <Field
+            label="Description"
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Tell clients what is included"
+            multiline
+            fieldRef={descriptionRef}
+            onFocus={() => onFieldFocus(descriptionRef.current)}
+          />
+          <Field
+            label="Price"
+            value={price}
+            onChangeText={setPrice}
+            placeholder="150"
+            keyboardType="decimal-pad"
+            fieldRef={priceRef}
+            onFocus={() => onFieldFocus(priceRef.current)}
+          />
+        </View>
+      </View>
     </View>
   );
 }
 
-function Field({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  multiline,
-  keyboardType,
+function AddStylePanel({
+  onAdd,
+  isAdding,
+  onFieldFocus,
 }: {
-  label: string;
-  value: string;
-  onChangeText: (value: string) => void;
-  placeholder?: string;
-  multiline?: boolean;
-  keyboardType?: 'default' | 'decimal-pad';
+  onAdd: (input: { title: string; description: string; price: number }, imageUri: string | null, mimeType: string | null) => Promise<void>;
+  isAdding: boolean;
+  onFieldFocus: (fieldRef: View | null) => void;
 }) {
-  return (
-    <View style={styles.field}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput
-        style={[styles.input, multiline && styles.inputMultiline]}
-        value={value}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textMuted}
-        multiline={multiline}
-        keyboardType={keyboardType}
-      />
-    </View>
-  );
-}
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [price, setPrice] = useState('');
+  const [imageUri, setImageUri] = useState<string | null>(null);
+  const [imageMimeType, setImageMimeType] = useState<string | null>(null);
+  const titleRef = useRef<View>(null);
+  const descriptionRef = useRef<View>(null);
+  const priceRef = useRef<View>(null);
 
-export default function SiteStylesEditor() {
-  const { catalogServices, isLoading, error, upsertStyle, isSaving } = useServiceCatalog();
-  const [busyId, setBusyId] = useState<string | null>(null);
-  const [newTitle, setNewTitle] = useState('');
-  const [newDescription, setNewDescription] = useState('');
-  const [newPrice, setNewPrice] = useState('');
-  const [newImageUri, setNewImageUri] = useState<string | null>(null);
-  const [newImageMimeType, setNewImageMimeType] = useState<string | null>(null);
-  const [isAdding, setIsAdding] = useState(false);
+  const parsedPrice = Number(price.replace(/[^0-9.]/g, '')) || 0;
+  const canAdd = title.trim().length > 0 && !isAdding;
 
-  const pickNewImage = async () => {
+  const pickImage = async () => {
     const picked = await pickSiteImageFromLibrary(
       'Allow photo library access to upload style images.',
     );
     if (!picked) return;
-    setNewImageUri(picked.uri);
-    setNewImageMimeType(picked.mimeType ?? null);
+    setImageUri(picked.uri);
+    setImageMimeType(picked.mimeType ?? null);
   };
 
-  const addStyle = async () => {
-    const parsedPrice = Number(newPrice.replace(/[^0-9.]/g, ''));
-    if (!newTitle.trim()) {
-      Alert.alert('Title required', 'Give your style a name before adding it.');
+  const submit = async () => {
+    if (!canAdd) return;
+    try {
+      await onAdd(
+        { title: title.trim(), description: description.trim(), price: parsedPrice },
+        imageUri,
+        imageMimeType,
+      );
+      setTitle('');
+      setDescription('');
+      setPrice('');
+      setImageUri(null);
+      setImageMimeType(null);
+    } catch {
+      // parent alerts
+    }
+  };
+
+  return (
+    <View style={styles.panel}>
+      <VenuePill venue="studio" label="New style" />
+
+      <View style={styles.panelRow}>
+        <StylePhoto
+          localUri={imageUri}
+          onPress={pickImage}
+          disabled={isAdding}
+          placeholder
+        />
+
+        <View style={styles.fieldsColumn}>
+          <Field
+            label="Title"
+            value={title}
+            onChangeText={setTitle}
+            placeholder="Silk press"
+            editable={!isAdding}
+            fieldRef={titleRef}
+            onFocus={() => onFieldFocus(titleRef.current)}
+          />
+          <Field
+            label="Description"
+            value={description}
+            onChangeText={setDescription}
+            placeholder="What clients should know"
+            multiline
+            editable={!isAdding}
+            fieldRef={descriptionRef}
+            onFocus={() => onFieldFocus(descriptionRef.current)}
+          />
+          <Field
+            label="Price"
+            value={price}
+            onChangeText={setPrice}
+            placeholder="120"
+            keyboardType="decimal-pad"
+            editable={!isAdding}
+            fieldRef={priceRef}
+            onFocus={() => onFieldFocus(priceRef.current)}
+          />
+
+          <Pressable
+            style={[styles.addButton, !canAdd && styles.addButtonDisabled]}
+            onPress={submit}
+            disabled={!canAdd}
+          >
+            {isAdding ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <>
+                <Ionicons name="add" size={18} color="#fff" />
+                <Text style={styles.addButtonText}>Add style</Text>
+              </>
+            )}
+          </Pressable>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function StylesEditorBody({
+  onFieldFocus,
+}: {
+  onFieldFocus: (fieldRef: View | null) => void;
+}) {
+  const { catalogServices, isLoading, error, upsertStyle, isSaving } = useServiceCatalog();
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [isAdding, setIsAdding] = useState(false);
+  const [selectedId, setSelectedId] = useState<string | 'new' | null>(null);
+  const { width } = useWindowDimensions();
+  const panelScrollRef = useRef<ScrollView>(null);
+  const panelWidth = Math.max(width - 40, 320);
+  const panelStride = panelWidth + 12;
+
+  useEffect(() => {
+    if (selectedId === 'new') return;
+    if (selectedId && catalogServices.some((service) => service.id === selectedId)) return;
+    if (catalogServices.length > 0) {
+      setSelectedId(catalogServices[0].id);
+    } else {
+      setSelectedId('new');
+    }
+  }, [catalogServices, selectedId]);
+
+  useEffect(() => {
+    if (selectedId === null) return;
+
+    const index =
+      selectedId === 'new'
+        ? 0
+        : catalogServices.findIndex((service) => service.id === selectedId) + 1;
+
+    if (index < 0) return;
+
+    panelScrollRef.current?.scrollTo({
+      x: index * panelStride,
+      animated: true,
+    });
+  }, [catalogServices, panelStride, selectedId]);
+
+  const handlePanelScrollEnd = (offsetX: number) => {
+    const index = Math.round(offsetX / panelStride);
+    if (index <= 0) {
+      setSelectedId('new');
       return;
     }
+    const service = catalogServices[index - 1];
+    if (service) setSelectedId(service.id);
+  };
 
+  const handleAdd = async (
+    input: { title: string; description: string; price: number },
+    imageUri: string | null,
+    mimeType: string | null,
+  ) => {
     setIsAdding(true);
     try {
-      await upsertStyle(
-        {
-          title: newTitle,
-          description: newDescription,
-          price: Number.isFinite(parsedPrice) ? parsedPrice : 0,
-        },
-        newImageUri,
-        newImageMimeType,
-      );
-      setNewTitle('');
-      setNewDescription('');
-      setNewPrice('');
-      setNewImageUri(null);
-      setNewImageMimeType(null);
+      const id = await upsertStyle(input, imageUri, mimeType);
+      setSelectedId(id);
     } catch (err) {
       Alert.alert('Add failed', err instanceof Error ? err.message : 'Could not add style.');
+      throw err;
     } finally {
       setIsAdding(false);
     }
@@ -272,65 +552,159 @@ export default function SiteStylesEditor() {
   return (
     <View>
       <Text style={styles.helper}>
-        Add styles with photos, titles, descriptions, and prices. Changes save automatically and
-        appear in your site preview.
+        Swipe the pills to pick a style. Tap fields to edit — the view moves up for the keyboard.
       </Text>
 
-      <Text style={styles.groupTitle}>Add a style</Text>
-      <View style={styles.card}>
-        <Pressable style={styles.newImageButton} onPress={pickNewImage} disabled={isAdding}>
-          {newImageUri ? (
-            <Image source={{ uri: newImageUri }} style={styles.newThumbnail} />
-          ) : (
-            <View style={styles.newImagePlaceholder}>
-              <Ionicons name="image-outline" size={24} color={colors.textMuted} />
-              <Text style={styles.newImageText}>Add photo</Text>
-            </View>
-          )}
-        </Pressable>
-        <Field label="Title" value={newTitle} onChangeText={setNewTitle} placeholder="Silk press" />
-        <Field
-          label="Description"
-          value={newDescription}
-          onChangeText={setNewDescription}
-          placeholder="What clients should know"
-          multiline
-        />
-        <Field
-          label="Price"
-          value={newPrice}
-          onChangeText={setNewPrice}
-          placeholder="120"
-          keyboardType="decimal-pad"
-        />
+      <Text style={styles.groupTitle}>Your styles</Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.pillRow}
+        keyboardShouldPersistTaps="handled"
+      >
         <Pressable
-          style={[styles.addButton, (isAdding || isSaving) && styles.addButtonDisabled]}
-          onPress={addStyle}
-          disabled={isAdding || isSaving}
+          style={[styles.addPill, selectedId === 'new' && styles.addPillSelected]}
+          onPress={() => setSelectedId('new')}
         >
-          <Ionicons name="add" size={18} color="#fff" />
-          <Text style={styles.addButtonText}>{isAdding ? 'Adding…' : 'Add style'}</Text>
+          <Ionicons
+            name="add"
+            size={18}
+            color={selectedId === 'new' ? colors.accentPink : colors.textMuted}
+          />
+          <Text style={[styles.addPillText, selectedId === 'new' && styles.addPillTextSelected]}>
+            Add
+          </Text>
         </Pressable>
-      </View>
-
-      <Text style={styles.groupTitle}>Your menu ({catalogServices.length})</Text>
-      {catalogServices.length === 0 ? (
-        <Text style={styles.empty}>No styles yet. Add your first one above.</Text>
-      ) : (
-        catalogServices.map((service) => (
-          <StyleEditorCard
+        {catalogServices.map((service) => (
+          <StylePill
             key={service.id}
             service={service}
-            busy={busyId === service.id}
-            onBusyChange={setBusyId}
+            selected={selectedId === service.id}
+            onPress={() => setSelectedId(service.id)}
           />
-        ))
-      )}
+        ))}
+      </ScrollView>
+
+      <View style={styles.legendRow}>
+        <VenuePill venue="studio" label="Studio" />
+        <VenuePill venue="house" label="House call" />
+        <VenuePill venue="kids" label="Kids" />
+      </View>
+
+      <Text style={styles.groupTitle}>Edit style</Text>
+
+      <ScrollView
+        ref={panelScrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        pagingEnabled
+        decelerationRate="fast"
+        snapToInterval={panelStride}
+        snapToAlignment="start"
+        contentContainerStyle={styles.panelCarousel}
+        keyboardShouldPersistTaps="handled"
+        onMomentumScrollEnd={(event) =>
+          handlePanelScrollEnd(event.nativeEvent.contentOffset.x)
+        }
+      >
+        <View style={[styles.panelSlide, { width: panelWidth }]}>
+          <AddStylePanel onAdd={handleAdd} isAdding={isAdding || isSaving} onFieldFocus={onFieldFocus} />
+        </View>
+        {catalogServices.map((service) => (
+          <View key={service.id} style={[styles.panelSlide, { width: panelWidth }]}>
+            <StyleEditorPanel
+              service={service}
+              busy={busyId === service.id}
+              onBusyChange={setBusyId}
+              onFieldFocus={onFieldFocus}
+            />
+          </View>
+        ))}
+      </ScrollView>
+
+      {catalogServices.length === 0 ? (
+        <Text style={styles.emptyHint}>Swipe left after adding your first style.</Text>
+      ) : null}
     </View>
   );
 }
 
+export default function SiteStylesEditor({ manageKeyboard = false }: SiteStylesEditorProps) {
+  const scrollRef = useRef<ScrollView>(null);
+  const contentRef = useRef<View>(null);
+  const [keyboardPadding, setKeyboardPadding] = useState(0);
+
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (event) => {
+      setKeyboardPadding(event.endCoordinates.height + 24);
+    });
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      setKeyboardPadding(24);
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const scrollToField = useCallback((fieldRef: View | null) => {
+    if (!fieldRef || !contentRef.current || !scrollRef.current) return;
+
+    setTimeout(() => {
+      fieldRef.measureLayout(
+        contentRef.current as View,
+        (_x, y, _width, height) => {
+          scrollRef.current?.scrollTo({
+            y: Math.max(0, y + height - 220),
+            animated: true,
+          });
+        },
+        () => undefined,
+      );
+    }, Platform.OS === 'ios' ? 100 : 250);
+  }, []);
+
+  const body = <StylesEditorBody onFieldFocus={scrollToField} />;
+
+  if (!manageKeyboard) {
+    return body;
+  }
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.keyboardRoot}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
+    >
+      <ScrollView
+        ref={scrollRef}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: keyboardPadding || 40 },
+        ]}
+      >
+        <View ref={contentRef} collapsable={false}>
+          {body}
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
 const styles = StyleSheet.create({
+  keyboardRoot: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+  },
   centered: {
     alignItems: 'center',
     gap: 10,
@@ -356,12 +730,93 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 10,
   },
-  empty: {
+  pillRow: {
+    gap: 10,
+    paddingBottom: 4,
+    paddingRight: 4,
+  },
+  stylePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingRight: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    backgroundColor: colors.card,
+    maxWidth: 200,
+  },
+  stylePillSelected: {
+    borderWidth: 1.5,
+  },
+  stylePillCopy: {
+    flexShrink: 1,
+    gap: 2,
+  },
+  stylePillTitle: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  stylePillPrice: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  addPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    borderStyle: 'dashed',
+    backgroundColor: colors.card,
+  },
+  addPillSelected: {
+    borderColor: colors.accentPinkBorder,
+    backgroundColor: colors.accentPinkMuted,
+    borderStyle: 'solid',
+  },
+  addPillText: {
     color: colors.textMuted,
     fontSize: 14,
-    marginBottom: 20,
+    fontWeight: '600',
   },
-  card: {
+  addPillTextSelected: {
+    color: colors.accentPink,
+  },
+  legendRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  venuePill: {
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  venuePillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
+  panelCarousel: {
+    gap: 12,
+    paddingRight: 20,
+  },
+  panelSlide: {
+    flexShrink: 0,
+  },
+  panel: {
     backgroundColor: colors.card,
     borderRadius: 16,
     borderWidth: 1,
@@ -369,93 +824,93 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 12,
   },
-  cardHeader: {
+  panelHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  panelRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     gap: 12,
-    marginBottom: 10,
   },
-  cardHeaderText: {
+  fieldsColumn: {
     flex: 1,
+    minWidth: 0,
+  },
+  savedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 4,
+    marginRight: 'auto',
   },
-  cardMeta: {
-    color: colors.textMuted,
+  savedPillText: {
+    color: colors.accentPink,
     fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
+    fontWeight: '700',
   },
-  imageButton: {
+  deleteIcon: {
+    marginLeft: 'auto',
+  },
+  photoArea: {
+    width: PHOTO_WIDTH,
+    aspectRatio: 4 / 5,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
     position: 'relative',
+    flexShrink: 0,
   },
-  imageOverlay: {
+  photoImage: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  photoPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  photoPlaceholderText: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+    textAlign: 'center',
+    paddingHorizontal: 8,
+  },
+  photoOverlay: {
     position: 'absolute',
-    right: 4,
-    bottom: 4,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
+    right: 8,
+    bottom: 8,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: 'rgba(0,0,0,0.55)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  thumbnail: {
-    width: 72,
-    height: 72,
-    borderRadius: 14,
-  },
   field: {
-    marginBottom: 10,
+    marginBottom: 8,
   },
   fieldLabel: {
     color: colors.textMuted,
-    fontSize: 12,
-    marginBottom: 6,
+    fontSize: 11,
+    marginBottom: 4,
   },
   input: {
     borderWidth: 1,
     borderColor: colors.cardBorder,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
     color: colors.text,
-    fontSize: 15,
+    fontSize: 14,
     backgroundColor: colors.background,
   },
   inputMultiline: {
-    minHeight: 80,
+    minHeight: 64,
     textAlignVertical: 'top',
-  },
-  priceHint: {
-    color: colors.accentPink,
-    fontSize: 13,
-    fontWeight: '600',
-    marginTop: -4,
-  },
-  newImageButton: {
-    marginBottom: 12,
-  },
-  newThumbnail: {
-    width: '100%',
-    height: 160,
-    borderRadius: 14,
-  },
-  newImagePlaceholder: {
-    height: 120,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    backgroundColor: colors.background,
-  },
-  newImageText: {
-    color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '600',
   },
   addButton: {
     marginTop: 4,
@@ -464,15 +919,21 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     backgroundColor: colors.accentPink,
-    borderRadius: 12,
-    paddingVertical: 12,
+    borderRadius: 10,
+    paddingVertical: 10,
   },
   addButtonDisabled: {
     opacity: 0.6,
   },
   addButtonText: {
     color: '#fff',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
+  },
+  emptyHint: {
+    color: colors.textMuted,
+    fontSize: 13,
+    marginTop: 8,
+    textAlign: 'center',
   },
 });

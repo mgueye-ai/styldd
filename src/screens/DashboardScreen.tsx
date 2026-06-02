@@ -12,6 +12,7 @@ import ServiceImage from '../components/ServiceImage';
 import { Period } from '../data/periods';
 import { usePrivacyMode } from '../context/PrivacyContext';
 import { useSiteData } from '../context/SiteDataContext';
+import { buildNotificationsFromBookings } from '../lib/notifications';
 import { DashboardStackParamList } from '../navigation/DashboardNavigator';
 import { colors } from '../theme';
 import { maskMoney } from '../utils/money';
@@ -41,38 +42,7 @@ function toDashboardAppointment(appointment: import('../data/appointments').Appo
   };
 }
 
-const INITIAL_NOTIFICATIONS: AppNotification[] = [
-  {
-    id: '1',
-    title: 'New booking',
-    body: 'Aaliyah Johnson booked Fulani Braids for today at 4 PM.',
-    time: '12m ago',
-    icon: 'calendar-outline',
-    unread: true,
-  },
-  {
-    id: '2',
-    title: 'Payment received',
-    body: 'You received $220 from Boho Braids with Aaliyah Johnson.',
-    time: '2h ago',
-    icon: 'card-outline',
-    unread: true,
-  },
-  {
-    id: '3',
-    title: 'Booking confirmed',
-    body: 'Destiny Williams confirmed her appointment for Friday at 11 AM.',
-    time: 'Yesterday',
-    icon: 'checkmark-circle-outline',
-  },
-  {
-    id: '4',
-    title: 'Site visit',
-    body: 'Someone viewed your booking page 5 times today.',
-    time: 'Yesterday',
-    icon: 'globe-outline',
-  },
-];
+const MONTH_VALUE = 0;
 
 function JobsProgressBar({ progress }: { progress: number }) {
   return (
@@ -147,11 +117,9 @@ function AppointmentCard({
   );
 }
 
-const MONTH_VALUE = 0;
-
 export default function DashboardScreen({ navigation }: Props) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [notifications, setNotifications] = useState(INITIAL_NOTIFICATIONS);
+  const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set());
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('month');
   const [displayValue, setDisplayValue] = useState(MONTH_VALUE);
   const { privacyMode } = usePrivacyMode();
@@ -159,11 +127,21 @@ export default function DashboardScreen({ navigation }: Props) {
     businessLabel,
     hasLinkedSite,
     isLoading,
+    bookings,
     getRevenueForPeriod,
     getTodayJobStats,
     getUpcomingAppointments,
     getCompletedAppointments,
   } = useSiteData();
+
+  const notifications = useMemo<AppNotification[]>(() => {
+    if (!hasLinkedSite) return [];
+
+    return buildNotificationsFromBookings(bookings).map((item) => ({
+      ...item,
+      unread: !readNotificationIds.has(item.id),
+    }));
+  }, [bookings, hasLinkedSite, readNotificationIds]);
 
   const revenueValue = getRevenueForPeriod(selectedPeriod);
   const jobStats = getTodayJobStats();
@@ -212,13 +190,15 @@ export default function DashboardScreen({ navigation }: Props) {
   );
 
   const markNotificationRead = (id: string) => {
-    setNotifications((current) =>
-      current.map((item) => (item.id === id ? { ...item, unread: false } : item)),
-    );
+    setReadNotificationIds((current) => new Set(current).add(id));
   };
 
   const markAllNotificationsRead = () => {
-    setNotifications((current) => current.map((item) => ({ ...item, unread: false })));
+    setReadNotificationIds((current) => {
+      const next = new Set(current);
+      notifications.forEach((item) => next.add(item.id));
+      return next;
+    });
   };
 
   return (

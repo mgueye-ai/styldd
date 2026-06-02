@@ -18,8 +18,7 @@ type MenuItem = {
 };
 
 const BUSINESS_MENU_LIVE: MenuItem[] = [
-  { label: 'Prices', icon: 'pricetag-outline', route: 'Prices' },
-  { label: 'Style photos', icon: 'images-outline', route: 'StylePhotos' },
+  { label: 'Styles', icon: 'cut-outline', route: 'Styles' },
   { label: 'Working hours', icon: 'time-outline', route: 'WorkingHours' },
   { label: 'Schedule', icon: 'calendar-outline', route: 'Schedule' },
   { label: 'Add appointment', icon: 'add-circle-outline', route: 'AddAppointment' },
@@ -28,7 +27,6 @@ const BUSINESS_MENU_LIVE: MenuItem[] = [
 const BUSINESS_MENU_VIEW: MenuItem[] = [
   { label: 'Stats', icon: 'stats-chart-outline', route: 'BusinessStats' },
   { label: 'Calendar', icon: 'calendar-clear-outline', route: 'BusinessCalendar' },
-  { label: 'Email previews', icon: 'mail-open-outline', route: 'EmailPreviews' },
 ];
 
 function StatCard({
