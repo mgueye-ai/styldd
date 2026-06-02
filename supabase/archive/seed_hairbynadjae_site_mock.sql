@@ -1,0 +1,192 @@
+-- Mock bookings + inquiries for hairbynadjae_site (Styld app demo data)
+
+insert into public.hairbynadjae_site (record_type, record_key, data, created_at, updated_at)
+values
+  (
+    'booking',
+    null,
+    jsonb_build_object(
+      'full_name', 'Aaliyah Johnson',
+      'phone', '(860) 555-0142',
+      'email', 'aaliyah.johnson@email.com',
+      'style_id', 'studio-fulani-one',
+      'style_name', 'Fulani Braids',
+      'hair_length', 'Medium',
+      'hair_option', '4C Natural',
+      'prewash', 'Yes',
+      'appointment_date', '2026-05-27',
+      'appointment_slot', '4:00 PM',
+      'notes', 'Client wants two small beads at the end of each braid. Bring extra rubber bands.',
+      'estimated_total', 180,
+      'deposit_amount', 50,
+      'payment_status', 'paid',
+      'booking_status', 'confirmed',
+      'appointment_starts_at', '2026-05-27T20:00:00+00:00',
+      'duration_minutes', 120,
+      'service_address', 'Norwich, CT',
+      'source', 'website'
+    ),
+    now(),
+    now()
+  ),
+  (
+    'booking',
+    null,
+    jsonb_build_object(
+      'full_name', 'Aaliyah Johnson',
+      'phone', '(860) 555-0142',
+      'email', 'aaliyah.johnson@email.com',
+      'style_id', 'studio-boho-md',
+      'style_name', 'Boho Braids',
+      'hair_length', 'Medium',
+      'hair_option', '4C Natural',
+      'prewash', 'Yes',
+      'appointment_date', '2026-05-27',
+      'appointment_slot', '1:30 PM',
+      'notes', 'Reference photo sent via Instagram DM. Waist-length bohemian style.',
+      'estimated_total', 220,
+      'deposit_amount', 60,
+      'payment_status', 'paid',
+      'booking_status', 'completed',
+      'appointment_starts_at', '2026-05-27T17:30:00+00:00',
+      'duration_minutes', 120,
+      'service_address', 'Norwich, CT',
+      'source', 'website'
+    ),
+    now(),
+    now()
+  ),
+  (
+    'booking',
+    null,
+    jsonb_build_object(
+      'full_name', 'Destiny Williams',
+      'phone', '(860) 555-0198',
+      'email', 'destiny.williams@email.com',
+      'style_id', 'studio-wig-pony',
+      'style_name', 'Quick Weave',
+      'hair_length', 'Short',
+      'hair_option', '3B Curly',
+      'prewash', 'No',
+      'appointment_date', '2026-05-27',
+      'appointment_slot', '12:00 PM',
+      'notes', 'Short bob style. Client prefers no glue near hairline.',
+      'estimated_total', 130,
+      'deposit_amount', 0,
+      'payment_status', 'paid',
+      'booking_status', 'completed',
+      'appointment_starts_at', '2026-05-27T16:00:00+00:00',
+      'duration_minutes', 60,
+      'service_address', 'New London, CT',
+      'source', 'website'
+    ),
+    now(),
+    now()
+  ),
+  (
+    'booking',
+    null,
+    jsonb_build_object(
+      'full_name', 'Janae Thompson',
+      'phone', '(959) 555-0117',
+      'email', 'janae.thompson@email.com',
+      'style_id', 'studio-knotless-md',
+      'style_name', 'Knotless Braids',
+      'hair_length', 'Long',
+      'hair_option', '4B Natural',
+      'prewash', 'Yes',
+      'appointment_date', '2026-05-28',
+      'appointment_slot', '10:00 AM',
+      'notes', 'Always brings reference photos. Very detail-oriented.',
+      'estimated_total', 160,
+      'deposit_amount', 40,
+      'payment_status', 'paid',
+      'booking_status', 'confirmed',
+      'appointment_starts_at', '2026-05-28T14:00:00+00:00',
+      'duration_minutes', 150,
+      'service_address', 'Groton, CT',
+      'source', 'website'
+    ),
+    now(),
+    now()
+  ),
+  (
+    'booking',
+    null,
+    jsonb_build_object(
+      'full_name', 'Brianna Scott',
+      'phone', '(860) 555-0163',
+      'email', 'brianna.scott@email.com',
+      'style_id', 'studio-wig-install',
+      'style_name', 'Wig Install',
+      'hair_length', 'Medium',
+      'hair_option', '2C Wavy',
+      'prewash', 'Yes',
+      'appointment_date', '2026-05-26',
+      'appointment_slot', '2:00 PM',
+      'notes', 'New client. Referred by Destiny Williams.',
+      'estimated_total', 115,
+      'deposit_amount', 30,
+      'payment_status', 'paid',
+      'booking_status', 'completed',
+      'appointment_starts_at', '2026-05-26T18:00:00+00:00',
+      'duration_minutes', 90,
+      'service_address', 'Waterford, CT',
+      'source', 'website'
+    ),
+    now() - interval '2 days',
+    now() - interval '2 days'
+  ),
+  (
+    'booking',
+    null,
+    jsonb_build_object(
+      'full_name', 'Aaliyah Johnson',
+      'phone', '(860) 555-0142',
+      'email', 'aaliyah.johnson@email.com',
+      'style_id', 'studio-knotless-lg',
+      'style_name', 'Knotless Braids',
+      'hair_length', 'Long',
+      'hair_option', '4C Natural',
+      'prewash', 'Yes',
+      'appointment_date', '2026-05-10',
+      'appointment_slot', '11:00 AM',
+      'notes', 'Regular client — prefers afternoon slots when possible.',
+      'estimated_total', 160,
+      'deposit_amount', 50,
+      'payment_status', 'paid',
+      'booking_status', 'completed',
+      'appointment_starts_at', '2026-05-10T15:00:00+00:00',
+      'duration_minutes', 120,
+      'service_address', 'Norwich, CT',
+      'source', 'website'
+    ),
+    now() - interval '17 days',
+    now() - interval '17 days'
+  ),
+  (
+    'inquiry',
+    null,
+    jsonb_build_object(
+      'full_name', 'Michelle Carter',
+      'email', 'michelle.carter@email.com',
+      'phone', '(860) 555-0181',
+      'message', 'Hi! Do you have availability for passion twists next week?',
+      'source', 'website'
+    ),
+    now() - interval '1 day',
+    now() - interval '1 day'
+  ),
+  (
+    'inquiry',
+    null,
+    jsonb_build_object(
+      'full_name', 'Taylor Reed',
+      'email', 'taylor.reed@email.com',
+      'phone', '(959) 555-0144',
+      'message', 'Looking for a consultation before booking knotless braids.',
+      'source', 'website'
+    ),
+    now() - interval '3 days',
+    now() - interval '3 days'
+  );
