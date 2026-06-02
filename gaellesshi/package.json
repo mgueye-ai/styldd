@@ -1,0 +1,8 @@
+{
+  "name": "hairby-nadjae",
+  "private": true,
+  "scripts": {
+    "build": "node scripts/vercel-build-inject.cjs",
+    "inject-vercel-analytics": "node scripts/inject-vercel-analytics-html.cjs"
+  }
+}

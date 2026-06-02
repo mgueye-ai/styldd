@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <title>Site preview</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Great+Vibes&family=Source+Sans+3:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="css/styles.css?v=28" />
+    <style>
+      body.page-preview { padding-top: 0; }
+      .preview-banner {
+        position: sticky;
+        top: 0;
+        z-index: 200;
+        background: #0a0a0a;
+        color: #fafafa;
+        text-align: center;
+        font: 600 12px/1 "Source Sans 3", sans-serif;
+        padding: 8px 12px;
+        letter-spacing: 0.04em;
+      }
+    </style>
+  </head>
+  <body class="page-home page-preview">
+    <div class="preview-banner">Styld preview — this is how your booking site will look</div>
+
+    <section class="hero-landing" aria-label="Welcome">
+      <div class="hero-landing__bg" aria-hidden="true"></div>
+      <div class="hero-landing__vignette" aria-hidden="true"></div>
+
+      <header class="hero-nav">
+        <div class="container hero-nav__inner">
+          <a class="hero-brand" href="#">
+            <img class="hero-brand__logo" src="assets/placeholders/logo.svg" width="44" height="44" alt="" />
+            <span class="hero-brand__text" id="preview-brand">Your brand name</span>
+          </a>
+
+          <button
+            type="button"
+            class="hero-nav__burger"
+            id="hero-nav-toggle"
+            aria-expanded="false"
+            aria-controls="hero-nav-panel"
+          >
+            <span class="hero-nav__burger-box" aria-hidden="true">
+              <span class="hero-nav__burger-line"></span>
+              <span class="hero-nav__burger-line"></span>
+              <span class="hero-nav__burger-line"></span>
+            </span>
+            <span class="visually-hidden">Menu</span>
+          </button>
+
+          <div id="hero-nav-panel" class="hero-nav__panel">
+            <nav class="hero-nav__links" aria-label="Main">
+              <a href="#">Home</a>
+              <a href="#preview-menu-section">Menu</a>
+              <a href="#">Gallery</a>
+            </nav>
+            <div class="hero-nav__actions">
+              <a class="hero-btn hero-btn--nav" href="#">Book Now</a>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div class="container hero-landing__content">
+        <div id="preview-hero-inner">
+        <div class="hero-scale-layout hero-layout--split">
+          <h1 class="hero-scale-title">
+            <span class="hero-scale-title__grid">
+              <span class="hero-scale-col hero-scale-col--left">
+                <span class="hero-scale-kicker" id="preview-kicker">Your brand name</span>
+                <span class="hero-scale-display hero-scale-display--ink" id="preview-tagline-left">Put your</span>
+              </span>
+              <span class="hero-scale-visual">
+                <img class="hero-scale-visual__img" src="assets/placeholders/hero.svg" alt="" />
+              </span>
+              <span class="hero-scale-col hero-scale-col--right">
+                <span class="hero-scale-display hero-scale-display--brand">
+                  <span class="hero-scale-display__line" id="preview-tagline-right-1">style</span>
+                  <span class="hero-scale-display__line" id="preview-tagline-right-2">here</span>
+                </span>
+              </span>
+            </span>
+          </h1>
+          <div class="hero-ctas hero-ctas--landing hero-ctas--scale">
+            <a class="hero-btn hero-btn--outline-light hero-btn--lg" href="#preview-menu-section">Browse menu &amp; prices</a>
+            <a class="hero-btn hero-btn--gold hero-btn--lg" href="#preview-visit-section">Book now</a>
+          </div>
+        </div>
+        </div>
+      </div>
+    </section>
+
+    <main>
+      <section class="section section-alt section--reels-showcase">
+        <div class="container">
+          <div class="section-head">
+            <h2 id="preview-reels-title">Put your video or social section title here</h2>
+            <p id="preview-reels-blurb">Replace this blurb with how you show work.</p>
+          </div>
+          <div id="preview-reels-carousel" class="reels-carousel reels-carousel--cards" data-reels-carousel>
+            <div class="reels-carousel__shell">
+              <button type="button" class="reels-carousel__btn reels-carousel__btn--prev" aria-label="Previous reel">‹</button>
+              <div class="reels-carousel__viewport">
+                <div class="reels-carousel__track" id="preview-reels-track"></div>
+              </div>
+              <button type="button" class="reels-carousel__btn reels-carousel__btn--next" aria-label="Next reel">›</button>
+            </div>
+          </div>
+          <p class="video-note video-note--reels" id="preview-reels-note"></p>
+        </div>
+      </section>
+
+      <section class="section section-popular-styles" id="preview-menu-section">
+        <div class="container">
+          <div class="section-head section-head--popular">
+            <h2 id="preview-menu-title">Menu</h2>
+            <p id="preview-menu-blurb">Browse our services &amp; prices — book online.</p>
+          </div>
+          <div class="catalog-grid" id="preview-style-grid">
+            <div class="style-card-wrap"><article class="style-card"><div class="style-card__media"></div><div class="style-card__body"><h3>Style menu</h3><p>Your services appear here once you add styles in the app.</p></div></article></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="container">
+          <div class="section-head">
+            <h2 id="preview-about-title">About your salon</h2>
+            <p id="preview-about-body">Tell clients who you are.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="section section-alt" id="preview-visit-section">
+        <div class="container">
+          <div class="section-head">
+            <h2 id="preview-visit-title">Visit &amp; connect</h2>
+            <p id="preview-visit-body">Share your studio or house-call area.</p>
+          </div>
+          <div class="info-cards info-cards--location-layout">
+            <article class="info-card info-card--location">
+              <h3>Location</h3>
+              <div class="info-card-body">
+                <p><strong id="preview-address">123 Main Street</strong></p>
+                <p id="preview-city-line">Your City, ST</p>
+                <p id="preview-phone">(555) 010-0199</p>
+                <p id="preview-instagram">@yourhandle</p>
+              </div>
+              <div class="location-map-wrap">
+                <iframe id="preview-map" class="location-map" title="Map" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox=-124.5%2C24.5%2C-66.9%2C49.5&amp;layer=mapnik"></iframe>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer site-footer--home-promo">
+      <div class="container footer-bottom">
+        <p id="preview-footer-brand">&copy; Your brand name</p>
+        <p class="footer-built-by"><span id="preview-footer-text">Add footer credit here</span></p>
+      </div>
+    </footer>
+
+    <script src="js/preview-content.js"></script>
+    <script src="js/hero-nav.js" defer></script>
+    <script src="js/reels-carousel.js" defer></script>
+  </body>
+</html>

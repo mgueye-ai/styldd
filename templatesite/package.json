@@ -1,0 +1,12 @@
+{
+  "name": "hair-braiding-site-template",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@vercel/functions": "^3.0.0"
+  },
+  "scripts": {
+    "build": "node scripts/vercel-build-inject.cjs",
+    "inject-vercel-analytics": "node scripts/inject-vercel-analytics-html.cjs"
+  }
+}

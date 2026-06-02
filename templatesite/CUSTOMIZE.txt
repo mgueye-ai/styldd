@@ -1,0 +1,18 @@
+Hair braiding site template (blank base)
+========================================
+
+Replace placeholders before launch:
+  - "Your Salon Name", yoursalon.com, yourinstagram handles
+  - js/booking-config.js — timezone, phone, hours, blackouts
+  - js/supabase-config.js — Supabase URL + anon key (or use supabase-config.local.js)
+  - js/stripe-config.js / Vercel env — Stripe publishable key (secrets stay in Supabase)
+  - logo.png, assets/favicon-32.png, assets/apple-touch-icon.png
+  - assets/hero-portrait.png — main homepage hero photo
+  - assets/reels/placeholder.jpg — reel thumbnails + update reel links in index.html / gallery.html
+  - Replace catalog photos under assets/catalog/ and tune styles-catalog.html / booking style list as needed
+  - Map iframe on index.html (Visit & connect)
+  - supabase/functions Edge secrets — see supabase/SETUP.md (RESEND_FROM, NOTIFY_TO_EMAIL, SALON_SITE_NOTIFY_SECRET; webhook header x-salon-site-notify-secret)
+  - Footer "Add footer credit here" on HTML pages
+
+New git repo:
+  cd into this folder, then git init and connect your remote.

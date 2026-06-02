@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Style detail template | Replace this page with a real offering from your catalog." />
+    <title>Style detail | Your brand name</title>
+    <link rel="icon" href="assets/favicon-32.png?v=4" type="image/png" sizes="32x32" />
+    <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=4" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/styles.css" />
+    <!-- Vercel Web Analytics: enable in Vercel Project Settings > Analytics -->
+    <script src="js/vercel-analytics-init.js"></script>
+    <script defer src="/_vercel/insights/script.js"></script>
+  </head>
+  <body class="page-site">
+    <header class="hero-nav hero-nav--site">
+      <div class="container hero-nav__inner">
+        <a class="hero-brand" href="index.html">
+          <img class="hero-brand__logo" src="assets/placeholders/logo.svg" width="44" height="44" alt="" decoding="async" />
+          <span class="hero-brand__text">Your brand name</span>
+        </a>
+
+        <button
+          type="button"
+          class="hero-nav__burger"
+          id="hero-nav-toggle"
+          aria-expanded="false"
+          aria-controls="hero-nav-panel"
+        >
+          <span class="hero-nav__burger-box" aria-hidden="true">
+            <span class="hero-nav__burger-line"></span>
+            <span class="hero-nav__burger-line"></span>
+            <span class="hero-nav__burger-line"></span>
+          </span>
+          <span class="visually-hidden">Menu</span>
+        </button>
+
+        <div id="hero-nav-panel" class="hero-nav__panel">
+          <nav class="hero-nav__links" aria-label="Main">
+            <a href="index.html">Home</a>
+            <a href="styles-catalog.html" aria-current="page">Menu</a>
+            <a href="gallery.html">Gallery</a>
+          </nav>
+          <div class="hero-nav__actions">
+            <a class="hero-btn hero-btn--nav" href="booking.html?style=studio-passion-md">
+              <svg class="hero-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"
+                  stroke="currentColor"
+                  stroke-width="1.75"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              Book Now
+              <svg class="hero-icon hero-icon--chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+            </a>
+            <a class="hero-nav__lookup" href="booking-lookup.html">
+              <svg class="hero-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.75" />
+                <path d="M20 20l-3-3" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
+              </svg>
+              Lookup Booking
+            </a>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <main class="style-detail-main">
+      <div class="container">
+        <nav class="style-detail-breadcrumb" aria-label="Breadcrumb">
+          <a href="styles-catalog.html">&larr; Back to menu</a>
+        </nav>
+
+        <div class="style-detail-layout">
+          <div class="style-detail-col style-detail-col--media">
+            <div class="style-detail-card">
+              <div class="style-detail-carousel" data-carousel>
+                <div class="style-detail-carousel__viewport">
+                  <div class="style-detail-carousel__track">
+                    <figure class="style-detail-carousel__slide">
+                      <img
+                        src="assets/placeholders/reel.svg"
+                        width="640"
+                        height="1136"
+                        alt="Photo placeholder"
+                        loading="eager"
+                        decoding="async"
+                      />
+                    </figure>
+                  </div>
+                </div>
+                <button type="button" class="style-detail-carousel__btn style-detail-carousel__btn--prev" aria-label="Previous photo">&lsaquo;</button>
+                <button type="button" class="style-detail-carousel__btn style-detail-carousel__btn--next" aria-label="Next photo">&rsaquo;</button>
+                <div class="style-detail-carousel__dots" role="tablist" aria-label="Photo indicators"></div>
+              </div>
+
+              <div class="style-detail-booking-block">
+                <p class="style-detail-price">$000 – $000</p>
+                <p class="style-detail-price-note">Sample range only — tie this card to real prices in booking and your catalog.</p>
+                <p class="style-detail-price-note">Add a second note for deposits, length upgrades, or policies if you need one.</p>
+                <a class="btn btn-primary style-detail-book-btn" href="booking.html?style=studio-passion-md">Book Now</a>
+              </div>
+            </div>
+          </div>
+
+          <div class="style-detail-col style-detail-col--copy">
+            <div class="style-detail-card">
+              <h1>Style detail (template)</h1>
+              <p class="style-detail-lead">Put your overview here — who it is for, what is included, and how booking works. Duplicate this page in your editor for each menu item.</p>
+
+              <div class="style-detail-panel">
+                <h2>
+                  <svg class="style-detail-icon" width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                  Features
+                </h2>
+                                <ul class="style-detail-checklist">
+                <li>Bullet one — what makes this service different</li>
+                <li>Bullet two — duration, materials, or add-ons</li>
+                <li>Bullet three — ideal client or occasion</li>
+                <li>Bullet four — optional line you can delete</li>
+                </ul>
+              </div>
+
+              <div class="style-detail-panel">
+                <h2>
+                  <svg class="style-detail-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                    <circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+                  </svg>
+                  Maintenance tips
+                </h2>
+                                <ul class="style-detail-checklist">
+                <li>Aftercare tip (edit or remove)</li>
+                <li>Second tip placeholder</li>
+                <li>Third tip placeholder</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="site-footer">
+      <div class="container">
+        <div class="footer-main">
+          <div class="footer-brand">
+            <a class="footer-brand__link" href="index.html">
+              <img
+                class="footer-brand__logo"
+                src="assets/placeholders/logo.svg"
+                width="80"
+                height="80"
+                alt="Your brand name logo"
+                decoding="async"
+              />
+              <span class="footer-brand__text">
+                <span class="footer-brand__name">Your brand name</span>
+                <span class="footer-brand__tagline">Put your tagline here · Swap this for your own line</span>
+                <span class="footer-brand__meta">yoursite.com</span>
+              </span>
+            </a>
+            <p class="footer-brand__address">Your City, ST · By appointment — studio details shared when you book</p>
+            <p class="footer-social">
+              <a href="https://www.instagram.com/yourhandle" target="_blank" rel="noopener noreferrer">Instagram</a>
+            </p>
+          </div>
+          <div class="footer-col">
+            <h3 class="footer-heading">Contact</h3>
+            <p><a href="tel:+15550100199">(555) 010-0199</a></p>
+            <p><a href="mailto:hello@yoursite.com">hello@yoursite.com</a></p>
+          </div>
+          <div class="footer-col">
+            <h3 class="footer-heading">Explore</h3>
+            <ul class="footer-links">
+              <li><a href="index.html">Home</a></li>
+              <li><a href="styles-catalog.html">Menu &amp; prices</a></li>
+              <li><a href="gallery.html">Gallery</a></li>
+              <li><a href="booking.html">Book appointment</a></li>
+            </ul>
+          </div>
+        </div>
+      </div>
+      <div class="container footer-bottom">
+        <p>
+          &copy; 2026 Your brand name. All rights reserved.
+          <a
+            class="footer-admin-link"
+            href="#"
+            onclick="var c=window.prompt('Enter admin code'); if(c==='0000'){window.location.href='admin.html?code=0000';} else if(c){window.alert('Incorrect code');} return false;"
+            >Admin</a
+          >
+        </p>
+        <p class="footer-built-by">
+          <span class="footer-built-by__link" style="opacity: 0.75;">Add footer credit here</span>
+        </p>
+      </div>
+    </footer>
+    <script src="js/style-carousel.js"></script>
+      <script src="js/hero-nav.js" defer></script>
+  </body>
+</html>

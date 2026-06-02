@@ -1,0 +1,139 @@
+(function loadStyldTenantSite() {
+  var cfg = window.__STYLD_TENANT__ || {};
+  var rootDomain = cfg.rootDomain || 'styldd.com';
+  var host = (window.location.hostname || '').toLowerCase();
+  var subdomain = new URLSearchParams(window.location.search).get('subdomain');
+
+  if (!subdomain && host.endsWith('.' + rootDomain) && host !== rootDomain && host !== 'www.' + rootDomain) {
+    subdomain = host.slice(0, -(rootDomain.length + 1));
+  }
+
+  var statusEl = document.getElementById('tenant-status');
+
+  function showError(message) {
+    if (statusEl) {
+      statusEl.hidden = false;
+      statusEl.textContent = message;
+    }
+    document.body.classList.add('tenant-error');
+  }
+
+  if (!subdomain) {
+    showError('Site not found.');
+    return;
+  }
+
+  if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) {
+    showError('This site host is not configured yet. Redeploy templatesite with Styld Supabase env vars.');
+    return;
+  }
+
+  var headers = {
+    apikey: cfg.supabaseAnonKey,
+    Authorization: 'Bearer ' + cfg.supabaseAnonKey,
+  };
+
+  function rest(path) {
+    return fetch(cfg.supabaseUrl.replace(/\/$/, '') + '/rest/v1/' + path, { headers: headers }).then(function (res) {
+      if (!res.ok) throw new Error('Could not load site data.');
+      return res.json();
+    });
+  }
+
+  function settingValue(row) {
+    if (!row || !row.data || typeof row.data !== 'object') return null;
+    if (row.data.value != null) return row.data.value;
+    return row.data;
+  }
+
+  function coverStoragePath(value) {
+    if (!value || typeof value !== 'object') {
+      return typeof value === 'string' ? value : null;
+    }
+    return value.storage_path || value.storagePath || null;
+  }
+
+  function coverUrl(path) {
+    if (!path) return null;
+    return cfg.supabaseUrl.replace(/\/$/, '') + '/storage/v1/object/public/style-covers/' + String(path).replace(/^\/+/, '');
+  }
+
+  function formatPrice(cents) {
+    if (typeof cents !== 'number' || Number.isNaN(cents)) return '';
+    return '$' + (cents / 100).toFixed(cents % 100 === 0 ? 0 : 2);
+  }
+
+  Promise.all([
+    rest('styld_site_subdomains?subdomain=eq.' + encodeURIComponent(subdomain) + '&select=user_id,published_at'),
+    Promise.resolve(null),
+  ])
+    .then(function (results) {
+      var rows = results[0];
+      var row = rows && rows[0];
+      if (!row || !row.published_at) {
+        throw new Error('This site has not been published yet.');
+      }
+      return rest(
+        'styld_site_records?user_id=eq.' +
+          encodeURIComponent(row.user_id) +
+          '&select=record_type,record_key,data',
+      );
+    })
+    .then(function (records) {
+      var content = null;
+      var theme = { heroLayout: 'split', heroImageUrl: null, logoImageUrl: null };
+      var meta = {};
+      var prices = {};
+      var covers = {};
+
+      records.forEach(function (record) {
+        var value = settingValue(record);
+        if (record.record_type === 'site_setting' && record.record_key === 'site_content') content = value;
+        if (record.record_type === 'site_setting' && record.record_key === 'site_theme') theme = Object.assign(theme, value || {});
+        if (record.record_type === 'site_setting' && record.record_key === 'style_catalog_meta') meta = value || {};
+        if (record.record_type === 'site_setting' && record.record_key === 'style_price_overrides') prices = value || {};
+        if (record.record_type === 'style_cover_image' && record.record_key) {
+          var coverPath = coverStoragePath(value);
+          if (typeof coverPath === 'string') covers[record.record_key] = coverPath;
+        }
+      });
+
+      if (!content) {
+        throw new Error('Site content not found.');
+      }
+
+      window.__STYLD_SITE_CONTENT__ = content;
+      window.__STYLD_SITE_THEME__ = {
+        heroLayout: theme.heroLayout || 'split',
+        heroImageUrl: coverUrl(theme.heroImagePath),
+        logoImageUrl: coverUrl(theme.logoImagePath),
+      };
+
+      var styles = Object.keys(meta).slice(0, 8).map(function (styleId) {
+        var item = meta[styleId] || {};
+        return {
+          title: item.title || styleId,
+          description: item.description || '',
+          priceLabel: formatPrice(prices[styleId]),
+          imageUrl: coverUrl(covers[styleId]),
+        };
+      });
+
+      window.__STYLD_SITE_STYLES__ = styles;
+
+      if (statusEl) statusEl.hidden = true;
+      if (window.applyStyldPreviewContent) {
+        window.applyStyldPreviewContent();
+      }
+
+      var logo = document.querySelector('.hero-brand__logo');
+      if (logo && window.__STYLD_SITE_THEME__.logoImageUrl) {
+        logo.src = window.__STYLD_SITE_THEME__.logoImageUrl;
+      }
+
+      document.title = (content.brandName || subdomain) + ' | Book online';
+    })
+    .catch(function (err) {
+      showError(err && err.message ? err.message : 'Site not found.');
+    });
+})();
