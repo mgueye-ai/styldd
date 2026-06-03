@@ -1101,22 +1101,10 @@
       return { ok: false, error: "Card form not ready. Please refresh and try again." };
     }
 
-    const { paymentMethod, error: pmError } = await stripe.createPaymentMethod({
-      type: "card",
-      card: stripeCardElement,
-      billing_details: {
-        name: payload.customerName || "",
-        email: payload.customerEmail || "",
-      },
-    });
-
-    if (pmError) {
-      return { ok: false, error: pmError.message || "Card error." };
-    }
-
-    const { data, error } = await sb.functions.invoke("stripe-booking-pay", {
+    // Step 1: Create a PaymentIntent on the backend (returns clientSecret).
+    // The backend routes the charge to the site owner's connected account.
+    const { data: piData, error: piError } = await sb.functions.invoke("stripe-booking-pay", {
       body: {
-        paymentMethodId: paymentMethod.id,
         amountCents: payload.amountCents,
         subdomain: payload.subdomain,
         bookingId: payload.bookingId,
@@ -1125,24 +1113,41 @@
       },
     });
 
-    if (error) {
-      let detail = error.message || "Payment failed";
+    if (piError) {
+      var piDetail = piError.message || "Payment setup failed";
       try {
-        if (error.context && typeof error.context.json === "function") {
-          const j = await error.context.json();
-          if (j && typeof j.error === "string") detail = j.error;
+        if (piError.context && typeof piError.context.json === "function") {
+          var pj = await piError.context.json();
+          if (pj && typeof pj.error === "string") piDetail = pj.error;
         }
-      } catch (_) {
-        /* ignore */
-      }
-      return { ok: false, error: detail };
+      } catch (_) { /* ignore */ }
+      return { ok: false, error: piDetail };
     }
 
-    if (!data || !data.paid) {
-      return { ok: false, error: (data && data.error) || "Payment was not accepted." };
+    if (!piData || piData.error || !piData.clientSecret) {
+      return { ok: false, error: (piData && piData.error) || "Payment setup failed." };
     }
 
-    return { ok: true, paymentId: data.paymentIntentId, status: data.status };
+    // Step 2: Confirm the payment client-side using the card element.
+    // This creates and attaches the PaymentMethod in one step, avoiding
+    // any mismatch between the PM owner and the account being charged.
+    var confirmResult = await stripe.confirmCardPayment(piData.clientSecret, {
+      payment_method: {
+        card: stripeCardElement,
+        billing_details: {
+          name: payload.customerName || "",
+          email: payload.customerEmail || "",
+        },
+      },
+    });
+
+    if (confirmResult.error) {
+      return { ok: false, error: confirmResult.error.message || "Card was declined." };
+    }
+
+    var intent = confirmResult.paymentIntent;
+    var success = intent && intent.status === "succeeded";
+    return { ok: !!success, paymentId: intent && intent.id, status: intent && intent.status };
   }
 
   function buildBookingDetailsUrl(params) {

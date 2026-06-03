@@ -85,7 +85,7 @@ export default function WalletBalanceSection({ onSummaryChange, showOnlyWhenActi
           if (result.status === 'pending_review') {
             Alert.alert(
               'Almost there',
-              'Stripe is reviewing your account. Payouts will be enabled shortly — check back in a few minutes.',
+              'We\'re verifying your account. Payouts will be enabled shortly — check back in a few minutes.',
             );
           }
           return;
@@ -205,7 +205,7 @@ export default function WalletBalanceSection({ onSummaryChange, showOnlyWhenActi
             ) : (
               <>
                 <Ionicons name="card-outline" size={18} color="#fff" />
-                <Text style={styles.actionBtnText}>Set up payments with Stripe</Text>
+                <Text style={styles.actionBtnText}>Set up Styld Pay</Text>
               </>
             )}
           </Pressable>
@@ -239,18 +239,16 @@ export default function WalletBalanceSection({ onSummaryChange, showOnlyWhenActi
           </Pressable>
         )}
 
-        {/* Stripe branding */}
-        <Text style={styles.poweredBy}>Powered by Stripe</Text>
       </View>
 
-      {/* Stripe Connect onboarding / dashboard modal */}
+      {/* Styld Pay onboarding / dashboard modal */}
       <Modal visible={!!connectUrl} animationType="slide" onRequestClose={() => setConnectUrl(null)}>
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Pressable onPress={() => setConnectUrl(null)} hitSlop={12}>
               <Ionicons name="close" size={22} color={colors.text} />
             </Pressable>
-            <Text style={styles.modalTitle}>Stripe Payments</Text>
+            <Text style={styles.modalTitle}>Styld Pay</Text>
             <Pressable
               onPress={() => {
                 setConnectUrl(null);
@@ -371,13 +369,6 @@ const styles = StyleSheet.create({
   payoutBtnText: { color: colors.accentPink, fontSize: 14, fontWeight: '600' },
   payoutBtnTextMuted: { color: colors.textMuted },
   btnDisabled: { opacity: 0.5 },
-
-  poweredBy: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 12,
-    textAlign: 'center',
-  },
 
   /* Modal */
   modalContainer: { flex: 1, backgroundColor: colors.background },

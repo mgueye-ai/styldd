@@ -17,7 +17,6 @@ Deno.serve(async (req) => {
 
   try {
     const {
-      paymentMethodId,
       amountCents,
       subdomain,
       bookingId,
@@ -25,8 +24,8 @@ Deno.serve(async (req) => {
       customerName,
     } = await req.json();
 
-    if (!paymentMethodId || !amountCents || !subdomain) {
-      return json({ error: 'Missing required fields: paymentMethodId, amountCents, subdomain' }, 400);
+    if (!amountCents || !subdomain) {
+      return json({ error: 'Missing required fields: amountCents, subdomain' }, 400);
     }
     if (typeof amountCents !== 'number' || amountCents < 50) {
       return json({ error: 'Amount must be at least $0.50' }, 400);
@@ -44,25 +43,30 @@ Deno.serve(async (req) => {
     const { data: stripeAccountId } = await supabase
       .rpc('styld_resolve_stripe_account', { p_subdomain: subdomain });
 
-    // Build PaymentIntent params
+    if (!stripeAccountId) {
+      return json({
+        error: 'This site has not enabled online payments yet. Please contact the business.',
+      }, 400);
+    }
+
+    // Create a PaymentIntent on the platform, routing funds to the connected account.
+    // We do NOT confirm server-side — the frontend confirms with the card element
+    // via stripe.confirmCardPayment(clientSecret). This avoids PaymentMethod
+    // ownership issues (pm_xxx must match the account being charged).
     const params = new URLSearchParams();
     params.set('amount', String(Math.round(amountCents)));
     params.set('currency', 'usd');
-    params.set('payment_method', paymentMethodId);
-    params.set('confirm', 'true');
-    params.set('automatic_payment_methods[enabled]', 'true');
-    params.set('automatic_payment_methods[allow_redirects]', 'never');
-    params.set('description', `Styld booking deposit — ${subdomain}`);
+    params.set('payment_method_types[]', 'card');
+    params.set('description', `Styld booking — ${subdomain}`);
     params.set('metadata[subdomain]', subdomain);
     params.set('metadata[source]', 'styld_booking');
     if (bookingId) params.set('metadata[bookingId]', String(bookingId));
     if (customerEmail) params.set('receipt_email', String(customerEmail));
 
-    // Route payment to stylist's Stripe Connect account (destination charge)
-    if (stripeAccountId) {
-      params.set('transfer_data[destination]', stripeAccountId);
-      // Optional platform fee (set to 0 for now — add application_fee_amount here later)
-    }
+    // Destination charge: platform processes, funds route to connected account.
+    // on_behalf_of ensures the charge shows the merchant's statement descriptor.
+    params.set('transfer_data[destination]', stripeAccountId);
+    params.set('on_behalf_of', stripeAccountId);
 
     const piRes = await fetch('https://api.stripe.com/v1/payment_intents', {
       method: 'POST',
@@ -76,28 +80,20 @@ Deno.serve(async (req) => {
     const pi = await piRes.json();
 
     if (!piRes.ok) {
-      const errMsg = pi.error?.message || 'Card payment failed';
-      return json({ error: errMsg, success: false, paid: false }, 400);
+      const errMsg = pi.error?.message || 'Could not set up payment';
+      return json({ error: errMsg }, 400);
     }
 
-    const success = pi.status === 'succeeded';
-
-    // Mark booking paid in Supabase
-    if (success && bookingId) {
-      await supabase
-        .rpc('styld_tenant_mark_booking_paid', {
-          p_subdomain: subdomain,
-          p_booking_id: bookingId,
-          p_payment_status: 'deposit_paid',
-          p_unit_payment_id: pi.id,
-        })
-        .catch((err: unknown) => console.warn('mark_booking_paid:', err));
-    }
-
-    return json({ success, paid: success, paymentIntentId: pi.id, status: pi.status });
+    // Return client_secret to the frontend for client-side confirmation
+    return json({
+      clientSecret: pi.client_secret,
+      paymentIntentId: pi.id,
+      subdomain,
+      bookingId: bookingId ?? null,
+    });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Internal error';
     console.error('stripe-booking-pay error:', err);
-    return json({ error: msg, success: false, paid: false }, 500);
+    return json({ error: msg }, 500);
   }
 });

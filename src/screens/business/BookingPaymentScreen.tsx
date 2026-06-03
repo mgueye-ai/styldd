@@ -22,6 +22,7 @@ import {
 } from '../../data/bookingPayment';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
 import { loadBookingPayment, saveBookingPayment } from '../../lib/siteServices';
+import { fetchStripeConnectStatus } from '../../lib/stripeConnect';
 import { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { colors } from '../../theme';
 
@@ -99,33 +100,48 @@ function PaymentModeCard({
   label,
   subtitle,
   badge,
+  locked,
   onPress,
 }: {
   selected: boolean;
   label: string;
   subtitle: string;
   badge?: string;
+  locked?: boolean;
   onPress: () => void;
 }) {
   return (
     <Pressable
-      style={({ pressed }) => [styles.modeCard, pressed && styles.modeCardPressed]}
+      style={({ pressed }) => [
+        styles.modeCard,
+        pressed && !locked && styles.modeCardPressed,
+        locked && styles.modeCardLocked,
+      ]}
       onPress={onPress}
     >
       <View style={styles.modeCardBody}>
         <View style={styles.modeCardTitleRow}>
-          <Text style={styles.modeCardTitle}>{label}</Text>
-          {badge ? (
+          <Text style={[styles.modeCardTitle, locked && styles.modeCardTitleLocked]}>{label}</Text>
+          {locked ? (
+            <View style={styles.lockedBadge}>
+              <Ionicons name="lock-closed" size={11} color={colors.textMuted} />
+              <Text style={styles.lockedBadgeText}>Requires Styld Pay</Text>
+            </View>
+          ) : badge ? (
             <View style={styles.modeBadge}>
               <Text style={styles.modeBadgeText}>{badge}</Text>
             </View>
           ) : null}
         </View>
-        <Text style={styles.modeCardSubtitle}>{subtitle}</Text>
+        <Text style={[styles.modeCardSubtitle, locked && styles.modeCardSubtitleLocked]}>{subtitle}</Text>
       </View>
-      <View style={[styles.modeCheck, selected && styles.modeCheckSelected]}>
-        {selected ? <Ionicons name="checkmark" size={16} color={colors.background} /> : null}
-      </View>
+      {locked ? (
+        <Ionicons name="lock-closed-outline" size={20} color={colors.textMuted} style={{ opacity: 0.5 }} />
+      ) : (
+        <View style={[styles.modeCheck, selected && styles.modeCheckSelected]}>
+          {selected ? <Ionicons name="checkmark" size={16} color={colors.background} /> : null}
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -257,13 +273,21 @@ export default function BookingPaymentScreen({ navigation }: Props) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
+  const [stripeReady, setStripeReady] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!linkedSite) return;
     setIsLoading(true);
     setError(null);
     try {
-      setPayment(await loadBookingPayment(linkedSite));
+      const [paymentData, stripeStatus] = await Promise.all([
+        loadBookingPayment(linkedSite),
+        fetchStripeConnectStatus().catch(() => null),
+      ]);
+      setPayment(paymentData);
+      setStripeReady(
+        stripeStatus?.status === 'ready' || stripeStatus?.status === 'pending_review',
+      );
       setIsDirty(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load booking payment settings.');
@@ -272,7 +296,7 @@ export default function BookingPaymentScreen({ navigation }: Props) {
     }
   }, [linkedSite]);
 
-  useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
+  useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
 
   const updatePayment = (next: BookingPaymentSettings) => {
     setPayment(next);
@@ -280,8 +304,43 @@ export default function BookingPaymentScreen({ navigation }: Props) {
     setIsDirty(true);
   };
 
+  const handleModePress = (modeId: BookingPaymentMode) => {
+    const requiresStripe = modeId === 'deposit' || modeId === 'full';
+    if (requiresStripe && !stripeReady) {
+      Alert.alert(
+        'Styld Pay required',
+        'Set up Styld Pay from your Profile → Earnings section to accept online payments.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Set up Styld Pay',
+            onPress: () => navigation.navigate('ConnectedAccounts'),
+          },
+        ],
+      );
+      return;
+    }
+    updatePayment({ ...payment, mode: modeId });
+  };
+
   const save = async (): Promise<boolean> => {
     if (!linkedSite) return false;
+
+    const requiresStripe = payment.mode === 'deposit' || payment.mode === 'full';
+    if (requiresStripe && !stripeReady) {
+      Alert.alert(
+        'Styld Pay required',
+        'You need to set up Styld Pay before enabling online payments. Go to Profile → Earnings to get started.',
+        [
+          { text: 'Not now', style: 'cancel' },
+          {
+            text: 'Set up Styld Pay',
+            onPress: () => navigation.navigate('ConnectedAccounts'),
+          },
+        ],
+      );
+      return false;
+    }
 
     if (payment.mode === 'deposit' && payment.depositKind === 'fixed' && payment.depositValue < 0.5) {
       Alert.alert('Invalid deposit', 'Fixed deposit must be at least $0.50 for card processing.');
@@ -336,16 +395,35 @@ export default function BookingPaymentScreen({ navigation }: Props) {
     >
       <BusinessSection title="Payment option">
         <Text style={styles.sectionLead}>Pick one — you can change this anytime.</Text>
-        {PAYMENT_MODES.map((option) => (
-          <PaymentModeCard
-            key={option.id}
-            selected={payment.mode === option.id}
-            label={option.label}
-            subtitle={option.subtitle}
-            badge={option.badge}
-            onPress={() => updatePayment({ ...payment, mode: option.id })}
-          />
-        ))}
+        {!stripeReady && (
+          <View style={styles.stripeGateBanner}>
+            <Ionicons name="card-outline" size={16} color={colors.accentPink} />
+            <Text style={styles.stripeGateBannerText}>
+              Set up{' '}
+              <Text
+                style={styles.stripeGateBannerLink}
+                onPress={() => navigation.navigate('ConnectedAccounts')}
+              >
+                Styld Pay
+              </Text>{' '}
+              to unlock online payment modes.
+            </Text>
+          </View>
+        )}
+        {PAYMENT_MODES.map((option) => {
+          const locked = !stripeReady && (option.id === 'deposit' || option.id === 'full');
+          return (
+            <PaymentModeCard
+              key={option.id}
+              selected={payment.mode === option.id}
+              label={option.label}
+              subtitle={option.subtitle}
+              badge={option.badge}
+              locked={locked}
+              onPress={() => handleModePress(option.id)}
+            />
+          );
+        })}
       </BusinessSection>
 
       <ClientPreview payment={payment} />
@@ -412,6 +490,50 @@ const styles = StyleSheet.create({
   },
   modeCardPressed: {
     opacity: 0.92,
+  },
+  modeCardLocked: {
+    opacity: 0.55,
+    backgroundColor: colors.progressTrack,
+  },
+  modeCardTitleLocked: {
+    color: colors.textMuted,
+  },
+  modeCardSubtitleLocked: {
+    color: colors.textMuted,
+    opacity: 0.7,
+  },
+  lockedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: colors.cardBorder,
+    borderRadius: 999,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  lockedBadgeText: {
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  stripeGateBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: colors.accentPinkMuted,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 12,
+  },
+  stripeGateBannerText: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.text,
+    lineHeight: 18,
+  },
+  stripeGateBannerLink: {
+    color: colors.accentPink,
+    fontWeight: '600',
   },
   modeCardBody: { flex: 1, minWidth: 0, paddingRight: 8 },
   modeCardTitleRow: {

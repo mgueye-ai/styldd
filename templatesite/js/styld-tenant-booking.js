@@ -127,7 +127,7 @@
         }
 
         var script = document.createElement('script');
-        script.src = '/js/booking.js?v=44';
+        script.src = '/js/booking.js?v=45';
         script.defer = true;
         document.body.appendChild(script);
       })

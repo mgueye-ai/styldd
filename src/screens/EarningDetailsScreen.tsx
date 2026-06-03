@@ -1,9 +1,25 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Line, Path, Rect, Text as SvgText } from 'react-native-svg';
+import { useCallback, useState } from 'react';
+import {
+  ActivityIndicator,
+  Dimensions,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+import Svg, { Rect, Text as SvgText } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import { usePrivacyMode } from '../context/PrivacyContext';
+import {
+  fetchStripeConnectStatus,
+  formatUsdFromCents,
+  type StripePayout,
+  type StripeConnectSummary,
+} from '../lib/stripeConnect';
 import { DashboardStackParamList } from '../navigation/DashboardNavigator';
 import { colors } from '../theme';
 import { maskMoney } from '../utils/money';
@@ -11,89 +27,57 @@ import { maskMoney } from '../utils/money';
 type Props = NativeStackScreenProps<DashboardStackParamList, 'EarningDetails'>;
 
 const CHART_WIDTH = Dimensions.get('window').width - 72;
-const REVENUE_CHART_HEIGHT = 190;
-const HOURS_CHART_HEIGHT = 120;
+const CHART_HEIGHT = 160;
 
-const REVENUE_DATA = [
-  { day: '22', value: 280 },
-  { day: '23', value: 150 },
-  { day: '24', value: 400 },
-  { day: '25', value: 200 },
-  { day: '26', value: 250 },
-  { day: '27', value: 180 },
-  { day: '28', value: 290 },
-];
+function PayoutsBarChart({ payouts }: { payouts: StripePayout[] }) {
+  if (!payouts.length) return null;
 
-const HOURS_DATA = [
-  { day: '22', value: 4 },
-  { day: '23', value: 7 },
-  { day: '24', value: 3 },
-  { day: '25', value: 5 },
-  { day: '26', value: 6 },
-  { day: '27', value: 4 },
-  { day: '28', value: 5 },
-];
-
-const REVENUE_MAX = 400;
-const REVENUE_LABELS = ['$0', '$100', '$200', '$300', '$400'];
-
-function RevenueChart() {
+  const recent = [...payouts].slice(0, 7).reverse();
+  const maxAmount = Math.max(...recent.map((p) => p.amountCents), 1);
   const chartInnerWidth = CHART_WIDTH - 36;
-  const chartInnerHeight = REVENUE_CHART_HEIGHT - 28;
-  const slotWidth = chartInnerWidth / REVENUE_DATA.length;
-  const barWidth = slotWidth * 0.42;
+  const chartInnerHeight = CHART_HEIGHT - 28;
+  const slotWidth = chartInnerWidth / recent.length;
+  const barWidth = slotWidth * 0.5;
 
   return (
-    <Svg width={CHART_WIDTH} height={REVENUE_CHART_HEIGHT}>
-      {REVENUE_LABELS.map((label, index) => {
-        const y = chartInnerHeight - (index / (REVENUE_LABELS.length - 1)) * chartInnerHeight + 8;
-
-        return (
-          <SvgText
-            key={label}
-            x={0}
-            y={y}
-            fill={colors.textMuted}
-            fontSize={11}
-            fontWeight="500"
-          >
-            {label}
-          </SvgText>
-        );
-      })}
-
-      {REVENUE_DATA.map((item, index) => {
-        const barHeight = (item.value / REVENUE_MAX) * chartInnerHeight;
+    <Svg width={CHART_WIDTH} height={CHART_HEIGHT}>
+      {recent.map((payout, index) => {
+        const barHeight = Math.max(4, (payout.amountCents / maxAmount) * chartInnerHeight);
         const x = 36 + index * slotWidth + (slotWidth - barWidth) / 2;
         const y = chartInnerHeight - barHeight + 8;
-
+        const label = new Date(payout.arrivalDate * 1000).toLocaleDateString('en-US', {
+          month: 'numeric',
+          day: 'numeric',
+        });
         return (
           <Rect
-            key={item.day}
+            key={payout.id}
             x={x}
             y={y}
             width={barWidth}
             height={barHeight}
             rx={barWidth / 2}
-            fill={colors.chartBlue}
+            fill={payout.status === 'paid' ? colors.chartBlue : colors.accentPink}
           />
         );
       })}
-
-      {REVENUE_DATA.map((item, index) => {
+      {recent.map((payout, index) => {
         const x = 36 + index * slotWidth + slotWidth / 2;
-
+        const label = new Date(payout.arrivalDate * 1000).toLocaleDateString('en-US', {
+          month: 'numeric',
+          day: 'numeric',
+        });
         return (
           <SvgText
-            key={`${item.day}-label`}
+            key={`${payout.id}-label`}
             x={x}
-            y={REVENUE_CHART_HEIGHT - 2}
+            y={CHART_HEIGHT - 2}
             fill={colors.textMuted}
-            fontSize={11}
+            fontSize={10}
             fontWeight="500"
             textAnchor="middle"
           >
-            {item.day}
+            {label}
           </SvgText>
         );
       })}
@@ -101,111 +85,161 @@ function RevenueChart() {
   );
 }
 
-function WorkHoursChart() {
-  const chartInnerWidth = CHART_WIDTH - 20;
-  const chartInnerHeight = HOURS_CHART_HEIGHT - 24;
-  const slotWidth = chartInnerWidth / (HOURS_DATA.length - 1);
-  const maxHours = 8;
+function statusColor(status: string) {
+  if (status === 'paid') return '#15803d';
+  if (status === 'in_transit') return '#92400e';
+  if (status === 'pending') return colors.textMuted;
+  if (status === 'failed') return '#dc2626';
+  return colors.textMuted;
+}
 
-  const points = HOURS_DATA.map((item, index) => {
-    const x = 10 + index * slotWidth;
-    const y = chartInnerHeight - (item.value / maxHours) * chartInnerHeight + 8;
-    return { x, y, day: item.day };
-  });
-
-  const linePath = points
-    .map((point, index) => `${index === 0 ? 'M' : 'L'} ${point.x} ${point.y}`)
-    .join(' ');
-
-  return (
-    <Svg width={CHART_WIDTH} height={HOURS_CHART_HEIGHT}>
-      <Path
-        d={linePath}
-        stroke={colors.chartTan}
-        strokeWidth={3}
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-
-      {points.map((point) => (
-        <Circle
-          key={point.day}
-          cx={point.x}
-          cy={point.y}
-          r={3}
-          fill={colors.chartTan}
-        />
-      ))}
-
-      {points.map((point) => (
-        <SvgText
-          key={`${point.day}-label`}
-          x={point.x}
-          y={HOURS_CHART_HEIGHT - 2}
-          fill={colors.textMuted}
-          fontSize={11}
-          fontWeight="500"
-          textAnchor="middle"
-        >
-          {point.day}
-        </SvgText>
-      ))}
-
-      <Line
-        x1={10}
-        y1={chartInnerHeight + 8}
-        x2={CHART_WIDTH - 10}
-        y2={chartInnerHeight + 8}
-        stroke={colors.calendarGridLine}
-        strokeWidth={1}
-      />
-    </Svg>
-  );
+function statusLabel(status: string) {
+  if (status === 'paid') return 'Paid';
+  if (status === 'in_transit') return 'In transit';
+  if (status === 'pending') return 'Pending';
+  if (status === 'failed') return 'Failed';
+  return status;
 }
 
 export default function EarningDetailsScreen({ navigation }: Props) {
   const { privacyMode } = usePrivacyMode();
+  const [summary, setSummary] = useState<StripeConnectSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await fetchStripeConnectStatus();
+      setSummary(data);
+    } catch {
+      setSummary(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void refresh();
+    }, [refresh]),
+  );
+
+  const isReady = summary?.status === 'ready';
+  const payouts = summary?.recentPayouts ?? [];
+  const totalPayoutsAmount = payouts
+    .filter((p) => p.status === 'paid')
+    .reduce((sum, p) => sum + p.amountCents, 0);
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header — no calendar icon */}
       <View style={styles.header}>
         <Pressable style={styles.headerButton} onPress={() => navigation.goBack()}>
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>
-
-        <Text style={styles.headerTitle}>Earning Details</Text>
-
-        <Pressable style={styles.headerButton}>
-          <Ionicons name="calendar-outline" size={20} color={colors.text} />
-        </Pressable>
+        <Text style={styles.headerTitle}>Earnings</Text>
+        <View style={styles.headerButton} />
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Daily Revenue</Text>
-          <Text style={styles.dateRange}>May 22 - May 29, 2025</Text>
+      {loading ? (
+        <ActivityIndicator color={colors.accentPink} style={styles.loader} />
+      ) : (
+        <ScrollView
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Balance overview card */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Balance overview</Text>
+            <Text style={styles.dateRange}>Updated just now</Text>
 
-          <View style={styles.totalBadge}>
-            <Text style={styles.totalBadgeText}>Total: {maskMoney(1250, privacyMode)}</Text>
+            <View style={styles.balanceRow}>
+              <View style={styles.balanceItem}>
+                <Text style={styles.balanceValue}>
+                  {maskMoney(
+                    isReady ? (summary?.balanceAvailableCents ?? 0) / 100 : 0,
+                    privacyMode,
+                  )}
+                </Text>
+                <View style={styles.balanceLabelRow}>
+                  <View style={[styles.dot, { backgroundColor: colors.chartBlue }]} />
+                  <Text style={styles.balanceLabel}>Available</Text>
+                </View>
+              </View>
+              <View style={styles.balanceDivider} />
+              <View style={styles.balanceItem}>
+                <Text style={styles.balanceValue}>
+                  {maskMoney(
+                    isReady ? (summary?.balancePendingCents ?? 0) / 100 : 0,
+                    privacyMode,
+                  )}
+                </Text>
+                <View style={styles.balanceLabelRow}>
+                  <View style={[styles.dot, { backgroundColor: colors.chartTan }]} />
+                  <Text style={styles.balanceLabel}>Pending</Text>
+                </View>
+              </View>
+            </View>
+
+            {!isReady && (
+              <View style={styles.notReadyBanner}>
+                <Ionicons name="information-circle-outline" size={15} color={colors.textMuted} />
+                <Text style={styles.notReadyText}>
+                  Set up Styld Pay from your Profile to start collecting payments.
+                </Text>
+              </View>
+            )}
           </View>
 
-          <RevenueChart />
-        </View>
+          {/* Payout history */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Payout history</Text>
+            {payouts.length > 0 ? (
+              <>
+                <View style={styles.totalBadge}>
+                  <Text style={styles.totalBadgeText}>
+                    Paid out: {maskMoney(totalPayoutsAmount / 100, privacyMode)}
+                  </Text>
+                </View>
+                <PayoutsBarChart payouts={payouts} />
+              </>
+            ) : (
+              <Text style={styles.emptyText}>No payouts yet. Earnings will appear here once you withdraw.</Text>
+            )}
+          </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Work hours</Text>
-          <Text style={styles.hoursAverage}>
-            <Text style={styles.hoursAverageValue}>5 hours </Text>
-            Daily Avg.
-          </Text>
-
-          <WorkHoursChart />
-        </View>
-      </ScrollView>
+          {/* Payout list */}
+          {payouts.length > 0 && (
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Recent payouts</Text>
+              {payouts.map((payout, idx) => (
+                <View
+                  key={payout.id}
+                  style={[styles.payoutRow, idx < payouts.length - 1 && styles.payoutRowBorder]}
+                >
+                  <View style={styles.payoutLeft}>
+                    <Text style={styles.payoutAmount}>
+                      {privacyMode ? '••••' : formatUsdFromCents(payout.amountCents)}
+                    </Text>
+                    <Text style={styles.payoutDate}>
+                      Arrives {new Date(payout.arrivalDate * 1000).toLocaleDateString('en-US', {
+                        month: 'short',
+                        day: 'numeric',
+                        year: 'numeric',
+                      })}
+                    </Text>
+                  </View>
+                  <View style={[styles.statusBadge, { borderColor: statusColor(payout.status) + '44' }]}>
+                    <Text style={[styles.statusText, { color: statusColor(payout.status) }]}>
+                      {statusLabel(payout.status)}
+                    </Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 }
@@ -234,9 +268,12 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '600',
   },
+  loader: {
+    marginTop: 60,
+  },
   content: {
     paddingHorizontal: 20,
-    paddingBottom: 120,
+    paddingBottom: 40,
     gap: 14,
   },
   card: {
@@ -248,37 +285,123 @@ const styles = StyleSheet.create({
   },
   cardTitle: {
     color: colors.text,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   dateRange: {
     color: colors.textMuted,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '500',
-    marginBottom: 14,
+    marginBottom: 16,
   },
+
+  /* Balance row */
+  balanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 0,
+    marginBottom: 4,
+  },
+  balanceItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  balanceDivider: {
+    width: 1,
+    height: 44,
+    backgroundColor: colors.cardBorder,
+  },
+  balanceValue: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: colors.text,
+    letterSpacing: -0.5,
+    marginBottom: 4,
+  },
+  balanceLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  dot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  balanceLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  notReadyBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    marginTop: 12,
+    padding: 10,
+    backgroundColor: colors.progressTrack,
+    borderRadius: 10,
+  },
+  notReadyText: {
+    flex: 1,
+    fontSize: 12,
+    color: colors.textMuted,
+    lineHeight: 17,
+  },
+
+  /* Payout chart section */
   totalBadge: {
     alignSelf: 'flex-start',
     backgroundColor: colors.accentBlueMuted,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    marginBottom: 18,
+    marginBottom: 16,
   },
   totalBadgeText: {
     color: colors.accentBlue,
     fontSize: 13,
     fontWeight: '600',
   },
-  hoursAverage: {
+  emptyText: {
     color: colors.textMuted,
-    fontSize: 14,
-    fontWeight: '500',
-    marginBottom: 18,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 8,
   },
-  hoursAverageValue: {
-    color: colors.chartTan,
-    fontWeight: '700',
+
+  /* Payout list */
+  payoutRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+  },
+  payoutRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.cardBorder,
+  },
+  payoutLeft: { flex: 1 },
+  payoutAmount: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.text,
+    marginBottom: 2,
+  },
+  payoutDate: {
+    fontSize: 12,
+    color: colors.textMuted,
+  },
+  statusBadge: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  statusText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
 });

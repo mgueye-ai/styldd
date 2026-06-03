@@ -53,15 +53,18 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
     }, [refresh]),
   );
 
-  async function handleOpenStripe() {
+  async function handleOpenOnboarding() {
     setBusy(true);
     try {
       const result = await startStripeConnectOnboarding();
       if ('alreadyOnboarded' in result && result.alreadyOnboarded) {
-        setConnectUrl(result.dashboardUrl);
-      } else {
-        setConnectUrl(result.onboardingUrl);
+        Alert.alert(
+          'Already set up',
+          'Your payout account is active. You can withdraw earnings from the Earnings section on your dashboard.',
+        );
+        return;
       }
+      setConnectUrl(result.onboardingUrl);
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Try again');
     } finally {
@@ -92,6 +95,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
   const isPending =
     summary?.status === 'onboarding' || summary?.status === 'pending_review';
   const hasAccount = summary?.hasAccount;
+  const bank = summary?.bankAccount;
 
   return (
     <>
@@ -107,14 +111,14 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
 
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Text style={styles.hint}>
-            Earnings from bookings go to your Stripe account and can be withdrawn to your bank.
+            Earnings from bookings accumulate here and can be withdrawn to your linked bank account.
           </Text>
 
           {loading ? (
             <ActivityIndicator color={colors.accentPink} style={styles.loader} />
           ) : (
             <>
-              {/* Status card */}
+              {/* Status + balance card */}
               <View style={styles.statusCard}>
                 <View style={styles.statusRow}>
                   <View style={[
@@ -124,69 +128,123 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
                   <View style={{ flex: 1 }}>
                     <Text style={styles.statusTitle}>
                       {isReady
-                        ? 'Stripe account active'
+                        ? 'Styld Pay active'
                         : isPending
                           ? summary?.status === 'pending_review'
-                            ? 'Under Stripe review'
+                            ? 'Verification in progress'
                             : 'Setup in progress'
-                          : 'No Stripe account'}
+                          : 'Styld Pay not set up'}
                     </Text>
                     <Text style={styles.statusSub}>
-                      {isReady
-                        ? `Available: ${formatUsdFromCents(summary?.balanceAvailableCents ?? 0)} · Pending: ${formatUsdFromCents(summary?.balancePendingCents ?? 0)}`
-                        : isPending
-                          ? 'Stripe is verifying your information. This usually takes a few minutes.'
-                          : 'Set up your account to start receiving payments.'}
+                      {isPending
+                        ? "We're verifying your information. This usually takes a few minutes."
+                        : !isReady
+                          ? 'Complete setup to start receiving online payments.'
+                          : 'Your account is active and ready to receive payments.'}
                     </Text>
                   </View>
                 </View>
 
-                {/* Action button */}
-                <Pressable
-                  style={[styles.stripeBtn, busy && styles.btnDisabled]}
-                  disabled={busy}
-                  onPress={() => void handleOpenStripe()}
-                >
-                  {busy ? (
-                    <ActivityIndicator color="#fff" size="small" />
-                  ) : (
-                    <>
-                      <Ionicons name="card-outline" size={18} color="#fff" />
-                      <Text style={styles.stripeBtnText}>
-                        {isReady
-                          ? 'Open Stripe dashboard'
-                          : hasAccount
-                            ? 'Continue Stripe setup'
-                            : 'Connect with Stripe'}
+                {/* Balance rows — shown when ready */}
+                {isReady && (
+                  <View style={styles.balanceGrid}>
+                    <View style={styles.balanceItem}>
+                      <Text style={styles.balanceAmount}>
+                        {formatUsdFromCents(summary?.balanceAvailableCents ?? 0)}
                       </Text>
-                      <Ionicons name="open-outline" size={15} color="rgba(255,255,255,0.7)" />
-                    </>
-                  )}
-                </Pressable>
+                      <Text style={styles.balanceLabel}>Available</Text>
+                    </View>
+                    <View style={styles.balanceDivider} />
+                    <View style={styles.balanceItem}>
+                      <Text style={styles.balanceAmount}>
+                        {formatUsdFromCents(summary?.balancePendingCents ?? 0)}
+                      </Text>
+                      <Text style={styles.balanceLabel}>Pending</Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Setup / continue button — only when NOT ready */}
+                {!isReady && (
+                  <Pressable
+                    style={[styles.setupBtn, busy && styles.btnDisabled]}
+                    disabled={busy}
+                    onPress={() => void handleOpenOnboarding()}
+                  >
+                    {busy ? (
+                      <ActivityIndicator color="#fff" size="small" />
+                    ) : (
+                      <>
+                        <Ionicons name="card-outline" size={18} color="#fff" />
+                        <Text style={styles.setupBtnText}>
+                          {hasAccount ? 'Continue setup' : 'Set up Styld Pay'}
+                        </Text>
+                      </>
+                    )}
+                  </Pressable>
+                )}
               </View>
 
+              {/* Linked bank account — shown when ready */}
+              {isReady && (
+                <>
+                  <Text style={styles.sectionLabel}>Linked bank account</Text>
+                  <View style={styles.bankCard}>
+                    <View style={styles.bankIconWrap}>
+                      <Ionicons name="business-outline" size={22} color={colors.accentPink} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      {bank ? (
+                        <>
+                          <Text style={styles.bankName}>{bank.bankName}</Text>
+                          <Text style={styles.bankSub}>
+                            Account ending in {bank.last4}
+                            {bank.routingNumber ? ` · Routing ${bank.routingNumber}` : ''}
+                          </Text>
+                          {bank.accountHolderName ? (
+                            <Text style={styles.bankHolder}>{bank.accountHolderName}</Text>
+                          ) : null}
+                        </>
+                      ) : (
+                        <Text style={styles.bankSub}>No bank account linked yet.</Text>
+                      )}
+                    </View>
+                    <View style={[styles.verifiedBadge]}>
+                      <Ionicons name="checkmark-circle" size={14} color="#15803d" />
+                      <Text style={styles.verifiedText}>Verified</Text>
+                    </View>
+                  </View>
+
+                  <Text style={styles.withdrawNote}>
+                    To withdraw earnings, go to your{' '}
+                    <Text style={styles.withdrawNoteLink}>Dashboard → Earnings</Text>
+                    {' '}and tap Withdraw.
+                  </Text>
+                </>
+              )}
+
               {/* How it works */}
-              <Text style={styles.sectionLabel}>How payouts work</Text>
+              <Text style={[styles.sectionLabel, { marginTop: isReady ? 28 : 0 }]}>How payouts work</Text>
               {[
                 {
                   icon: 'card-outline' as const,
                   title: 'Customer pays on your site',
-                  body: 'When someone books and pays, the money goes directly to your Stripe account.',
+                  body: 'When someone books and pays, the money goes directly to your Styld Pay account.',
                 },
                 {
                   icon: 'wallet-outline' as const,
                   title: 'Earnings accumulate',
-                  body: 'View your balance above. Stripe holds funds briefly before they become available.',
+                  body: 'Funds are held briefly before becoming available, usually 2–3 business days.',
                 },
                 {
                   icon: 'arrow-down-circle-outline' as const,
                   title: 'Withdraw to your bank',
-                  body: 'Tap Withdraw on the Earnings card. Arrives in 1–2 business days.',
+                  body: 'Tap Withdraw on the Earnings card on your dashboard. Arrives in 1–2 business days.',
                 },
                 {
                   icon: 'shield-checkmark-outline' as const,
-                  title: 'Bank account managed by Stripe',
-                  body: 'Add or change your bank account anytime via the Stripe dashboard.',
+                  title: 'Bank account managed by Styld',
+                  body: 'Your linked bank account is shown above and verified by our secure payment partner.',
                 },
               ].map((item) => (
                 <View key={item.title} style={styles.howRow}>
@@ -204,14 +262,14 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
         </ScrollView>
       </SafeAreaView>
 
-      {/* Stripe modal */}
+      {/* Onboarding WebView — only used for initial setup flow */}
       <Modal visible={!!connectUrl} animationType="slide" onRequestClose={() => setConnectUrl(null)}>
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
             <Pressable onPress={() => setConnectUrl(null)} hitSlop={12}>
               <Ionicons name="close" size={22} color={colors.text} />
             </Pressable>
-            <Text style={styles.modalTitle}>Stripe</Text>
+            <Text style={styles.modalTitle}>Styld Pay Setup</Text>
             <Pressable
               onPress={() => {
                 setConnectUrl(null);
@@ -274,7 +332,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.cardBorder,
     padding: 16,
-    marginBottom: 28,
+    marginBottom: 24,
     gap: 14,
   },
   statusRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
@@ -285,8 +343,22 @@ const styles = StyleSheet.create({
   statusTitle: { fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: 3 },
   statusSub: { fontSize: 13, color: colors.textMuted, lineHeight: 18 },
 
-  stripeBtn: {
-    backgroundColor: '#635bff',
+  /* Balance grid */
+  balanceGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.progressTrack,
+    borderRadius: 12,
+    padding: 14,
+  },
+  balanceItem: { flex: 1, alignItems: 'center' },
+  balanceAmount: { fontSize: 22, fontWeight: '700', color: colors.text, marginBottom: 2 },
+  balanceLabel: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
+  balanceDivider: { width: 1, height: 36, backgroundColor: colors.cardBorder },
+
+  /* Setup button */
+  setupBtn: {
+    backgroundColor: colors.accentPink,
     borderRadius: 12,
     paddingVertical: 13,
     paddingHorizontal: 16,
@@ -295,10 +367,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
-  stripeBtnText: { color: '#fff', fontSize: 15, fontWeight: '600', flex: 1, textAlign: 'center' },
+  setupBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
   btnDisabled: { opacity: 0.5 },
 
-  /* How it works */
+  /* Bank card */
   sectionLabel: {
     fontSize: 12,
     fontWeight: '700',
@@ -307,6 +379,48 @@ const styles = StyleSheet.create({
     letterSpacing: 0.8,
     marginBottom: 12,
   },
+  bankCard: {
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+  },
+  bankIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: colors.progressTrack,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bankName: { fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: 2 },
+  bankSub: { fontSize: 13, color: colors.textMuted },
+  bankHolder: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  verifiedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#dcfce7',
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  verifiedText: { fontSize: 11, fontWeight: '600', color: '#15803d' },
+
+  withdrawNote: {
+    fontSize: 13,
+    color: colors.textMuted,
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  withdrawNoteLink: { color: colors.accentPink, fontWeight: '600' },
+
+  /* How it works */
   howRow: {
     flexDirection: 'row',
     gap: 12,
