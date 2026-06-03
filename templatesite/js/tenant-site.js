@@ -107,7 +107,43 @@
         heroLayout: theme.heroLayout || 'split',
         heroImageUrl: coverUrl(theme.heroImagePath),
         logoImageUrl: coverUrl(theme.logoImagePath),
+        primaryColor: theme.primaryColor || null,
+        secondaryColor: theme.secondaryColor || null,
+        styleCardLayout: theme.styleCardLayout || 'card',
       };
+
+      // Apply brand colors as CSS variables
+      if (theme.primaryColor || theme.secondaryColor) {
+        (function applyBrandColors() {
+          var primary = theme.primaryColor || '#db2777';
+          var secondary = theme.secondaryColor || '#0a0a0a';
+
+          function hexToRgb(hex) {
+            var clean = hex.replace('#', '');
+            if (clean.length !== 6) return null;
+            return [parseInt(clean.slice(0, 2), 16), parseInt(clean.slice(2, 4), 16), parseInt(clean.slice(4, 6), 16)];
+          }
+          function darken(hex, factor) {
+            var rgb = hexToRgb(hex);
+            if (!rgb) return hex;
+            return '#' + rgb.map(function(c){ return Math.max(0, Math.round(c * factor)).toString(16).padStart(2, '0'); }).join('');
+          }
+          function lighten(hex, factor) {
+            var rgb = hexToRgb(hex);
+            if (!rgb) return hex;
+            return '#' + rgb.map(function(c){ return Math.min(255, Math.round(c + (255 - c) * factor)).toString(16).padStart(2, '0'); }).join('');
+          }
+
+          var root = document.documentElement;
+          root.style.setProperty('--pink', primary);
+          root.style.setProperty('--pink-dark', darken(primary, 0.68));
+          root.style.setProperty('--pink-heading', lighten(primary, 0.1));
+          root.style.setProperty('--hero-pink', lighten(primary, 0.22));
+          root.style.setProperty('--hero-pink-deep', darken(primary, 0.68));
+          root.style.setProperty('--pink-light', lighten(primary, 0.22));
+          root.style.setProperty('--ink', secondary);
+        })();
+      }
 
       var styles = Object.keys(meta).slice(0, 8).map(function (styleId) {
         var item = meta[styleId] || {};

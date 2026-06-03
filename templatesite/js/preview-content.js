@@ -205,6 +205,43 @@
       .join('');
   }
 
+  function buildMenuStylePillsHtml(styles) {
+    if (!styles || !styles.length) {
+      return (
+        '<a class="style-pill" href="#">' +
+        '<div class="style-pill__img"></div>' +
+        '<div class="style-pill__body"><div class="style-pill__name">Add styles</div>' +
+        '<div class="style-pill__desc">Your services appear here</div></div></a>'
+      );
+    }
+    return styles
+      .slice(0, 20)
+      .map(function (style) {
+        var imgHtml = style.imageUrl
+          ? '<div class="style-pill__img--bg" style="background-image:url(\'' +
+            String(style.imageUrl).replace(/'/g, '%27') +
+            '\')"></div>'
+          : '<div class="style-pill__img"></div>';
+        var desc = style.description
+          ? '<div class="style-pill__desc">' + escapeHtml(style.description) + '</div>'
+          : '';
+        var price = style.priceLabel
+          ? '<span class="style-pill__price">' + escapeHtml(style.priceLabel) + '</span>'
+          : '';
+        return (
+          '<a class="style-pill" href="#">' +
+          imgHtml +
+          '<div class="style-pill__body">' +
+          '<div class="style-pill__name">' + escapeHtml(style.title || '') + '</div>' +
+          desc +
+          '</div>' +
+          price +
+          '</a>'
+        );
+      })
+      .join('');
+  }
+
   window.applyStyldPreviewContent = function applyStyldPreviewContent() {
     var content = window.__STYLD_SITE_CONTENT__;
     if (!content || typeof content !== 'object') return;
@@ -231,12 +268,21 @@
     setText('preview-footer-brand', content.brandName);
     setText('preview-footer-tagline', content.metaDescription);
 
-    var handle = (content.instagramHandle || 'yourhandle').replace(/^@/, '');
-    setText('preview-instagram', '@' + handle);
+    var handle = (content.instagramHandle || 'yourhandle').replace(/^@/, '').trim();
+    var igUrl = 'https://www.instagram.com/' + encodeURIComponent(handle) + '/';
+
+    var igEl = document.getElementById('preview-instagram');
+    if (igEl) {
+      igEl.innerHTML =
+        '<a href="' +
+        escapeHtml(igUrl) +
+        '" target="_blank" rel="noopener noreferrer" style="color:inherit;text-decoration:underline;text-underline-offset:3px;">@' +
+        escapeHtml(handle) +
+        '</a>';
+    }
 
     var reelsNote = document.getElementById('preview-reels-note');
     if (reelsNote) {
-      var igUrl = 'https://www.instagram.com/' + encodeURIComponent(handle) + '/';
       reelsNote.innerHTML =
         'Follow <a href="' +
         escapeHtml(igUrl) +
@@ -274,7 +320,14 @@
 
     var grid = document.getElementById('preview-style-grid');
     if (grid) {
-      grid.innerHTML = buildMenuStyleCardsHtml(window.__STYLD_SITE_STYLES__ || []);
+      var styleCardLayout =
+        (window.__STYLD_SITE_THEME__ && window.__STYLD_SITE_THEME__.styleCardLayout) || 'card';
+      if (styleCardLayout === 'pill') {
+        grid.className = 'style-pill-list';
+        grid.innerHTML = buildMenuStylePillsHtml(window.__STYLD_SITE_STYLES__ || []);
+      } else {
+        grid.innerHTML = buildMenuStyleCardsHtml(window.__STYLD_SITE_STYLES__ || []);
+      }
     }
   };
 

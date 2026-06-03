@@ -1,9 +1,12 @@
 import HeroImagePicker from './HeroImagePicker';
 import HeroLayoutPicker from './HeroLayoutPicker';
+import ColorPicker from './ColorPicker';
 import { useSiteContent } from '../../context/SiteContentContext';
 import { useSiteTheme } from '../../context/SiteThemeContext';
+import { StyleCardLayout } from '../../data/siteTheme';
 import { colors } from '../../theme';
-import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 function Field({
   label,
@@ -30,17 +33,57 @@ function Field({
   );
 }
 
+type LayoutOptionProps = {
+  value: StyleCardLayout;
+  current: StyleCardLayout;
+  onSelect: (v: StyleCardLayout) => void;
+  icon: string;
+  label: string;
+  description: string;
+};
+
+function CardLayoutOption({ value, current, onSelect, icon, label, description }: LayoutOptionProps) {
+  const active = value === current;
+  return (
+    <Pressable
+      style={[styles.layoutOption, active && styles.layoutOptionActive]}
+      onPress={() => onSelect(value)}
+    >
+      <View style={[styles.layoutOptionIcon, active && styles.layoutOptionIconActive]}>
+        <Ionicons name={icon as any} size={20} color={active ? colors.accentPink : colors.textMuted} />
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={[styles.layoutOptionLabel, active && styles.layoutOptionLabelActive]}>{label}</Text>
+        <Text style={styles.layoutOptionDesc}>{description}</Text>
+      </View>
+      {active && <Ionicons name="checkmark-circle" size={18} color={colors.accentPink} />}
+    </Pressable>
+  );
+}
+
 export default function SiteDesignEditor() {
   const { content, updateContent } = useSiteContent();
-  const { theme, setHeroLayout, uploadHeroImage, uploadLogoImage, removeHeroImage, heroImageUrl, logoImageUrl, isSaving } =
+  const { theme, updateTheme, setHeroLayout, uploadHeroImage, uploadLogoImage, removeHeroImage, heroImageUrl, logoImageUrl, isSaving } =
     useSiteTheme();
 
   return (
     <View>
+      <Text style={styles.groupTitle}>Brand colors</Text>
       <Text style={styles.helper}>
-        Choose how your hero looks — text beside your photo, image first, or text only. Upload your
-        logo and main photo clients see at the top of your site.
+        Choose your primary accent color and the dominant dark color for text and backgrounds.
       </Text>
+      <ColorPicker
+        label="Primary color"
+        value={theme.primaryColor}
+        presets="primary"
+        onChange={(primaryColor) => updateTheme({ primaryColor })}
+      />
+      <ColorPicker
+        label="Secondary color"
+        value={theme.secondaryColor}
+        presets="secondary"
+        onChange={(secondaryColor) => updateTheme({ secondaryColor })}
+      />
 
       <Text style={styles.groupTitle}>Logo</Text>
       <HeroImagePicker
@@ -49,7 +92,26 @@ export default function SiteDesignEditor() {
         onPick={uploadLogoImage}
       />
 
-      <Text style={styles.groupTitle}>Template layout</Text>
+      <Text style={styles.groupTitle}>Menu card style</Text>
+      <Text style={styles.helper}>How your services appear in the menu section.</Text>
+      <CardLayoutOption
+        value="card"
+        current={theme.styleCardLayout}
+        onSelect={(styleCardLayout) => updateTheme({ styleCardLayout })}
+        icon="albums-outline"
+        label="Cards"
+        description="Square image with service name and price"
+      />
+      <CardLayoutOption
+        value="pill"
+        current={theme.styleCardLayout}
+        onSelect={(styleCardLayout) => updateTheme({ styleCardLayout })}
+        icon="ellipse-outline"
+        label="Pills"
+        description="Compact horizontal row — great for long menus"
+      />
+
+      <Text style={styles.groupTitle}>Hero layout</Text>
       <HeroLayoutPicker value={theme.heroLayout} onChange={setHeroLayout} />
 
       <Text style={styles.groupTitle}>Hero photo</Text>
@@ -133,5 +195,44 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 15,
     backgroundColor: colors.card,
+  },
+  layoutOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 8,
+  },
+  layoutOptionActive: {
+    borderColor: colors.accentPink,
+    backgroundColor: colors.accentPinkMuted,
+  },
+  layoutOptionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  layoutOptionIconActive: {
+    backgroundColor: colors.accentPinkSoft,
+  },
+  layoutOptionLabel: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  layoutOptionLabelActive: {
+    color: colors.text,
+  },
+  layoutOptionDesc: {
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
   },
 });

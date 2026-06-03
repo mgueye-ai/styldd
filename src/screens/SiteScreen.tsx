@@ -4,12 +4,14 @@ import { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { WebView } from 'react-native-webview';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import PeriodSelector from '../components/PeriodSelector';
 import { getSiteAnalytics, Period } from '../data/periods';
@@ -20,7 +22,7 @@ import { useSiteContent } from '../context/SiteContentContext';
 import { useSiteTheme } from '../context/SiteThemeContext';
 import { formatStylePrice } from '../data/siteStyles';
 import { SitePreviewTheme } from '../lib/sitePreviewHtml';
-import { buildPublicSiteUrl, getSiteRootDomain, normalizeSubdomain } from '../data/sitePublish';
+import { getSiteRootDomain, normalizeSubdomain } from '../data/sitePublish';
 import { useOnboarding } from '../context/OnboardingContext';
 import { useSiteData } from '../context/SiteDataContext';
 import { SiteStackParamList } from '../navigation/SiteNavigator';
@@ -100,11 +102,19 @@ function StatTile({ icon, label, value, sub }: {
   );
 }
 
+const WEBVIEW_HEIGHT = 420;
+
 function SitePreviewPanel({ loading }: { loading: boolean }) {
   const { content } = useSiteContent();
   const { sitePublish } = useOnboarding();
   const { theme, heroImageUrl } = useSiteTheme();
   const { catalogServices, getCoverUrl, getPrice, getStyleMeta } = useServiceCatalog();
+
+  const liveUrl = sitePublish.published && sitePublish.publicUrl ? sitePublish.publicUrl : null;
+  const displayUrl =
+    liveUrl?.replace(/^https?:\/\//, '') ??
+    `${normalizeDisplaySlug(content.brandName)}.${getSiteRootDomain()}`;
+
   const previewStyles = useMemo(
     () =>
       catalogServices.map((service) => {
@@ -124,10 +134,31 @@ function SitePreviewPanel({ loading }: { loading: boolean }) {
     [heroImageUrl, theme.heroLayout],
   );
 
+  const browserBar = (
+    <Pressable
+      style={styles.browserBar}
+      onPress={() => liveUrl && Linking.openURL(liveUrl)}
+      accessibilityRole="link"
+    >
+      <View style={styles.browserDots}>
+        <View style={[styles.dot, styles.dotRed]} />
+        <View style={[styles.dot, styles.dotYellow]} />
+        <View style={[styles.dot, styles.dotGreen]} />
+      </View>
+      <Text style={styles.browserUrl} numberOfLines={1}>
+        {displayUrl}
+      </Text>
+      {liveUrl ? (
+        <Ionicons name="open-outline" size={14} color={colors.textMuted} />
+      ) : null}
+    </Pressable>
+  );
+
   if (loading) {
     return (
       <View style={styles.sitePanel}>
-        <View style={styles.webviewWrap}>
+        {browserBar}
+        <View style={[styles.webviewWrap, { height: WEBVIEW_HEIGHT }]}>
           <View style={styles.webviewLoading}>
             <ActivityIndicator color={colors.accentPink} />
           </View>
@@ -138,19 +169,31 @@ function SitePreviewPanel({ loading }: { loading: boolean }) {
 
   return (
     <View style={styles.sitePanel}>
-      <View style={styles.browserBar}>
-        <View style={styles.browserDots}>
-          <View style={[styles.dot, styles.dotRed]} />
-          <View style={[styles.dot, styles.dotYellow]} />
-          <View style={[styles.dot, styles.dotGreen]} />
-        </View>
-        <Text style={styles.browserUrl} numberOfLines={1}>
-          {sitePublish.publicUrl?.replace(/^https?:\/\//, '') ||
-            `${normalizeDisplaySlug(content.brandName)}.${getSiteRootDomain()}`}
-        </Text>
-      </View>
-      <View style={styles.webviewWrap}>
-        <SitePreviewWebView content={content} styles={previewStyles} theme={previewTheme} />
+      {browserBar}
+      <View style={[styles.webviewWrap, { height: WEBVIEW_HEIGHT }]}>
+        {liveUrl ? (
+          <WebView
+            source={{ uri: liveUrl }}
+            style={styles.webview}
+            scrollEnabled
+            showsVerticalScrollIndicator={false}
+            startInLoadingState
+            renderLoading={() => (
+              <View style={styles.webviewLoading}>
+                <ActivityIndicator color={colors.accentPink} />
+              </View>
+            )}
+            onShouldStartLoadWithRequest={(req) => {
+              if (req.url !== liveUrl && req.navigationType === 'click') {
+                Linking.openURL(req.url);
+                return false;
+              }
+              return true;
+            }}
+          />
+        ) : (
+          <SitePreviewWebView content={content} styles={previewStyles} theme={previewTheme} />
+        )}
       </View>
     </View>
   );
@@ -202,7 +245,11 @@ export default function SiteScreen({ navigation }: Props) {
       </View>
 
       {activeTab === 'site' ? (
-        <>
+        <ScrollView
+          contentContainerStyle={styles.sitePanelScroll}
+          showsVerticalScrollIndicator={false}
+          scrollEventThrottle={16}
+        >
           {needsSetup && !onboardingLoading ? (
             <Pressable
               style={styles.setupBanner}
@@ -228,7 +275,7 @@ export default function SiteScreen({ navigation }: Props) {
               onPublish={() => navigation.navigate('SiteDeploy')}
             />
           ) : null}
-        </>
+        </ScrollView>
       ) : (
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <Text style={styles.title}>Analytics</Text>
@@ -385,10 +432,12 @@ const styles = StyleSheet.create({
   switcherTextActive: {
     color: colors.navbarActive,
   },
+  sitePanelScroll: {
+    paddingBottom: 140,
+  },
   sitePanel: {
-    flex: 1,
     paddingHorizontal: 20,
-    paddingBottom: 108,
+    paddingBottom: 12,
   },
   linkCard: {
     flex: 1,

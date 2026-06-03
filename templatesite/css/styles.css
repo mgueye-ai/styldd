@@ -807,14 +807,31 @@ a:hover {
   align-items: center;
   gap: clamp(1rem, 3vw, 1.5rem);
   text-align: center;
+  width: 100%;
 }
 
 .hero-layout--image-below .hero-scale-visual {
-  width: min(100%, 420px);
-  max-width: 90vw;
+  display: block;
+  align-self: center;
+  width: min(90vw, 380px);
+  max-width: 380px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .hero-layout--image-below .hero-scale-title {
+  width: 100%;
+  text-align: center;
+}
+
+.hero-layout--image-below .hero-scale-col--center {
+  align-items: center;
+  text-align: center;
+  width: 100%;
+}
+
+.hero-layout--image-below .hero-ctas {
+  justify-content: center;
   width: 100%;
 }
 
@@ -840,10 +857,19 @@ a:hover {
     gap: 1.15rem;
   }
 
-  .hero-scale-visual {
+  /* For split layout: image pops above text on mobile */
+  .hero-layout--split .hero-scale-visual {
     order: -1;
     max-width: min(360px, 90vw);
     margin-bottom: 0.25rem;
+  }
+
+  /* For image-below layout: image stays below, centered */
+  .hero-layout--image-below .hero-scale-visual {
+    order: 1;
+    max-width: min(360px, 90vw);
+    margin: 0 auto;
+    display: block;
   }
 
   .hero-scale-col--left,
@@ -856,6 +882,12 @@ a:hover {
     align-items: center;
     text-align: center;
   }
+}
+
+/* Additional centering for image-below — all screen sizes */
+.hero-layout--image-below .hero-scale-visual {
+  margin-inline: auto;
+  display: block;
 }
 
 .hero-center-stack {
@@ -1340,6 +1372,84 @@ a:hover {
   font-weight: 700;
   color: var(--pink-dark);
   font-size: 0.95rem;
+}
+
+/* ── Pill card layout ── */
+.style-pill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  width: 100%;
+}
+
+.style-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.6rem 1.1rem 0.6rem 0.6rem;
+  border-radius: 999px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.style-pill:hover {
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.1);
+  border-color: rgba(219, 39, 119, 0.25);
+}
+
+.style-pill__img {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: linear-gradient(145deg, #e8e4dc, #d4cfc5);
+}
+
+.style-pill__img--bg {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background-size: cover;
+  background-position: center;
+}
+
+.style-pill__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.style-pill__name {
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink);
+}
+
+.style-pill__desc {
+  font-size: 0.78rem;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.style-pill__price {
+  font-weight: 800;
+  font-size: 0.95rem;
+  color: var(--pink);
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 /* Videos */

@@ -1,3 +1,6 @@
+export type SiteSection = 'social' | 'menu' | 'about' | 'visit';
+export type LocationPart = 'address' | 'map' | 'contact';
+
 export type SiteContent = {
   brandName: string;
   taglineLeft: string;
@@ -24,7 +27,22 @@ export type SiteContent = {
   mapEmbedUrl: string;
   footerText: string;
   timezone: string;
+  hiddenSections: SiteSection[];
+  hiddenLocationParts: LocationPart[];
 };
+
+export const LOCATION_PARTS: { id: LocationPart; label: string; icon: string }[] = [
+  { id: 'address', label: 'Address', icon: 'home-outline' },
+  { id: 'map', label: 'Map', icon: 'map-outline' },
+  { id: 'contact', label: 'Contact info', icon: 'call-outline' },
+];
+
+export const SITE_SECTIONS: { id: SiteSection; label: string; icon: string }[] = [
+  { id: 'social', label: 'Social / reels', icon: 'play-circle-outline' },
+  { id: 'menu', label: 'Services menu', icon: 'list-outline' },
+  { id: 'about', label: 'About', icon: 'person-outline' },
+  { id: 'visit', label: 'Visit & contact', icon: 'location-outline' },
+];
 
 export const DEFAULT_SITE_CONTENT: SiteContent = {
   brandName: 'Your brand name',
@@ -55,7 +73,12 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
   mapEmbedUrl: '',
   footerText: 'Add footer credit here',
   timezone: 'America/New_York',
+  hiddenSections: [],
+  hiddenLocationParts: [],
 };
+
+const VALID_SECTIONS: SiteSection[] = ['social', 'menu', 'about', 'visit'];
+const VALID_LOCATION_PARTS: LocationPart[] = ['address', 'map', 'contact'];
 
 export function normalizeSiteContent(value: unknown): SiteContent {
   const source =
@@ -63,10 +86,24 @@ export function normalizeSiteContent(value: unknown): SiteContent {
 
   const result = { ...DEFAULT_SITE_CONTENT };
   for (const key of Object.keys(DEFAULT_SITE_CONTENT) as (keyof SiteContent)[]) {
+    if (key === 'hiddenSections' || key === 'hiddenLocationParts') continue;
     if (typeof source[key] === 'string') {
-      result[key] = source[key] as string;
+      (result as Record<string, unknown>)[key] = source[key];
     }
   }
+
+  if (Array.isArray(source.hiddenSections)) {
+    result.hiddenSections = (source.hiddenSections as unknown[]).filter(
+      (s): s is SiteSection => VALID_SECTIONS.includes(s as SiteSection),
+    );
+  }
+
+  if (Array.isArray(source.hiddenLocationParts)) {
+    result.hiddenLocationParts = (source.hiddenLocationParts as unknown[]).filter(
+      (p): p is LocationPart => VALID_LOCATION_PARTS.includes(p as LocationPart),
+    );
+  }
+
   return result;
 }
 

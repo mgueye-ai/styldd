@@ -1,15 +1,22 @@
 export type HeroLayout = 'split' | 'image-below' | 'minimal';
+export type StyleCardLayout = 'card' | 'pill';
 
 export type SiteTheme = {
   heroLayout: HeroLayout;
   heroImagePath: string | null;
   logoImagePath: string | null;
+  primaryColor: string;
+  secondaryColor: string;
+  styleCardLayout: StyleCardLayout;
 };
 
 export const DEFAULT_SITE_THEME: SiteTheme = {
   heroLayout: 'split',
   heroImagePath: null,
   logoImagePath: null,
+  primaryColor: '#db2777',
+  secondaryColor: '#0a0a0a',
+  styleCardLayout: 'card',
 };
 
 export type HeroLayoutOption = {
@@ -36,6 +43,10 @@ export const HERO_LAYOUT_OPTIONS: HeroLayoutOption[] = [
   },
 ];
 
+function isValidHexColor(value: unknown): value is string {
+  return typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value.trim());
+}
+
 export function normalizeSiteTheme(value: unknown): SiteTheme {
   const source =
     value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
@@ -56,5 +67,13 @@ export function normalizeSiteTheme(value: unknown): SiteTheme {
       typeof source.logoImagePath === 'string' && source.logoImagePath.trim()
         ? source.logoImagePath.trim()
         : null,
+    primaryColor: isValidHexColor(source.primaryColor)
+      ? source.primaryColor.trim()
+      : DEFAULT_SITE_THEME.primaryColor,
+    secondaryColor: isValidHexColor(source.secondaryColor)
+      ? source.secondaryColor.trim()
+      : DEFAULT_SITE_THEME.secondaryColor,
+    styleCardLayout:
+      source.styleCardLayout === 'pill' ? 'pill' : DEFAULT_SITE_THEME.styleCardLayout,
   };
 }

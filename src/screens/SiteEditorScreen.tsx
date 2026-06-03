@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useMemo, useState } from 'react';
 import {
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,16 +10,16 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import SiteDesignEditor from '../components/site/SiteDesignEditor';
 import SitePreviewWebView from '../components/site/SitePreviewWebView';
-import ViewLiveSiteButton from '../components/site/ViewLiveSiteButton';
 import SiteStylesEditor from '../components/site/SiteStylesEditor';
 import { useServiceCatalog } from '../context/ServiceCatalogContext';
 import { useSiteContent } from '../context/SiteContentContext';
 import { useSiteTheme } from '../context/SiteThemeContext';
 import { useOnboarding } from '../context/OnboardingContext';
 import { formatStylePrice } from '../data/siteStyles';
+import { LOCATION_PARTS, LocationPart, SITE_SECTIONS, SiteSection } from '../data/siteContent';
 import { SitePreviewTheme } from '../lib/sitePreviewHtml';
 import { SiteStackParamList } from '../navigation/SiteNavigator';
 import { colors } from '../theme';
@@ -26,6 +27,7 @@ import { colors } from '../theme';
 type Props = NativeStackScreenProps<SiteStackParamList, 'SiteEditor'>;
 
 type EditorTab = 'design' | 'content' | 'location' | 'styles';
+type PreviewMode = 'split' | 'fullscreen' | 'hidden';
 
 function Field({
   label,
@@ -55,18 +57,141 @@ function Field({
   );
 }
 
+function SectionCard({
+  sectionId,
+  label,
+  icon,
+  visible,
+  onToggle,
+  children,
+}: {
+  sectionId: SiteSection;
+  label: string;
+  icon: string;
+  visible: boolean;
+  onToggle: (id: SiteSection) => void;
+  children: React.ReactNode;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <View style={[styles.sectionCard, !visible && styles.sectionCardHidden]}>
+      <Pressable
+        style={styles.sectionCardHeader}
+        onPress={() => { if (visible) setExpanded((e) => !e); }}
+      >
+        <View style={styles.sectionCardLeft}>
+          <Ionicons
+            name={icon as keyof typeof Ionicons.glyphMap}
+            size={18}
+            color={visible ? colors.text : colors.textMuted}
+          />
+          <Text style={[styles.sectionCardTitle, !visible && styles.sectionCardTitleHidden]}>
+            {label}
+          </Text>
+        </View>
+        <View style={styles.sectionCardRight}>
+          <Pressable
+            hitSlop={10}
+            onPress={() => onToggle(sectionId)}
+            style={[styles.visibilityToggle, visible && styles.visibilityToggleOn]}
+          >
+            <Ionicons
+              name={visible ? 'eye-outline' : 'eye-off-outline'}
+              size={16}
+              color={visible ? colors.accentPink : colors.textMuted}
+            />
+          </Pressable>
+          {visible && (
+            <Ionicons
+              name={expanded ? 'chevron-up' : 'chevron-down'}
+              size={16}
+              color={colors.textMuted}
+            />
+          )}
+        </View>
+      </Pressable>
+
+      {expanded && visible ? (
+        <View style={styles.sectionCardBody}>{children}</View>
+      ) : null}
+    </View>
+  );
+}
+
+function LocationPartCard({
+  partId,
+  label,
+  icon,
+  visible,
+  onToggle,
+  children,
+}: {
+  partId: LocationPart;
+  label: string;
+  icon: string;
+  visible: boolean;
+  onToggle: (id: LocationPart) => void;
+  children: React.ReactNode;
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <View style={[styles.sectionCard, !visible && styles.sectionCardHidden]}>
+      <Pressable
+        style={styles.sectionCardHeader}
+        onPress={() => { if (visible) setExpanded((e) => !e); }}
+      >
+        <View style={styles.sectionCardLeft}>
+          <Ionicons
+            name={icon as keyof typeof Ionicons.glyphMap}
+            size={18}
+            color={visible ? colors.text : colors.textMuted}
+          />
+          <Text style={[styles.sectionCardTitle, !visible && styles.sectionCardTitleHidden]}>
+            {label}
+          </Text>
+        </View>
+        <View style={styles.sectionCardRight}>
+          <Pressable
+            hitSlop={10}
+            onPress={() => onToggle(partId)}
+            style={[styles.visibilityToggle, visible && styles.visibilityToggleOn]}
+          >
+            <Ionicons
+              name={visible ? 'eye-outline' : 'eye-off-outline'}
+              size={16}
+              color={visible ? colors.accentPink : colors.textMuted}
+            />
+          </Pressable>
+          {visible && (
+            <Ionicons
+              name={expanded ? 'chevron-up' : 'chevron-down'}
+              size={16}
+              color={colors.textMuted}
+            />
+          )}
+        </View>
+      </Pressable>
+
+      {expanded && visible ? (
+        <View style={styles.sectionCardBody}>{children}</View>
+      ) : null}
+    </View>
+  );
+}
+
 export default function SiteEditorScreen({ navigation }: Props) {
   const { content, updateContent, isSaving } = useSiteContent();
   const { sitePublish } = useOnboarding();
-  const { theme, heroImageUrl, isSaving: isSavingTheme } = useSiteTheme();
+  const { theme, heroImageUrl, logoImageUrl, isSaving: isSavingTheme } = useSiteTheme();
   const { catalogServices, getCoverUrl, getPrice, getStyleMeta, isSaving: isSavingStyles, refresh } =
     useServiceCatalog();
   const [tab, setTab] = useState<EditorTab>('design');
+  const [previewMode, setPreviewMode] = useState<PreviewMode>('split');
 
   useEffect(() => {
-    if (tab === 'styles') {
-      void refresh();
-    }
+    if (tab === 'styles') void refresh();
   }, [tab, refresh]);
 
   const previewStyles = useMemo(
@@ -85,45 +210,123 @@ export default function SiteEditorScreen({ navigation }: Props) {
   );
 
   const previewTheme = useMemo<SitePreviewTheme>(
-    () => ({ heroLayout: theme.heroLayout, heroImageUrl }),
-    [heroImageUrl, theme.heroLayout],
+    () => ({
+      heroLayout: theme.heroLayout,
+      heroImageUrl,
+      logoImageUrl,
+      primaryColor: theme.primaryColor,
+      secondaryColor: theme.secondaryColor,
+      styleCardLayout: theme.styleCardLayout,
+      zoomedOut: previewMode === 'split',
+    }),
+    [heroImageUrl, logoImageUrl, theme, previewMode],
   );
 
-  const saveLabel = isSaving || isSavingStyles || isSavingTheme ? 'Saving…' : 'Live preview';
+  const fullscreenTheme = useMemo<SitePreviewTheme>(
+    () => ({
+      ...previewTheme,
+      zoomedOut: false,
+    }),
+    [previewTheme],
+  );
+
+  const isSavingAny = isSaving || isSavingStyles || isSavingTheme;
+
+  const toggleSection = (sectionId: SiteSection) => {
+    const current = content.hiddenSections ?? [];
+    const next = current.includes(sectionId)
+      ? current.filter((s) => s !== sectionId)
+      : [...current, sectionId];
+    updateContent({ hiddenSections: next });
+  };
+
+  const isSectionVisible = (id: SiteSection) =>
+    !(content.hiddenSections ?? []).includes(id);
+
+  const toggleLocationPart = (partId: LocationPart) => {
+    const current = content.hiddenLocationParts ?? [];
+    const next = current.includes(partId)
+      ? current.filter((p) => p !== partId)
+      : [...current, partId];
+    updateContent({ hiddenLocationParts: next });
+  };
+
+  const isLocationPartVisible = (id: LocationPart) =>
+    !(content.hiddenLocationParts ?? []).includes(id);
+
+  const insets = useSafeAreaInsets();
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
       <View style={styles.header}>
         <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>
         <Text style={styles.headerTitle}>Edit site</Text>
         <View style={styles.headerRight}>
-          <Text style={styles.saveState}>{saveLabel}</Text>
+          {isSavingAny ? (
+            <View style={styles.savingBadge}>
+              <View style={styles.savingDot} />
+              <Text style={styles.savingText}>Saving</Text>
+            </View>
+          ) : (
+            <View style={styles.savedBadge}>
+              <Ionicons name="checkmark-circle" size={13} color="#4ade80" />
+              <Text style={styles.savedText}>Saved</Text>
+            </View>
+          )}
           <Pressable style={styles.publishButton} onPress={() => navigation.navigate('SiteDeploy')}>
-            <Ionicons name="rocket-outline" size={16} color={colors.accentPink} />
+            <Ionicons name="rocket-outline" size={15} color={colors.accentPink} />
             <Text style={styles.publishButtonText}>Publish</Text>
           </Pressable>
         </View>
       </View>
 
-      <View style={styles.previewWrap}>
-        <SitePreviewWebView
-          content={content}
-          styles={previewStyles}
-          theme={previewTheme}
-          compact
-        />
+      {/* Preview mode controls */}
+      <View style={styles.previewControls}>
+        <View style={styles.previewModeBar}>
+          {([
+            ['split', 'Zoomed out', 'scan-outline'],
+            ['fullscreen', 'Full view', 'phone-portrait-outline'],
+            ['hidden', 'Edit only', 'create-outline'],
+          ] as const).map(([mode, label, icon]) => (
+            <Pressable
+              key={mode}
+              style={[styles.previewModeBtn, previewMode === mode && styles.previewModeBtnActive]}
+              onPress={() => setPreviewMode(mode)}
+            >
+              <Ionicons
+                name={icon}
+                size={14}
+                color={previewMode === mode ? colors.accentPink : colors.textMuted}
+              />
+              <Text
+                style={[
+                  styles.previewModeBtnText,
+                  previewMode === mode && styles.previewModeBtnTextActive,
+                ]}
+              >
+                {label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
       </View>
 
-      <View style={styles.viewLiveWrap}>
-        <ViewLiveSiteButton
-          sitePublish={sitePublish}
-          compact
-          onPublish={() => navigation.navigate('SiteDeploy')}
-        />
-      </View>
+      {/* Split preview */}
+      {previewMode === 'split' ? (
+        <View style={styles.previewWrap}>
+          <SitePreviewWebView
+            content={content}
+            styles={previewStyles}
+            theme={previewTheme}
+            compact
+          />
+        </View>
+      ) : null}
 
+      {/* Editor tabs */}
       <View style={styles.tabs}>
         {([
           ['design', 'Design'],
@@ -147,50 +350,219 @@ export default function SiteEditorScreen({ navigation }: Props) {
         {tab === 'content' ? (
           <>
             <Text style={styles.groupTitle}>Hero & brand</Text>
-            <Field label="Brand name" value={content.brandName} onChangeText={(brandName) => updateContent({ brandName })} />
-            <Field label="Site description" value={content.metaDescription} onChangeText={(metaDescription) => updateContent({ metaDescription })} multiline />
+            <Field
+              label="Brand name"
+              value={content.brandName}
+              onChangeText={(brandName) => updateContent({ brandName })}
+            />
+            <Field
+              label="Site description"
+              value={content.metaDescription}
+              onChangeText={(metaDescription) => updateContent({ metaDescription })}
+              multiline
+            />
 
-            <Text style={styles.groupTitle}>Social section</Text>
-            <Field label="Section title" value={content.reelsTitle} onChangeText={(reelsTitle) => updateContent({ reelsTitle })} placeholder="Our work" />
-            <Field label="Section blurb" value={content.reelsBlurb} onChangeText={(reelsBlurb) => updateContent({ reelsBlurb })} multiline placeholder="Instagram / social showcase copy" />
+            <Text style={styles.groupTitle}>Page sections</Text>
+            <Text style={styles.helper}>
+              Toggle sections on or off, and tap to edit their content.
+            </Text>
 
-            <Text style={styles.groupTitle}>Menu section</Text>
-            <Field label="Section title" value={content.menuTitle} onChangeText={(menuTitle) => updateContent({ menuTitle })} placeholder="Menu" />
-            <Field label="Section blurb" value={content.menuBlurb} onChangeText={(menuBlurb) => updateContent({ menuBlurb })} multiline placeholder="Browse services & prices" />
+            {SITE_SECTIONS.map(({ id, label, icon }) => (
+              <SectionCard
+                key={id}
+                sectionId={id}
+                label={label}
+                icon={icon}
+                visible={isSectionVisible(id)}
+                onToggle={toggleSection}
+              >
+                {id === 'social' ? (
+                  <>
+                    <Field
+                      label="Section title"
+                      value={content.reelsTitle}
+                      onChangeText={(reelsTitle) => updateContent({ reelsTitle })}
+                      placeholder="Our work"
+                    />
+                    <Field
+                      label="Section blurb"
+                      value={content.reelsBlurb}
+                      onChangeText={(reelsBlurb) => updateContent({ reelsBlurb })}
+                      multiline
+                      placeholder="Instagram / social showcase copy"
+                    />
+                  </>
+                ) : null}
 
-            <Text style={styles.groupTitle}>About</Text>
-            <Field label="About title" value={content.aboutTitle} onChangeText={(aboutTitle) => updateContent({ aboutTitle })} />
-            <Field label="About body" value={content.aboutBody} onChangeText={(aboutBody) => updateContent({ aboutBody })} multiline />
+                {id === 'menu' ? (
+                  <>
+                    <Field
+                      label="Section title"
+                      value={content.menuTitle}
+                      onChangeText={(menuTitle) => updateContent({ menuTitle })}
+                      placeholder="Menu"
+                    />
+                    <Field
+                      label="Section blurb"
+                      value={content.menuBlurb}
+                      onChangeText={(menuBlurb) => updateContent({ menuBlurb })}
+                      multiline
+                      placeholder="Browse services & prices"
+                    />
+                  </>
+                ) : null}
 
-            <Text style={styles.groupTitle}>Contact</Text>
-            <Field label="Phone (display)" value={content.phoneDisplay} onChangeText={(phoneDisplay) => updateContent({ phoneDisplay })} />
-            <Field label="Phone (tel link)" value={content.phoneTel} onChangeText={(phoneTel) => updateContent({ phoneTel })} />
-            <Field label="Email" value={content.email} onChangeText={(email) => updateContent({ email })} />
-            <Field label="Instagram handle" value={content.instagramHandle} onChangeText={(instagramHandle) => updateContent({ instagramHandle })} placeholder="yourhandle" />
-            <Field label="Footer text" value={content.footerText} onChangeText={(footerText) => updateContent({ footerText })} />
+                {id === 'about' ? (
+                  <>
+                    <Field
+                      label="About title"
+                      value={content.aboutTitle}
+                      onChangeText={(aboutTitle) => updateContent({ aboutTitle })}
+                    />
+                    <Field
+                      label="About body"
+                      value={content.aboutBody}
+                      onChangeText={(aboutBody) => updateContent({ aboutBody })}
+                      multiline
+                    />
+                  </>
+                ) : null}
+
+                {id === 'visit' ? (
+                  <>
+                    <Field
+                      label="Section title"
+                      value={content.visitTitle}
+                      onChangeText={(visitTitle) => updateContent({ visitTitle })}
+                    />
+                    <Field
+                      label="Section body"
+                      value={content.visitBody}
+                      onChangeText={(visitBody) => updateContent({ visitBody })}
+                      multiline
+                    />
+                    <Field
+                      label="Phone (display)"
+                      value={content.phoneDisplay}
+                      onChangeText={(phoneDisplay) => updateContent({ phoneDisplay })}
+                    />
+                    <Field
+                      label="Email"
+                      value={content.email}
+                      onChangeText={(email) => updateContent({ email })}
+                    />
+                    <Field
+                      label="Instagram handle"
+                      value={content.instagramHandle}
+                      onChangeText={(instagramHandle) => updateContent({ instagramHandle })}
+                      placeholder="yourhandle"
+                    />
+                    <Field
+                      label="Footer text"
+                      value={content.footerText}
+                      onChangeText={(footerText) => updateContent({ footerText })}
+                    />
+                  </>
+                ) : null}
+              </SectionCard>
+            ))}
           </>
         ) : null}
 
         {tab === 'location' ? (
           <>
+            <Text style={styles.groupTitle}>Visit section</Text>
+            <Field
+              label="Section title"
+              value={content.visitTitle}
+              onChangeText={(visitTitle) => updateContent({ visitTitle })}
+            />
+            <Field
+              label="Section intro"
+              value={content.visitBody}
+              onChangeText={(visitBody) => updateContent({ visitBody })}
+              multiline
+            />
+
+            <Text style={styles.groupTitle}>Location parts</Text>
             <Text style={styles.helper}>
-              Set during setup — tweak your address and visit details here.
+              Toggle each part on or off, and tap to edit its details.
             </Text>
-            <Text style={styles.groupTitle}>Visit & connect</Text>
-            <Field label="Section title" value={content.visitTitle} onChangeText={(visitTitle) => updateContent({ visitTitle })} />
-            <Field label="Section body" value={content.visitBody} onChangeText={(visitBody) => updateContent({ visitBody })} multiline />
-            <Field label="Address line 1" value={content.addressLine1} onChangeText={(addressLine1) => updateContent({ addressLine1 })} />
-            <Field label="Address line 2" value={content.addressLine2} onChangeText={(addressLine2) => updateContent({ addressLine2 })} />
-            <Field label="City" value={content.city} onChangeText={(city) => updateContent({ city })} />
-            <Field label="State" value={content.state} onChangeText={(state) => updateContent({ state })} />
-            <Field label="ZIP" value={content.zip} onChangeText={(zip) => updateContent({ zip })} />
-            <Field label="Map embed URL" value={content.mapEmbedUrl} onChangeText={(mapEmbedUrl) => updateContent({ mapEmbedUrl })} placeholder="Optional Google Maps embed link" />
-            <Field label="Timezone" value={content.timezone} onChangeText={(timezone) => updateContent({ timezone })} placeholder="America/New_York" />
+
+            {LOCATION_PARTS.map(({ id, label, icon }) => (
+              <LocationPartCard
+                key={id}
+                partId={id}
+                label={label}
+                icon={icon}
+                visible={isLocationPartVisible(id)}
+                onToggle={toggleLocationPart}
+              >
+                {id === 'address' ? (
+                  <>
+                    <Field label="Address line 1" value={content.addressLine1} onChangeText={(addressLine1) => updateContent({ addressLine1 })} />
+                    <Field label="Address line 2" value={content.addressLine2} onChangeText={(addressLine2) => updateContent({ addressLine2 })} />
+                    <Field label="City" value={content.city} onChangeText={(city) => updateContent({ city })} />
+                    <Field label="State" value={content.state} onChangeText={(state) => updateContent({ state })} />
+                    <Field label="ZIP" value={content.zip} onChangeText={(zip) => updateContent({ zip })} />
+                    <Field label="Timezone" value={content.timezone} onChangeText={(timezone) => updateContent({ timezone })} placeholder="America/New_York" />
+                  </>
+                ) : null}
+
+                {id === 'map' ? (
+                  <Field
+                    label="Google Maps embed URL"
+                    value={content.mapEmbedUrl}
+                    onChangeText={(mapEmbedUrl) => updateContent({ mapEmbedUrl })}
+                    placeholder="Paste your Google Maps embed link"
+                  />
+                ) : null}
+
+                {id === 'contact' ? (
+                  <>
+                    <Field label="Phone (display)" value={content.phoneDisplay} onChangeText={(phoneDisplay) => updateContent({ phoneDisplay })} />
+                    <Field label="Phone (tel link)" value={content.phoneTel} onChangeText={(phoneTel) => updateContent({ phoneTel })} />
+                    <Field label="Email" value={content.email} onChangeText={(email) => updateContent({ email })} />
+                    <Field label="Instagram handle" value={content.instagramHandle} onChangeText={(instagramHandle) => updateContent({ instagramHandle })} placeholder="yourhandle" />
+                    <Field label="Footer text" value={content.footerText} onChangeText={(footerText) => updateContent({ footerText })} />
+                  </>
+                ) : null}
+              </LocationPartCard>
+            ))}
           </>
         ) : null}
 
         {tab === 'styles' ? <SiteStylesEditor /> : null}
       </ScrollView>
+
+      {/* Fullscreen preview modal */}
+      <Modal
+        visible={previewMode === 'fullscreen'}
+        animationType="slide"
+        statusBarTranslucent
+        onRequestClose={() => setPreviewMode('split')}
+      >
+        <View style={[styles.fullscreenContainer, { paddingTop: insets.top }]}>
+          <View style={styles.fullscreenHeader}>
+            <Text style={styles.fullscreenTitle}>Live preview</Text>
+            <Pressable
+              style={styles.fullscreenClose}
+              onPress={() => setPreviewMode('split')}
+              hitSlop={12}
+            >
+              <Ionicons name="close" size={20} color={colors.text} />
+              <Text style={styles.fullscreenCloseText}>Close</Text>
+            </Pressable>
+          </View>
+          <View style={styles.fullscreenWebView}>
+            <SitePreviewWebView
+              content={content}
+              styles={previewStyles}
+              theme={fullscreenTheme}
+            />
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -224,8 +596,30 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  saveState: {
-    color: colors.accentPink,
+  savingBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  savingDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.accentPink,
+    opacity: 0.8,
+  },
+  savingText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  savedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  savedText: {
+    color: '#4ade80',
     fontSize: 12,
     fontWeight: '600',
   },
@@ -233,8 +627,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     borderRadius: 999,
     backgroundColor: colors.accentPinkMuted,
     borderWidth: 1,
@@ -245,18 +639,47 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  previewWrap: {
-    height: 240,
-    marginHorizontal: 16,
+  previewControls: {
+    paddingHorizontal: 16,
     marginBottom: 8,
-    borderRadius: 24,
+  },
+  previewModeBar: {
+    flexDirection: 'row',
+    backgroundColor: colors.navbar,
+    borderRadius: 12,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: colors.navbarBorder,
+    gap: 2,
+  },
+  previewModeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 8,
+    borderRadius: 9,
+  },
+  previewModeBtnActive: {
+    backgroundColor: colors.card,
+  },
+  previewModeBtnText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  previewModeBtnTextActive: {
+    color: colors.accentPink,
+  },
+  previewWrap: {
+    height: 200,
+    marginHorizontal: 16,
+    marginBottom: 10,
+    borderRadius: 20,
     overflow: 'hidden',
     borderWidth: 1,
     borderColor: colors.cardBorder,
-  },
-  viewLiveWrap: {
-    marginHorizontal: 16,
-    marginBottom: 12,
   },
   tabs: {
     flexDirection: 'row',
@@ -291,12 +714,18 @@ const styles = StyleSheet.create({
   },
   groupTitle: {
     color: colors.textMuted,
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.6,
     textTransform: 'uppercase',
-    marginTop: 8,
+    marginTop: 10,
     marginBottom: 10,
+  },
+  helper: {
+    color: colors.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 12,
   },
   field: {
     marginBottom: 12,
@@ -320,34 +749,101 @@ const styles = StyleSheet.create({
     minHeight: 90,
     textAlignVertical: 'top',
   },
-  helper: {
-    color: colors.textMuted,
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: 14,
-  },
-  linkCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  // Section cards
+  sectionCard: {
     backgroundColor: colors.card,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.cardBorder,
-    padding: 14,
-    marginBottom: 10,
+    marginBottom: 8,
+    overflow: 'hidden',
   },
-  linkCardText: {
+  sectionCardHidden: {
+    opacity: 0.5,
+  },
+  sectionCardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+  },
+  sectionCardLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     flex: 1,
   },
-  linkCardTitle: {
+  sectionCardTitle: {
     color: colors.text,
     fontSize: 15,
     fontWeight: '600',
   },
-  linkCardBody: {
+  sectionCardTitleHidden: {
     color: colors.textMuted,
-    fontSize: 12,
-    marginTop: 2,
+  },
+  sectionCardRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  visibilityToggle: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  visibilityToggleOn: {
+    backgroundColor: colors.accentPinkMuted,
+    borderColor: colors.accentPinkBorder,
+  },
+  sectionCardBody: {
+    paddingHorizontal: 14,
+    paddingBottom: 14,
+    borderTopWidth: 1,
+    borderTopColor: colors.cardBorder,
+    paddingTop: 12,
+    gap: 0,
+  },
+  // Fullscreen modal
+  fullscreenContainer: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
+  fullscreenHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.cardBorder,
+  },
+  fullscreenTitle: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  fullscreenClose: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.card,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  fullscreenCloseText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  fullscreenWebView: {
+    flex: 1,
   },
 });
