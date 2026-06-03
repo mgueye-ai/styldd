@@ -106,6 +106,7 @@ if (styldUrl && styldAnonKey) {
   window.__STYLD_TENANT__.supabaseAnonKey = ${JSON.stringify(styldAnonKey)};
   window.__STYLD_TENANT__.rootDomain = ${JSON.stringify(styldRootDomain)};
   window.__STYLD_TENANT__.marketingUrl = "https://" + ${JSON.stringify(styldRootDomain)};
+  window.__STYLD_TENANT__.stripePk = ${JSON.stringify(stripePk && (stripePk.startsWith("pk_live") || stripePk.startsWith("pk_test")) ? stripePk : "")};
 })();
 `;
   fs.writeFileSync(

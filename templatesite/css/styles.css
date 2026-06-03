@@ -5921,3 +5921,25 @@ ul.price-menu__policy-list {
   font-size: 0.92rem;
   color: var(--muted);
 }
+
+/* ── Stripe card element ─────────────────────────────── */
+.stripe-card-element {
+  border: 1px solid #d1d5db;
+  border-radius: var(--radius, 6px);
+  padding: 0.875rem 1rem;
+  background: #fff;
+  margin: 0.5rem 0 0.25rem;
+  transition: border-color 0.15s;
+}
+
+.stripe-card-element:focus-within {
+  border-color: var(--pink, #db2777);
+  box-shadow: 0 0 0 3px rgba(219, 39, 119, 0.12);
+  outline: none;
+}
+
+.payment-card-trust {
+  color: var(--muted);
+  font-size: 0.92rem;
+  margin-bottom: 0.5rem;
+}

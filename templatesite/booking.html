@@ -308,19 +308,16 @@
 
           <section class="form-section hidden" id="payment-section" aria-hidden="true">
             <h2>Payment</h2>
-            <p class="payment-bank-trust" id="payment-bank-trust" hidden>
-              Pay securely from your bank account. Link your bank below, then confirm with the button at the bottom.
+            <p class="payment-card-trust" id="payment-card-trust" hidden>
+              Pay securely with your credit or debit card.
             </p>
             <div class="payment-placeholder">
               <p><strong>Name:</strong> <span id="pay-name-preview">—</span></p>
               <p><strong>Email:</strong> <span id="pay-email-preview">—</span></p>
               <p><strong>Due now:</strong> <span id="pay-deposit-preview">$0.00</span></p>
             </div>
-            <button type="button" id="plaid-link-btn" class="btn btn-secondary hidden" style="width: 100%; margin-bottom: 0.75rem">
-              Connect bank to pay
-            </button>
-            <p id="plaid-link-status" class="deposit-note" hidden></p>
-            <p id="plaid-payment-error" class="booking-feedback booking-feedback--error" hidden></p>
+            <div id="stripe-card-element" class="stripe-card-element"></div>
+            <p id="stripe-card-error" class="booking-feedback booking-feedback--error" role="alert" hidden></p>
           </section>
 
           <section class="form-section">
@@ -380,7 +377,7 @@
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.5.0/build/global/luxon.min.js"></script>
-    <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
+    <script src="https://js.stripe.com/v3/"></script>
     <script src="js/booking-config.js"></script>
     <script src="/js/styld-tenant-config.js?v=37"></script>
     <script src="/js/styld-tenant-config.local.js?v=37"></script>
@@ -391,8 +388,14 @@
     <script id="booking-fallback-bootstrap">
       (function () {
         if (window.StyldTenant && window.StyldTenant.getSubdomain()) return;
-        window.__STYLD_UNIT_PAYMENTS_READY__ = false;
-        var tenantBooking = window.__STYLD_TENANT_BOOKING__ || {};
+        // Initialize Stripe if a publishable key is available
+        var stripePk = (window.__STYLD_TENANT__ && window.__STYLD_TENANT__.stripePk) || '';
+        if (stripePk && window.Stripe) {
+          window.__STYLD_STRIPE__ = window.Stripe(stripePk);
+          window.__STYLD_STRIPE_READY__ = true;
+        } else {
+          window.__STYLD_STRIPE_READY__ = false;
+        }
         var module = document.createElement('script');
         module.type = 'module';
         module.textContent =
@@ -401,11 +404,6 @@
           'if (!c || !c.url || !c.anonKey) return;' +
           'const sb = createClient(c.url, c.anonKey);' +
           'window.salonSupabaseClient = sb;' +
-          'const sub = ' + JSON.stringify(tenantBooking.subdomain || '') + ';' +
-          'if (sub) {' +
-          '  const { data } = await sb.functions.invoke("unit-merchant-status", { body: { subdomain: sub } });' +
-          '  window.__STYLD_UNIT_PAYMENTS_READY__ = !!(data && data.ready);' +
-          '}' +
           'const booking = document.createElement("script");' +
           'booking.src = "js/booking.js?v=44";' +
           'booking.defer = true;' +

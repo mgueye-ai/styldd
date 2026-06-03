@@ -192,9 +192,8 @@
   let viewMonth;
   let selectedIsoDate = null;
   let selectedSlotIso = null;
-  let plaidLinkHandler = null;
-  let plaidBankLink = null;
-  let plaidLinkToken = "";
+  let stripeCardElement = null;
+  let stripeElementsMounted = false;
   let pendingBookingId = "";
 
   const els = {
@@ -250,28 +249,15 @@
     return t && t.subdomain ? String(t.subdomain).trim().toLowerCase() : "";
   }
 
-  function setInlinePaymentError(message) {
-    var el = document.getElementById("plaid-payment-error");
+  function setStripeCardError(message) {
+    var el = document.getElementById("stripe-card-error");
     if (!el) return;
     el.hidden = !message;
     el.textContent = message || "";
   }
 
-  function setPlaidLinkStatus(message) {
-    var el = document.getElementById("plaid-link-status");
-    if (!el) return;
-    el.hidden = !message;
-    el.textContent = message || "";
-  }
-
-  function clearPlaidPaymentState() {
-    plaidBankLink = null;
-    plaidLinkToken = "";
-    plaidLinkHandler = null;
-    setInlinePaymentError("");
-    setPlaidLinkStatus("");
-    var btn = document.getElementById("plaid-link-btn");
-    if (btn) btn.classList.remove("hidden");
+  function clearStripePaymentState() {
+    setStripeCardError("");
   }
 
   function trimAddr(el) {
@@ -874,11 +860,11 @@
   }
 
   function needsOnlinePayment() {
-    return wantsOnlinePayment() && !!window.__STYLD_UNIT_PAYMENTS_READY__;
+    return wantsOnlinePayment() && !!window.__STYLD_STRIPE_READY__;
   }
 
   function merchantPaymentsNotReady() {
-    return wantsOnlinePayment() && !window.__STYLD_UNIT_PAYMENTS_READY__;
+    return wantsOnlinePayment() && !window.__STYLD_STRIPE_READY__;
   }
 
   function computeTotals() {
@@ -1042,20 +1028,14 @@
         : "";
     }
 
-    const bankTrust = document.getElementById("payment-bank-trust");
-    if (bankTrust) {
-      bankTrust.hidden = !showPayment;
-      bankTrust.textContent = showPayment
+    const cardTrust = document.getElementById("payment-card-trust");
+    if (cardTrust) {
+      cardTrust.hidden = !showPayment;
+      cardTrust.textContent = showPayment
         ? mode === "full"
-          ? "Link your bank below, then use the bottom button to pay the full estimated price."
-          : "Link your bank below, then use the bottom button to pay your deposit."
+          ? "Pay the full estimated price securely with your card."
+          : "Pay your deposit securely with your card."
         : "";
-    }
-
-    var plaidBtn = document.getElementById("plaid-link-btn");
-    if (plaidBtn) {
-      plaidBtn.classList.toggle("hidden", !showPayment);
-      if (showPayment && plaidBankLink) plaidBtn.classList.add("hidden");
     }
 
     const depOut = document.getElementById("pay-deposit-preview");
@@ -1070,10 +1050,10 @@
     }
 
     if (!showPayment) {
-      clearPlaidPaymentState();
+      clearStripePaymentState();
       if (!complete) pendingBookingId = "";
     } else {
-      void ensurePlaidLinkReady();
+      initStripeCardElement();
     }
   }
 
@@ -1089,161 +1069,59 @@
     return !!(style && style.id !== "other" && name && phone && email && photoOk && slotOk && addrOk);
   }
 
-  async function ensurePlaidLinkReady() {
-    const sb = window.salonSupabaseClient;
-    const subdomain = getBookingSubdomain();
-    const { deposit } = computeTotals();
-    const depositCents = Math.round(Number(deposit || 0) * 100);
+  function initStripeCardElement() {
+    const stripe = window.__STYLD_STRIPE__;
+    if (!stripe || stripeElementsMounted) return;
 
-    if (!sb || !subdomain || !window.Plaid || depositCents < MIN_ONLINE_PAYMENT_CENTS) return;
+    const container = document.getElementById("stripe-card-element");
+    if (!container) return;
 
-    if (!pendingBookingId) pendingBookingId = crypto.randomUUID();
-    if (plaidLinkToken) return;
-
-    // Pass the current page URL so Plaid can redirect back after OAuth bank auth
-    var redirectUri = window.location.origin + window.location.pathname;
-
-    setInlinePaymentError("");
-    const { data, error } = await sb.functions.invoke("unit-booking-plaid-link", {
-      body: { subdomain, bookingId: pendingBookingId, redirectUri: redirectUri },
+    const elements = stripe.elements();
+    stripeCardElement = elements.create("card", {
+      style: {
+        base: {
+          fontFamily: "'Source Sans 3', 'Source Sans Pro', sans-serif",
+          fontSize: "16px",
+          color: "#1a1a1a",
+          "::placeholder": { color: "#aab7c4" },
+        },
+        invalid: { color: "#e53e3e" },
+      },
     });
+    stripeCardElement.mount(container);
+    stripeCardElement.on("change", function (event) {
+      setStripeCardError(event.error ? event.error.message : "");
+    });
+    stripeElementsMounted = true;
+  }
 
-    if (error) {
-      setInlinePaymentError(error.message || "Could not start bank link.");
-      return;
+  async function payBookingWithStripe(sb, payload) {
+    const stripe = window.__STYLD_STRIPE__;
+    if (!stripe || !stripeCardElement) {
+      return { ok: false, error: "Card form not ready. Please refresh and try again." };
     }
-    if (!data || !data.linkToken) {
-      setInlinePaymentError((data && data.error) || "Online payments are not available for this business.");
-      return;
+
+    const { paymentMethod, error: pmError } = await stripe.createPaymentMethod({
+      type: "card",
+      card: stripeCardElement,
+      billing_details: {
+        name: payload.customerName || "",
+        email: payload.customerEmail || "",
+      },
+    });
+
+    if (pmError) {
+      return { ok: false, error: pmError.message || "Card error." };
     }
-    plaidLinkToken = data.linkToken;
-  }
 
-  /**
-   * If the page loaded with ?oauth_state_id= from a Plaid OAuth redirect,
-   * re-open the Plaid handler so the bank link completes automatically.
-   */
-  function maybeResumeOAuthFlow() {
-    var params = new URLSearchParams(window.location.search);
-    var oauthStateId = params.get("oauth_state_id");
-    if (!oauthStateId || !window.Plaid) return;
-
-    // Restore pendingBookingId from sessionStorage if we have it
-    try {
-      var savedId = sessionStorage.getItem("styld_pending_booking_id");
-      if (savedId) pendingBookingId = savedId;
-    } catch (_) { /* ignore */ }
-
-    var receivedRedirectUri = window.location.href;
-
-    // Re-fetch a link token then re-open Plaid with receivedRedirectUri
-    var sb = window.salonSupabaseClient;
-    var subdomain = getBookingSubdomain();
-    if (!sb || !subdomain) return;
-
-    setPlaidLinkStatus("Resuming bank connection…");
-    sb.functions.invoke("unit-booking-plaid-link", {
-      body: { subdomain, bookingId: pendingBookingId, redirectUri: receivedRedirectUri },
-    }).then(function(result) {
-      var data = result.data;
-      var error = result.error;
-      if (error || !data || !data.linkToken) {
-        setInlinePaymentError("Could not resume bank connection. Please try again.");
-        setPlaidLinkStatus("");
-        return;
-      }
-      plaidLinkToken = data.linkToken;
-      var handler = window.Plaid.create({
-        token: plaidLinkToken,
-        receivedRedirectUri: receivedRedirectUri,
-        onSuccess: function(public_token, metadata) {
-          var acct = metadata && metadata.accounts && metadata.accounts[0];
-          if (!acct || !acct.id) {
-            setInlinePaymentError("No bank account was selected.");
-            return;
-          }
-          plaidBankLink = {
-            publicToken: public_token,
-            accountId: acct.id,
-            institutionName: metadata.institution && metadata.institution.name,
-          };
-          setPlaidLinkStatus(
-            "Bank connected" +
-              (plaidBankLink.institutionName ? " (" + plaidBankLink.institutionName + ")" : "") +
-              ". Tap the button below to pay and book.",
-          );
-          var btn = document.getElementById("plaid-link-btn");
-          if (btn) btn.classList.add("hidden");
-          // Clean up OAuth params from URL without reloading
-          try {
-            var clean = window.location.origin + window.location.pathname;
-            window.history.replaceState({}, document.title, clean);
-          } catch (_) { /* ignore */ }
-        },
-        onExit: function(err) {
-          setPlaidLinkStatus("");
-          if (err && err.error_message) setInlinePaymentError(err.error_message);
-        },
-      });
-      handler.open();
-    });
-  }
-
-  function openBookingPlaidLink() {
-    return new Promise(function (resolve, reject) {
-      if (!window.Plaid || !plaidLinkToken) {
-        reject(new Error("Bank link is not ready yet. Please wait a moment."));
-        return;
-      }
-      if (plaidLinkHandler && typeof plaidLinkHandler.destroy === "function") {
-        try { plaidLinkHandler.destroy(); } catch (_) { /* ignore */ }
-      }
-
-      // Save pendingBookingId so it can be restored after an OAuth redirect
-      try {
-        if (pendingBookingId) sessionStorage.setItem("styld_pending_booking_id", pendingBookingId);
-      } catch (_) { /* ignore */ }
-
-      plaidLinkHandler = window.Plaid.create({
-        token: plaidLinkToken,
-        onSuccess: function (public_token, metadata) {
-          var acct = metadata && metadata.accounts && metadata.accounts[0];
-          if (!acct || !acct.id) {
-            reject(new Error("No bank account selected."));
-            return;
-          }
-          plaidBankLink = {
-            publicToken: public_token,
-            accountId: acct.id,
-            institutionName: metadata.institution && metadata.institution.name,
-          };
-          setPlaidLinkStatus(
-            "Bank connected" +
-              (plaidBankLink.institutionName ? " (" + plaidBankLink.institutionName + ")" : "") +
-              ". Tap the button below to pay and book.",
-          );
-          var btn = document.getElementById("plaid-link-btn");
-          if (btn) btn.classList.add("hidden");
-          resolve(plaidBankLink);
-        },
-        onExit: function (err) {
-          if (err && err.error_message) reject(new Error(err.error_message));
-          else reject(new Error("Bank link was cancelled."));
-        },
-      });
-      plaidLinkHandler.open();
-    });
-  }
-
-  async function payBookingWithUnit(sb, payload) {
-    const { data, error } = await sb.functions.invoke("unit-booking-pay", {
+    const { data, error } = await sb.functions.invoke("stripe-booking-pay", {
       body: {
+        paymentMethodId: paymentMethod.id,
+        amountCents: payload.amountCents,
         subdomain: payload.subdomain,
         bookingId: payload.bookingId,
-        amountCents: payload.amountCents,
-        publicToken: payload.publicToken,
-        plaidAccountId: payload.plaidAccountId,
-        description: payload.description,
+        customerEmail: payload.customerEmail,
+        customerName: payload.customerName,
       },
     });
 
@@ -1260,11 +1138,11 @@
       return { ok: false, error: detail };
     }
 
-    if (!data || data.paid === false) {
+    if (!data || !data.paid) {
       return { ok: false, error: (data && data.error) || "Payment was not accepted." };
     }
 
-    return { ok: true, paymentId: data.paymentId, status: data.status };
+    return { ok: true, paymentId: data.paymentIntentId, status: data.status };
   }
 
   function buildBookingDetailsUrl(params) {
@@ -1516,20 +1394,6 @@
     if (els.calPrev) els.calPrev.addEventListener("click", () => navigateMonth(-1));
     if (els.calNext) els.calNext.addEventListener("click", () => navigateMonth(1));
 
-    var plaidBtn = document.getElementById("plaid-link-btn");
-    if (plaidBtn) {
-      plaidBtn.addEventListener("click", function () {
-        setInlinePaymentError("");
-        void ensurePlaidLinkReady()
-          .then(function () {
-            return openBookingPlaidLink();
-          })
-          .catch(function (err) {
-            setInlinePaymentError(err && err.message ? err.message : "Bank link failed.");
-          });
-      });
-    }
-
     if (els.form) {
       els.form.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -1577,11 +1441,6 @@
           const bookingId = pendingBookingId || crypto.randomUUID();
           pendingBookingId = bookingId;
 
-          if (online && !plaidBankLink) {
-            await ensurePlaidLinkReady();
-            await openBookingPlaidLink();
-          }
-
           const { id, paths } = await submitBookingRequest(sb, apptIso, durationMinutes, bookingId, null);
           if (!id) throw new Error("Could not save booking id.");
 
@@ -1604,26 +1463,25 @@
             return;
           }
 
-          if (!plaidBankLink) {
-            throw new Error("Connect your bank account to pay before booking.");
-          }
-
           if (submitBtn) submitBtn.textContent = "Processing payment…";
 
           const { deposit } = computeTotals();
           const amountCents = Math.round(Number(deposit || 0) * 100);
           const subdomain = getBookingSubdomain();
-          const style = getSelectedStyle();
-          const payResult = await payBookingWithUnit(sb, {
+          const nameEl = document.getElementById("full-name");
+          const emailEl = document.getElementById("email");
+          const payResult = await payBookingWithStripe(sb, {
             subdomain,
             bookingId,
             amountCents,
-            publicToken: plaidBankLink.publicToken,
-            plaidAccountId: plaidBankLink.accountId,
-            description: `Booking ${style?.name || "appointment"}`.slice(0, 80),
+            customerName: (nameEl && nameEl.value && nameEl.value.trim()) || "",
+            customerEmail: (emailEl && emailEl.value && emailEl.value.trim()) || "",
           });
 
-          if (!payResult.ok) throw new Error(payResult.error || "Payment failed.");
+          if (!payResult.ok) {
+            setStripeCardError(payResult.error || "Payment failed.");
+            throw new Error(payResult.error || "Payment failed.");
+          }
 
           void invokeNotifySalon(sb, { booking_id: bookingId });
           saveLocalBooking({
@@ -1651,11 +1509,9 @@
             err && typeof err === "object" && "message" in err && err.message
               ? String(err.message)
               : String(err || "Unknown error");
-          const hint = msg.includes("Bank link") || msg.includes("Connect your bank")
-            ? " Tap Connect bank to pay above, then try again."
-            : msg.includes("UNIT_API_TOKEN") || msg.includes("not configured")
-              ? " The business owner must finish payment setup in the Styld app."
-              : "";
+          const hint = msg.includes("not configured")
+            ? " The business owner must finish payment setup."
+            : "";
           setBookingFeedback(`Could not complete your booking. ${msg}${hint}`, "error");
         } finally {
           if (submitBtn) {
@@ -1707,7 +1563,6 @@
 
   readPaidReturnParams();
   populateStyles();
-  maybeResumeOAuthFlow();
 
   const presetRaw = new URLSearchParams(window.location.search).get("style");
   const preset = presetRaw ? STYLE_ALIASES[presetRaw] || presetRaw : "";
