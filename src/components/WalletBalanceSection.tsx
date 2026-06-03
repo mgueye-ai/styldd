@@ -17,12 +17,14 @@ import { colors } from '../theme';
 
 type Props = {
   onSummaryChange?: (summary: StripeConnectSummary | null) => void;
+  /** When true, hides the component entirely if Stripe Connect is not yet set up */
+  showOnlyWhenActive?: boolean;
 };
 
 const RETURN_URL = 'styldd.com/connect/return';
 const REFRESH_URL = 'styldd.com/connect/refresh';
 
-export default function WalletBalanceSection({ onSummaryChange }: Props) {
+export default function WalletBalanceSection({ onSummaryChange, showOnlyWhenActive }: Props) {
   const { hasLinkedSite } = useSiteData();
   const { privacyMode } = usePrivacyMode();
   const [summary, setSummary] = useState<StripeConnectSummary | null>(null);
@@ -132,12 +134,16 @@ export default function WalletBalanceSection({ onSummaryChange }: Props) {
   }
 
   if (!hasLinkedSite) {
+    if (showOnlyWhenActive) return null;
     return (
       <View style={styles.card}>
         <Text style={styles.emptyText}>Link your booking site to start collecting payments.</Text>
       </View>
     );
   }
+
+  // In passive mode, hide the whole section until the account is active
+  if (showOnlyWhenActive && !loading && needsOnboarding) return null;
 
   return (
     <>

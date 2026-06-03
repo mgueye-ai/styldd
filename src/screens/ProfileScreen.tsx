@@ -21,6 +21,7 @@ type MenuItem = {
 const MANAGE_MENU: MenuItem[] = [
   { label: 'Styles & Services', icon: 'cut-outline', route: 'Styles' },
   { label: 'Booking payments', icon: 'card-outline', route: 'BookingPayment' },
+  { label: 'Payments & payouts', icon: 'wallet-outline', route: 'ConnectedAccounts' },
   { label: 'Working hours', icon: 'time-outline', route: 'WorkingHours' },
   { label: 'Schedule', icon: 'calendar-outline', route: 'Schedule' },
   { label: 'Add appointment', icon: 'add-circle-outline', route: 'AddAppointment' },
@@ -137,24 +138,8 @@ export default function ProfileScreen({ navigation }: Props) {
           </View>
         </View>
 
-        {/* ── Earnings ── */}
-        <SectionLabel title="Earnings" />
-        <WalletBalanceSection />
-
-        {/* ── Payout account ── */}
-        <SectionLabel title="Payout account" />
-        <View style={styles.menuCard}>
-          <Pressable
-            style={styles.menuRow}
-            onPress={() => navigation.navigate('ConnectedAccounts')}
-          >
-            <View style={styles.menuIconWrap}>
-              <Ionicons name="wallet-outline" size={18} color={colors.textMuted} />
-            </View>
-            <Text style={styles.menuLabel}>Connected accounts</Text>
-            <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
-          </Pressable>
-        </View>
+        {/* ── Earnings — only shown once Stripe account is active ── */}
+        <WalletBalanceSection showOnlyWhenActive />
 
         {/* ── Manage business ── */}
         <SectionLabel title="Manage" />

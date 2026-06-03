@@ -101,7 +101,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
           <Pressable onPress={() => navigation.goBack()} hitSlop={12} style={styles.backBtn}>
             <Ionicons name="chevron-back" size={22} color={colors.text} />
           </Pressable>
-          <Text style={styles.headerTitle}>Payout account</Text>
+          <Text style={styles.headerTitle}>Payments & Payouts</Text>
           <View style={{ width: 36 }} />
         </View>
 
