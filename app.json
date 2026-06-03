@@ -44,13 +44,6 @@
           "photosPermission": "Allow Styld to access your photos."
         }
       ],
-      [
-        "@stripe/stripe-react-native",
-        {
-          "merchantIdentifier": "merchant.com.crmstyld.app",
-          "enableGooglePay": false
-        }
-      ],
       "expo-font"
     ],
     "extra": {
@@ -58,6 +51,6 @@
         "projectId": "2b4df120-1511-4aad-ada8-2944efa882d9"
       }
     },
-    "owner": "digaifounder"
+    "owner": "mousappsllc"
   }
 }

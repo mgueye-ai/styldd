@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
-import { WebView, type WebViewMessageEvent } from 'react-native-webview';
+import { WebView, type WebViewMessageEvent, type ShouldStartLoadRequest } from 'react-native-webview';
 import { colors } from '../theme';
 
 type PlaidSuccessPayload = {
@@ -111,10 +111,11 @@ export default function PlaidLinkWebView({ visible, linkToken, onClose, onSucces
     if (visible) {
       setWebviewKey((k) => k + 1);
       setOAuthRedirectUri(undefined);
+      // 5-minute timeout — bank OAuth flows can take time
       timerRef.current = setTimeout(() => {
         onError('Bank link timed out. Please try again.');
         onClose();
-      }, 30_000);
+      }, 300_000);
     }
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -180,15 +181,19 @@ export default function PlaidLinkWebView({ visible, linkToken, onClose, onSucces
         javaScriptEnabled
         domStorageEnabled
         allowsInlineMediaPlayback
-        onNavigationStateChange={(navState) => {
-          // Detect when Plaid redirects the WebView for OAuth authentication.
-          // The URL will contain oauth_state_id after the bank authenticates.
-          if (navState.url && navState.url.includes('oauth_state_id')) {
+        onShouldStartLoadWithRequest={(request: ShouldStartLoadRequest) => {
+          // Intercept the OAuth callback BEFORE the WebView renders it.
+          // After bank login, the bank redirects to a Plaid URL containing
+          // oauth_state_id. We capture that URL and reload our HTML page with
+          // receivedRedirectUri so Plaid can finish the flow — avoiding the
+          // white screen that appears when the WebView loads that page directly.
+          if (request.url && request.url.includes('oauth_state_id')) {
             clearTimer();
-            // Rebuild the page with receivedRedirectUri so Plaid can complete
-            setOAuthRedirectUri(navState.url);
+            setOAuthRedirectUri(request.url);
             setWebviewKey((k) => k + 1);
+            return false; // block navigation — our HTML reload handles it
           }
+          return true;
         }}
         onMessage={handleMessage}
         renderLoading={() => (

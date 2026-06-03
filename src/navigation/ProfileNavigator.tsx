@@ -9,6 +9,7 @@ import WalletScreen from '../screens/business/WalletScreen';
 import WorkingHoursScreen from '../screens/business/WorkingHoursScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import ConnectedAccountsScreen from '../screens/ConnectedAccountsScreen';
+import AccountSettingsScreen from '../screens/AccountSettingsScreen';
 
 export type ProfileStackParamList = {
   ProfileHome: undefined;
@@ -21,6 +22,7 @@ export type ProfileStackParamList = {
   BusinessStats: undefined;
   BusinessCalendar: undefined;
   ConnectedAccounts: undefined;
+  AccountSettings: undefined;
 };
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
@@ -38,6 +40,7 @@ export default function ProfileNavigator() {
       <Stack.Screen name="BusinessStats" component={BusinessStatsScreen} />
       <Stack.Screen name="BusinessCalendar" component={BusinessCalendarScreen} />
       <Stack.Screen name="ConnectedAccounts" component={ConnectedAccountsScreen} />
+      <Stack.Screen name="AccountSettings" component={AccountSettingsScreen} />
     </Stack.Navigator>
   );
 }

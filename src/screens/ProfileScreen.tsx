@@ -205,6 +205,16 @@ export default function ProfileScreen({ navigation }: Props) {
         {/* ── Account ── */}
         <SectionLabel title="Account" />
         <View style={styles.menuCard}>
+          <Pressable
+            style={[styles.menuRow, styles.menuRowBorder]}
+            onPress={() => navigation.navigate('AccountSettings')}
+          >
+            <View style={styles.menuIconWrap}>
+              <Ionicons name="person-outline" size={18} color={colors.textMuted} />
+            </View>
+            <Text style={styles.menuLabel}>Account settings</Text>
+            <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+          </Pressable>
           <Pressable style={styles.menuRow} onPress={signOut}>
             <View style={styles.menuIconWrap}>
               <Ionicons name="log-out-outline" size={18} color="#f87171" />

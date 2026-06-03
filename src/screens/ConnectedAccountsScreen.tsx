@@ -12,7 +12,8 @@ import {
 } from 'react-native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
-import PlaidLinkWebView from '../components/PlaidLinkWebView';
+import { create as plaidCreate, open as plaidOpen, destroy as plaidDestroy } from 'react-native-plaid-link-sdk';
+import type { LinkSuccess, LinkExit } from 'react-native-plaid-link-sdk';
 import {
   createPayoutLinkToken,
   exchangePayoutBankLink,
@@ -28,8 +29,6 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
   const [summary, setSummary] = useState<MerchantFinanceSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [plaidToken, setPlaidToken] = useState('');
-  const [plaidVisible, setPlaidVisible] = useState(false);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -52,10 +51,47 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
   async function handleAddBank() {
     setBusy(true);
     try {
-      const token = await createPayoutLinkToken();
-      setPlaidToken(token);
-      setPlaidVisible(true);
+      const token = await createPayoutLinkToken('https://www.hairbynadjae.com/oauth-return.html');
+
+      // Destroy any prior Plaid session before starting a new one
+      await plaidDestroy().catch(() => {});
+
+      plaidCreate({ token });
+
+      plaidOpen({
+        onSuccess: (success: LinkSuccess) => {
+          const account = success.metadata.accounts[0];
+          if (!account) {
+            Alert.alert('No account selected', 'Please select a bank account.');
+            setBusy(false);
+            return;
+          }
+          void (async () => {
+            try {
+              await exchangePayoutBankLink({
+                publicToken: success.publicToken,
+                accountId: account.id,
+                institutionName: success.metadata.institution?.name,
+                accountMask: account.mask,
+              });
+              await refresh();
+            } catch (err) {
+              Alert.alert('Could not save bank', err instanceof Error ? err.message : 'Try again.');
+            } finally {
+              setBusy(false);
+            }
+          })();
+        },
+        onExit: (exit: LinkExit) => {
+          setBusy(false);
+          if (exit.error) {
+            Alert.alert('Bank connection', exit.error.displayMessage ?? exit.error.errorMessage);
+          }
+          void refresh();
+        },
+      });
     } catch (err) {
+      setBusy(false);
       const message = err instanceof Error ? err.message : 'Try again';
       if (message.includes('wallet') || message.includes('setup')) {
         Alert.alert(
@@ -65,8 +101,6 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
       } else {
         Alert.alert('Could not connect bank', message);
       }
-    } finally {
-      setBusy(false);
     }
   }
 
@@ -125,31 +159,6 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
         )}
       </ScrollView>
 
-      <PlaidLinkWebView
-        visible={plaidVisible}
-        linkToken={plaidToken}
-        onClose={() => {
-          setPlaidVisible(false);
-          setPlaidToken('');
-          // Always refresh when Plaid closes so any saved data appears immediately
-          void refresh();
-        }}
-        onSuccess={(payload) => {
-          void (async () => {
-            setBusy(true);
-            try {
-              await exchangePayoutBankLink(payload);
-              await refresh();
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : 'Try again';
-              Alert.alert('Could not save bank', msg);
-            } finally {
-              setBusy(false);
-            }
-          })();
-        }}
-        onError={(message) => Alert.alert('Bank connection', message)}
-      />
     </SafeAreaView>
   );
 }
