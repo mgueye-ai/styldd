@@ -188,9 +188,9 @@ export default function AppointmentComposerSheet({
                   <ServiceImage styleId={item.id} size={54} radius={14} />
                   <View style={styles.styleInfo}>
                     <Text style={styles.styleName}>{item.name}</Text>
-                    <Text style={styles.styleMeta}>
-                      {item.variant} · {item.venueLabel}
-                    </Text>
+                    {item.variant !== 'STANDARD' ? (
+                      <Text style={styles.styleMeta}>{item.variant}</Text>
+                    ) : null}
                     <Text style={styles.stylePrice}>${getPrice(item.id)}</Text>
                   </View>
                   <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
@@ -208,7 +208,8 @@ export default function AppointmentComposerSheet({
                   <View style={styles.selectedStyleInfo}>
                     <Text style={styles.selectedStyleName}>{selectedStyle.name}</Text>
                     <Text style={styles.selectedStyleMeta}>
-                      {selectedStyle.venueLabel} · ${getPrice(selectedStyle.id)}
+                      {selectedStyle.variant !== 'STANDARD' ? `${selectedStyle.variant} · ` : ''}$
+                      {getPrice(selectedStyle.id)}
                     </Text>
                   </View>
                 </View>

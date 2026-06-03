@@ -105,6 +105,7 @@ if (styldUrl && styldAnonKey) {
   window.__STYLD_TENANT__.supabaseUrl = ${JSON.stringify(styldUrl)};
   window.__STYLD_TENANT__.supabaseAnonKey = ${JSON.stringify(styldAnonKey)};
   window.__STYLD_TENANT__.rootDomain = ${JSON.stringify(styldRootDomain)};
+  window.__STYLD_TENANT__.marketingUrl = "https://" + ${JSON.stringify(styldRootDomain)};
 })();
 `;
   fs.writeFileSync(

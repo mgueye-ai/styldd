@@ -1,4 +1,4 @@
-export type SiteSection = 'social' | 'menu' | 'about' | 'visit';
+export type SiteSection = 'menu' | 'about' | 'visit';
 export type LocationPart = 'address' | 'map' | 'contact';
 
 export type SiteContent = {
@@ -38,7 +38,6 @@ export const LOCATION_PARTS: { id: LocationPart; label: string; icon: string }[]
 ];
 
 export const SITE_SECTIONS: { id: SiteSection; label: string; icon: string }[] = [
-  { id: 'social', label: 'Social / reels', icon: 'play-circle-outline' },
   { id: 'menu', label: 'Services menu', icon: 'list-outline' },
   { id: 'about', label: 'About', icon: 'person-outline' },
   { id: 'visit', label: 'Visit & contact', icon: 'location-outline' },
@@ -77,7 +76,7 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
   hiddenLocationParts: [],
 };
 
-const VALID_SECTIONS: SiteSection[] = ['social', 'menu', 'about', 'visit'];
+const VALID_SECTIONS: SiteSection[] = ['menu', 'about', 'visit'];
 const VALID_LOCATION_PARTS: LocationPart[] = ['address', 'map', 'contact'];
 
 export function normalizeSiteContent(value: unknown): SiteContent {
@@ -94,7 +93,8 @@ export function normalizeSiteContent(value: unknown): SiteContent {
 
   if (Array.isArray(source.hiddenSections)) {
     result.hiddenSections = (source.hiddenSections as unknown[]).filter(
-      (s): s is SiteSection => VALID_SECTIONS.includes(s as SiteSection),
+      (s): s is SiteSection =>
+        typeof s === 'string' && s !== 'social' && VALID_SECTIONS.includes(s as SiteSection),
     );
   }
 
@@ -111,4 +111,25 @@ export function formatSiteAddress(content: SiteContent): string {
   return [content.addressLine1, content.addressLine2, content.city, content.state, content.zip]
     .filter(Boolean)
     .join(', ');
+}
+
+export function buildGoogleMapsSearchUrl(address: string): string {
+  const query = address.trim();
+  if (!query) return 'https://www.google.com/maps';
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(query)}`;
+}
+
+/** Uses custom embed URL from editor, or builds one from the saved address fields. */
+export function buildGoogleMapsEmbedUrl(content: SiteContent): string | null {
+  const custom = content.mapEmbedUrl?.trim();
+  if (custom) return custom;
+
+  const address = formatSiteAddress(content).trim();
+  if (!address) return null;
+
+  return `https://www.google.com/maps?q=${encodeURIComponent(address)}&output=embed`;
+}
+
+export function hasSiteAddress(content: SiteContent): boolean {
+  return Boolean(formatSiteAddress(content).trim());
 }

@@ -17,8 +17,13 @@ import {
 } from 'react-native';
 import ServiceImage from '../ServiceImage';
 import { useServiceCatalog } from '../../context/ServiceCatalogContext';
-import { CatalogService, ServiceVenue } from '../../data/serviceCatalog';
-import { formatStylePrice } from '../../data/siteStyles';
+import { CatalogService } from '../../data/serviceCatalog';
+import {
+  DEFAULT_STYLE_DURATION_MINUTES,
+  formatStyleDuration,
+  formatStylePrice,
+  STYLE_DURATION_PRESETS,
+} from '../../data/siteStyles';
 import { pickSiteImageFromLibrary } from '../../lib/pickSiteImage';
 import { colors } from '../../theme';
 
@@ -33,38 +38,13 @@ type SiteStylesEditorProps = {
   manageKeyboard?: boolean;
 };
 
-const VENUE_COLORS: Record<ServiceVenue, { bg: string; border: string; text: string }> = {
-  studio: {
-    bg: colors.accentPinkMuted,
-    border: colors.accentPinkBorder,
-    text: colors.accentPink,
-  },
-  house: {
-    bg: colors.accentOrangeBadge,
-    border: 'rgba(232, 135, 42, 0.35)',
-    text: colors.accentOrange,
-  },
-  kids: {
-    bg: 'rgba(245, 185, 66, 0.14)',
-    border: 'rgba(245, 185, 66, 0.35)',
-    text: colors.accentGold,
-  },
-};
-
 const PHOTO_WIDTH = 128;
 
-function venueColors(venue: ServiceVenue) {
-  return VENUE_COLORS[venue] ?? VENUE_COLORS.studio;
-}
-
-function VenuePill({ venue, label }: { venue: ServiceVenue; label: string }) {
-  const tone = venueColors(venue);
-  return (
-    <View style={[styles.venuePill, { backgroundColor: tone.bg, borderColor: tone.border }]}>
-      <Text style={[styles.venuePillText, { color: tone.text }]}>{label}</Text>
-    </View>
-  );
-}
+const PILL_TONE = {
+  bg: colors.accentPinkMuted,
+  border: colors.accentPinkBorder,
+  text: colors.accentPink,
+};
 
 function StylePill({
   service,
@@ -79,14 +59,14 @@ function StylePill({
   const meta = getStyleMeta(service.id);
   const title = meta?.title ?? service.name;
   const price = getPrice(service.id);
-  const tone = venueColors(service.venue);
+  const durationMinutes = meta?.durationMinutes ?? DEFAULT_STYLE_DURATION_MINUTES;
 
   return (
     <Pressable
       style={[
         styles.stylePill,
         selected && styles.stylePillSelected,
-        selected && { borderColor: tone.border, backgroundColor: tone.bg },
+        selected && { borderColor: PILL_TONE.border, backgroundColor: PILL_TONE.bg },
       ]}
       onPress={onPress}
     >
@@ -95,8 +75,8 @@ function StylePill({
         <Text style={styles.stylePillTitle} numberOfLines={1}>
           {title}
         </Text>
-        <Text style={[styles.stylePillPrice, { color: tone.text }]}>
-          {formatStylePrice(price)}
+        <Text style={styles.stylePillMeta} numberOfLines={1}>
+          {formatStyleDuration(durationMinutes)} · {formatStylePrice(price)}
         </Text>
       </View>
     </Pressable>
@@ -186,6 +166,45 @@ function Field({
   );
 }
 
+function DurationPicker({
+  value,
+  onChange,
+  disabled,
+}: {
+  value: number;
+  onChange: (minutes: number) => void;
+  disabled?: boolean;
+}) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>Duration</Text>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.durationRow}
+      >
+        {STYLE_DURATION_PRESETS.map((preset) => {
+          const selected = value === preset.minutes;
+          return (
+            <Pressable
+              key={preset.minutes}
+              style={[styles.durationChip, selected && styles.durationChipSelected]}
+              onPress={() => onChange(preset.minutes)}
+              disabled={disabled}
+            >
+              <Text
+                style={[styles.durationChipText, selected && styles.durationChipTextSelected]}
+              >
+                {preset.label}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+    </View>
+  );
+}
+
 function StyleEditorPanel({ service, busy, onBusyChange, onFieldFocus }: StyleEditorCardProps) {
   const { getStyleMeta, getPrice, upsertStyle, deleteStyle, uploadStyleImage } = useServiceCatalog();
 
@@ -193,6 +212,9 @@ function StyleEditorPanel({ service, busy, onBusyChange, onFieldFocus }: StyleEd
   const [title, setTitle] = useState(meta?.title ?? service.name);
   const [description, setDescription] = useState(meta?.description ?? service.description ?? '');
   const [price, setPrice] = useState(String(getPrice(service.id) || ''));
+  const [durationMinutes, setDurationMinutes] = useState(
+    meta?.durationMinutes ?? DEFAULT_STYLE_DURATION_MINUTES,
+  );
   const [localImageUri, setLocalImageUri] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -203,17 +225,18 @@ function StyleEditorPanel({ service, busy, onBusyChange, onFieldFocus }: StyleEd
   const descriptionRef = useRef<View>(null);
   const priceRef = useRef<View>(null);
 
-  const snapshot = `${title}|${description}|${price}`;
+  const snapshot = `${title}|${description}|${price}|${durationMinutes}`;
   const parsedPrice = Number(price.replace(/[^0-9.]/g, '')) || 0;
 
   useEffect(() => {
     setTitle(meta?.title ?? service.name);
     setDescription(meta?.description ?? service.description ?? '');
     setPrice(String(getPrice(service.id) || ''));
+    setDurationMinutes(meta?.durationMinutes ?? DEFAULT_STYLE_DURATION_MINUTES);
     setLocalImageUri(null);
     skipNextSave.current = true;
-    lastSavedSnapshot.current = `${meta?.title ?? service.name}|${meta?.description ?? service.description ?? ''}|${getPrice(service.id) || ''}`;
-  }, [service.id]);
+    lastSavedSnapshot.current = `${meta?.title ?? service.name}|${meta?.description ?? service.description ?? ''}|${getPrice(service.id) || ''}|${meta?.durationMinutes ?? DEFAULT_STYLE_DURATION_MINUTES}`;
+  }, [getPrice, meta?.description, meta?.durationMinutes, meta?.title, service.description, service.id, service.name]);
 
   const saveStyle = useCallback(async () => {
     onBusyChange(service.id);
@@ -223,6 +246,7 @@ function StyleEditorPanel({ service, busy, onBusyChange, onFieldFocus }: StyleEd
         title,
         description,
         price: Number.isFinite(parsedPrice) ? parsedPrice : 0,
+        durationMinutes,
         category: meta?.category ?? service.category,
         venue: service.venue,
       });
@@ -234,7 +258,18 @@ function StyleEditorPanel({ service, busy, onBusyChange, onFieldFocus }: StyleEd
     } finally {
       onBusyChange(null);
     }
-  }, [description, meta?.category, onBusyChange, parsedPrice, service.category, service.id, service.venue, title, upsertStyle]);
+  }, [
+    description,
+    durationMinutes,
+    meta?.category,
+    onBusyChange,
+    parsedPrice,
+    service.category,
+    service.id,
+    service.venue,
+    title,
+    upsertStyle,
+  ]);
 
   useEffect(() => {
     if (skipNextSave.current) {
@@ -303,7 +338,6 @@ function StyleEditorPanel({ service, busy, onBusyChange, onFieldFocus }: StyleEd
   return (
     <View style={styles.panel}>
       <View style={styles.panelHeader}>
-        <VenuePill venue={service.venue} label={service.venueLabel} />
         {savedFlash ? (
           <View style={styles.savedPill}>
             <Ionicons name="checkmark-circle" size={14} color={colors.accentPink} />
@@ -352,6 +386,11 @@ function StyleEditorPanel({ service, busy, onBusyChange, onFieldFocus }: StyleEd
             fieldRef={priceRef}
             onFocus={() => onFieldFocus(priceRef.current)}
           />
+          <DurationPicker
+            value={durationMinutes}
+            onChange={setDurationMinutes}
+            disabled={busy}
+          />
         </View>
       </View>
     </View>
@@ -363,13 +402,18 @@ function AddStylePanel({
   isAdding,
   onFieldFocus,
 }: {
-  onAdd: (input: { title: string; description: string; price: number }, imageUri: string | null, mimeType: string | null) => Promise<void>;
+  onAdd: (
+    input: { title: string; description: string; price: number; durationMinutes: number },
+    imageUri: string | null,
+    mimeType: string | null,
+  ) => Promise<void>;
   isAdding: boolean;
   onFieldFocus: (fieldRef: View | null) => void;
 }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
+  const [durationMinutes, setDurationMinutes] = useState(DEFAULT_STYLE_DURATION_MINUTES);
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [imageMimeType, setImageMimeType] = useState<string | null>(null);
   const titleRef = useRef<View>(null);
@@ -392,13 +436,19 @@ function AddStylePanel({
     if (!canAdd) return;
     try {
       await onAdd(
-        { title: title.trim(), description: description.trim(), price: parsedPrice },
+        {
+          title: title.trim(),
+          description: description.trim(),
+          price: parsedPrice,
+          durationMinutes,
+        },
         imageUri,
         imageMimeType,
       );
       setTitle('');
       setDescription('');
       setPrice('');
+      setDurationMinutes(DEFAULT_STYLE_DURATION_MINUTES);
       setImageUri(null);
       setImageMimeType(null);
     } catch {
@@ -408,8 +458,6 @@ function AddStylePanel({
 
   return (
     <View style={styles.panel}>
-      <VenuePill venue="studio" label="New style" />
-
       <View style={styles.panelRow}>
         <StylePhoto
           localUri={imageUri}
@@ -447,6 +495,11 @@ function AddStylePanel({
             editable={!isAdding}
             fieldRef={priceRef}
             onFocus={() => onFieldFocus(priceRef.current)}
+          />
+          <DurationPicker
+            value={durationMinutes}
+            onChange={setDurationMinutes}
+            disabled={isAdding}
           />
 
           <Pressable
@@ -520,7 +573,7 @@ function StylesEditorBody({
   };
 
   const handleAdd = async (
-    input: { title: string; description: string; price: number },
+    input: { title: string; description: string; price: number; durationMinutes: number },
     imageUri: string | null,
     mimeType: string | null,
   ) => {
@@ -584,12 +637,6 @@ function StylesEditorBody({
           />
         ))}
       </ScrollView>
-
-      <View style={styles.legendRow}>
-        <VenuePill venue="studio" label="Studio" />
-        <VenuePill venue="house" label="House call" />
-        <VenuePill venue="kids" label="Kids" />
-      </View>
 
       <Text style={styles.groupTitle}>Edit style</Text>
 
@@ -760,8 +807,35 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
   },
-  stylePillPrice: {
+  stylePillMeta: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  durationRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingVertical: 2,
+  },
+  durationChip: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    backgroundColor: colors.card,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  durationChipSelected: {
+    borderColor: colors.accentPinkBorder,
+    backgroundColor: colors.accentPinkMuted,
+  },
+  durationChipText: {
+    color: colors.textMuted,
     fontSize: 12,
+    fontWeight: '600',
+  },
+  durationChipTextSelected: {
+    color: colors.accentPink,
     fontWeight: '700',
   },
   addPill: {
@@ -788,26 +862,6 @@ const styles = StyleSheet.create({
   },
   addPillTextSelected: {
     color: colors.accentPink,
-  },
-  legendRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  venuePill: {
-    alignSelf: 'flex-start',
-    borderRadius: 999,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  venuePillText: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
   },
   panelCarousel: {
     gap: 12,

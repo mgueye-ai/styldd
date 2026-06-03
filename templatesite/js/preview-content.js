@@ -8,6 +8,59 @@
       .replace(/'/g, '&#39;');
   }
 
+  function formatSiteAddress(content) {
+    if (!content) return '';
+    return [content.addressLine1, content.addressLine2, content.city, content.state, content.zip]
+      .filter(Boolean)
+      .join(', ');
+  }
+
+  function buildGoogleMapsSearchUrl(address) {
+    var query = String(address || '').trim();
+    if (!query) return 'https://www.google.com/maps';
+    return 'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(query);
+  }
+
+  function buildGoogleMapsEmbedUrl(content) {
+    if (!content) return null;
+    var custom = content.mapEmbedUrl ? String(content.mapEmbedUrl).trim() : '';
+    if (custom) return custom;
+    var address = formatSiteAddress(content).trim();
+    if (!address) return null;
+    return 'https://www.google.com/maps?q=' + encodeURIComponent(address) + '&output=embed';
+  }
+
+  function applyLocationAddress(content) {
+    var fullAddress = formatSiteAddress(content).trim();
+    var addressPart = document.querySelector('[data-location-part="address"]');
+    if (!addressPart) return;
+
+    if (!fullAddress) {
+      addressPart.innerHTML = '';
+      return;
+    }
+
+    var mapsUrl = buildGoogleMapsSearchUrl(fullAddress);
+    var line2 = [content.addressLine2, content.city, content.state, content.zip]
+      .filter(Boolean)
+      .join(', ');
+    var html =
+      '<a class="location-address-link" href="' +
+      escapeHtml(mapsUrl) +
+      '" target="_blank" rel="noopener noreferrer">';
+    if (content.addressLine1) {
+      html += '<p><strong>' + escapeHtml(content.addressLine1) + '</strong></p>';
+    }
+    if (line2) {
+      html += '<p>' + escapeHtml(line2) + '</p>';
+    }
+    if (!content.addressLine1 && !line2) {
+      html += '<p><strong>' + escapeHtml(fullAddress) + '</strong></p>';
+    }
+    html += '</a>';
+    addressPart.innerHTML = html;
+  }
+
   function heroImageStyle(url) {
     if (!url) return '';
     return (
@@ -21,7 +74,7 @@
     return (
       '<div class="hero-ctas hero-ctas--landing hero-ctas--scale">' +
       '<a class="hero-btn hero-btn--outline-light hero-btn--lg" href="#preview-menu-section">Browse menu &amp; prices</a>' +
-      '<a class="hero-btn hero-btn--gold hero-btn--lg" href="#preview-visit-section">Book now</a>' +
+      '<a class="hero-btn hero-btn--gold hero-btn--lg" href="/booking">Book now</a>' +
       '</div>'
     );
   }
@@ -127,41 +180,41 @@
     );
   }
 
-  function buildInstagramReelsHtml(content) {
-    var handle = (content.instagramHandle || 'yourhandle').replace(/^@/, '');
-    var igUrl = 'https://www.instagram.com/' + encodeURIComponent(handle) + '/';
-    var slides = [
-      { title: 'Recent work', caption: 'Tap to view on Instagram' },
-      { title: 'Client features', caption: 'Fresh styles & transformations' },
-      { title: 'Behind the chair', caption: 'Process, prep, and finished looks' },
-      { title: 'Book from Instagram', caption: 'DM or link in bio to schedule' },
-    ];
+  var VALID_SECTIONS = ['menu', 'about', 'visit'];
+  var VALID_LOCATION_PARTS = ['address', 'map', 'contact'];
 
-    return slides
-      .map(function (slide) {
-        return (
-          '<div class="reels-carousel__slide">' +
-          '<a class="ig-reel-card" href="' +
-          escapeHtml(igUrl) +
-          '" target="_blank" rel="noopener noreferrer">' +
-          '<span class="ig-reel-card__media" aria-hidden="true">' +
-          '<img class="ig-reel-card__thumb" src="/assets/placeholders/reel.svg" alt="" width="640" height="1136" loading="lazy" decoding="async" />' +
-          '<span class="ig-reel-card__play">▶</span>' +
-          '</span>' +
-          '<span class="ig-reel-card__body">' +
-          '<span class="ig-reel-card__handle">@' +
-          escapeHtml(handle) +
-          '</span>' +
-          '<strong>' +
-          escapeHtml(slide.title) +
-          '</strong>' +
-          '<span>' +
-          escapeHtml(slide.caption) +
-          '</span>' +
-          '</span></a></div>'
-        );
-      })
-      .join('');
+  function isSectionHidden(content, section) {
+    if (!content || !Array.isArray(content.hiddenSections)) return false;
+    return content.hiddenSections.indexOf(section) !== -1;
+  }
+
+  function isLocationPartHidden(content, part) {
+    if (!content || !Array.isArray(content.hiddenLocationParts)) return false;
+    return content.hiddenLocationParts.indexOf(part) !== -1;
+  }
+
+  function applyPageVisibility(content) {
+    document.querySelectorAll('[data-site-section]').forEach(function (el) {
+      var sectionId = el.getAttribute('data-site-section');
+      if (!sectionId || VALID_SECTIONS.indexOf(sectionId) === -1) return;
+      el.hidden = isSectionHidden(content, sectionId);
+    });
+
+    document.querySelectorAll('[data-location-part]').forEach(function (el) {
+      var partId = el.getAttribute('data-location-part');
+      if (!partId || VALID_LOCATION_PARTS.indexOf(partId) === -1) return;
+      el.hidden = isLocationPartHidden(content, partId);
+    });
+
+    var menuNav = document.querySelector('.hero-nav__links a[href="#preview-menu-section"]');
+    if (menuNav) menuNav.hidden = isSectionHidden(content, 'menu');
+    var visitNav = document.querySelector('.hero-nav__links a[href="#preview-visit-section"]');
+    if (visitNav) visitNav.hidden = isSectionHidden(content, 'visit');
+
+    var menuCta = document.querySelector('a[href="#preview-menu-section"].hero-btn--outline-light');
+    if (menuCta) menuCta.hidden = isSectionHidden(content, 'menu');
+    var bookCta = document.querySelector('a[href="#preview-visit-section"].hero-btn--gold');
+    if (bookCta) bookCta.hidden = isSectionHidden(content, 'visit');
   }
 
   function buildCatalogServiceCardHtml(style) {
@@ -176,16 +229,20 @@
     var sizeHtml = style.sizeLabel
       ? '<span class="catalog-service-card__size">' + escapeHtml(style.sizeLabel) + '</span>'
       : '';
+    var durationHtml = style.durationLabel
+      ? '<span class="catalog-service-card__duration">' + escapeHtml(style.durationLabel) + '</span>'
+      : '';
     var priceHtml = style.priceLabel
       ? '<span class="catalog-service-card__price">' + escapeHtml(style.priceLabel) + '</span>'
       : '';
     var midHtml =
-      sizeHtml || priceHtml
-        ? '<div class="catalog-service-card__mid">' + sizeHtml + priceHtml + '</div>'
+      sizeHtml || durationHtml || priceHtml
+        ? '<div class="catalog-service-card__mid">' + sizeHtml + durationHtml + priceHtml + '</div>'
         : '';
 
+    var bookHref = style.id ? '/booking?style=' + encodeURIComponent(style.id) : '/booking';
     return (
-      '<a class="catalog-service-card" href="#">' +
+      '<a class="catalog-service-card" href="' + bookHref + '">' +
       '<div class="' +
       mediaClass +
       '" aria-hidden="true"' +
@@ -271,21 +328,26 @@
     }
 
     setText('preview-brand', content.brandName);
-    setText('preview-reels-title', content.reelsTitle);
-    setText('preview-reels-blurb', content.reelsBlurb);
     setText('preview-menu-title', content.menuTitle || 'Menu');
     setText('preview-menu-blurb', content.menuBlurb || 'Browse our services & prices — book online.');
     setText('preview-about-title', content.aboutTitle);
     setText('preview-about-body', content.aboutBody);
     setText('preview-visit-title', content.visitTitle);
     setText('preview-visit-body', content.visitBody);
-    setText('preview-address', content.addressLine1);
-    setText('preview-city-line', [content.city, content.state, content.zip].filter(Boolean).join(', '));
+    applyLocationAddress(content);
     setText('preview-phone', content.phoneDisplay);
     setText('preview-email', content.email || 'hello@yoursite.com');
-    setText('preview-footer-text', content.footerText);
-    setText('preview-footer-brand', content.brandName);
-    setText('preview-footer-tagline', content.metaDescription);
+    if (window.StyldTenant && window.StyldTenant.applySiteFooter) {
+      window.StyldTenant.applySiteFooter(content);
+    } else {
+      setText('preview-footer-brand', content.brandName);
+      var styldLink = document.getElementById('preview-footer-styld-link');
+      if (styldLink) {
+        var marketingUrl =
+          (window.__STYLD_TENANT__ && window.__STYLD_TENANT__.marketingUrl) || 'https://styldd.com';
+        styldLink.href = marketingUrl;
+      }
+    }
 
     var handle = (content.instagramHandle || 'yourhandle').replace(/^@/, '').trim();
     var igUrl = 'https://www.instagram.com/' + encodeURIComponent(handle) + '/';
@@ -300,19 +362,15 @@
         '</a>';
     }
 
-    var reelsNote = document.getElementById('preview-reels-note');
-    if (reelsNote) {
-      reelsNote.innerHTML =
-        'Follow <a href="' +
-        escapeHtml(igUrl) +
-        '" target="_blank" rel="noopener noreferrer">@' +
-        escapeHtml(handle) +
-        '</a> for the latest work.';
-    }
-
     var mapFrame = document.getElementById('preview-map');
-    if (mapFrame && content.mapEmbedUrl) {
-      mapFrame.src = content.mapEmbedUrl;
+    if (mapFrame) {
+      var embedUrl = buildGoogleMapsEmbedUrl(content);
+      if (embedUrl) {
+        mapFrame.src = embedUrl;
+        mapFrame.title = 'Map to ' + formatSiteAddress(content);
+      } else {
+        mapFrame.removeAttribute('src');
+      }
     }
 
     document.title = (content.brandName || 'Your site') + ' | Book online';
@@ -332,11 +390,6 @@
       logo.src = theme.logoImageUrl;
     }
 
-    var reelsTrack = document.getElementById('preview-reels-track');
-    if (reelsTrack) {
-      reelsTrack.innerHTML = buildInstagramReelsHtml(content);
-    }
-
     var grid = document.getElementById('preview-style-grid');
     if (grid) {
       var styleCardLayout =
@@ -349,6 +402,8 @@
         grid.innerHTML = buildMenuCatalogCardsHtml(window.__STYLD_SITE_STYLES__ || []);
       }
     }
+
+    applyPageVisibility(content);
   };
 
   if (window.__STYLD_SITE_CONTENT__) {

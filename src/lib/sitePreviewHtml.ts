@@ -1,4 +1,11 @@
-import { formatSiteAddress, LocationPart, SiteContent, SiteSection } from '../data/siteContent';
+import {
+  buildGoogleMapsEmbedUrl,
+  buildGoogleMapsSearchUrl,
+  formatSiteAddress,
+  LocationPart,
+  SiteContent,
+  SiteSection,
+} from '../data/siteContent';
 import { HeroLayout, StyleCardLayout } from '../data/siteTheme';
 
 const SITE_PREVIEW_CSS = `
@@ -61,8 +68,9 @@ const SITE_PREVIEW_CSS = `
 .info-card{background:var(--white);border-radius:var(--radius);padding:1.5rem;border:1px solid rgba(181,154,91,.28);box-shadow:var(--shadow)}
 .info-card h3{font-family:var(--font-display);color:var(--pink-heading);margin:0 0 1rem}
 .info-card p{margin:.25rem 0;color:var(--muted-soft)}.location-map{width:100%;height:220px;border:0;margin-top:1rem;border-radius:10px}
-.site-footer{padding:2rem 0 2.5rem;background:#111;color:#fafafa;text-align:center}.site-footer p{margin:.35rem 0;font-size:.9rem;color:#a1a1aa}
-@media (max-width:767px){.hero-scale-title__grid{display:flex;flex-direction:column;align-items:center;gap:1.15rem}.hero-scale-visual{order:-1;max-width:min(360px,90vw);margin-bottom:.25rem}.hero-scale-col--left,.hero-scale-col--right{align-items:center;text-align:center}.hero-scale-display--brand{align-items:center;text-align:center}.hero-nav__burger{display:inline-flex}.hero-nav__panel{display:none;flex-direction:column;align-items:stretch;width:100%;order:3;gap:1rem;margin-top:.35rem;padding:1rem 1.1rem 1.2rem;background:rgba(255,255,255,.98);border-radius:14px;border:1px solid rgba(244,114,182,.28)}.hero-nav__panel.hero-nav__panel--open{display:flex}.hero-nav__links{flex-direction:column;align-items:stretch}.hero-nav__actions{flex-direction:column;width:100%}.hero-nav__actions .hero-btn--nav{width:100%;justify-content:center}}
+.location-address-link{display:block;color:inherit;text-decoration:none}.location-address-link:hover,.location-address-link:focus-visible{color:var(--pink-dark);text-decoration:underline}.location-address-link p{margin:0 0 .35rem}
+.site-footer{padding:2rem 0 2.5rem;background:#111;color:#fafafa;text-align:center}.site-footer p{margin:.35rem 0;font-size:.9rem;color:#a1a1aa}.footer-built-by{margin:.35rem 0 0}.footer-built-by__link{display:inline-flex;align-items:center;gap:.4rem;font-size:.76rem;color:rgba(255,255,255,.55);text-decoration:none}.footer-built-by__logo{width:22px;height:22px;border-radius:6px;object-fit:cover}
+@media (max-width:767px){.hero-landing__content{justify-content:center;width:100%}.hero-scale-layout{width:100%;max-width:100%}.hero-scale-title{width:100%;display:flex;flex-direction:column;align-items:center}.hero-scale-title__grid{display:flex;flex-direction:column;align-items:center;gap:1.15rem;width:100%;max-width:min(24rem,100%);margin-inline:auto}.hero-scale-visual{order:-1;max-width:min(360px,92vw);width:100%;margin-inline:auto;align-self:center}.hero-scale-col--left,.hero-scale-col--right,.hero-scale-col--center{width:100%;align-items:center;text-align:center}.hero-scale-display,.hero-scale-display--brand{align-items:center;text-align:center;width:100%}.hero-ctas--scale{width:100%;max-width:min(22rem,92vw);margin-inline:auto;justify-content:center;align-items:center;flex-direction:column}.hero-ctas--scale .hero-btn--lg{width:100%;max-width:20rem;margin-inline:auto;justify-content:center}.hero-nav__burger{display:inline-flex}.hero-nav__panel{display:none;flex-direction:column;align-items:stretch;width:100%;order:3;gap:1rem;margin-top:.35rem;padding:1rem 1.1rem 1.2rem;background:rgba(255,255,255,.98);border-radius:14px;border:1px solid rgba(244,114,182,.28)}.hero-nav__panel.hero-nav__panel--open{display:flex}.hero-nav__links{flex-direction:column;align-items:stretch}.hero-nav__actions{flex-direction:column;width:100%}.hero-nav__actions .hero-btn--nav{width:100%;justify-content:center}}
 @media (max-width:720px){.section-popular-styles .catalog-service-cards--popular{grid-template-columns:1fr}}
 .style-pill-list{display:flex;flex-direction:column;gap:.6rem;width:100%}
 .style-pill{display:flex;align-items:center;gap:.85rem;padding:.6rem 1rem .6rem .6rem;border-radius:999px;background:#fff;border:1px solid rgba(0,0,0,.08);box-shadow:0 2px 8px rgba(0,0,0,.05);text-decoration:none;color:inherit;transition:box-shadow .15s}
@@ -86,10 +94,12 @@ function escapeHtml(value: string): string {
 }
 
 export type SitePreviewStyle = {
+  id?: string;
   title: string;
   description: string;
   priceLabel: string;
   sizeLabel?: string;
+  durationLabel?: string;
   imageUrl?: string | null;
 };
 
@@ -176,7 +186,7 @@ function heroImageAttr(url: string | null | undefined): string {
 
 function buildHeroCtasHtml(): string {
   return `<div class="hero-ctas hero-ctas--landing hero-ctas--scale"><a class="hero-btn hero-btn--outline-light hero-btn--lg" href="#preview-menu-section">Browse menu &amp; prices</a>
-<a class="hero-btn hero-btn--gold hero-btn--lg" href="#preview-visit-section">Book now</a></div>`;
+<a class="hero-btn hero-btn--gold hero-btn--lg" href="/booking">Book now</a></div>`;
 }
 
 function buildHeroInnerHtml(content: SiteContent, theme: SitePreviewTheme): string {
@@ -230,15 +240,19 @@ function buildCatalogServiceCardHtml(style: SitePreviewStyle): string {
   const sizeHtml = style.sizeLabel
     ? `<span class="catalog-service-card__size">${escapeHtml(style.sizeLabel)}</span>`
     : '';
+  const durationHtml = style.durationLabel
+    ? `<span class="catalog-service-card__duration">${escapeHtml(style.durationLabel)}</span>`
+    : '';
   const priceHtml = style.priceLabel
     ? `<span class="catalog-service-card__price">${escapeHtml(style.priceLabel)}</span>`
     : '';
   const midHtml =
-    sizeHtml || priceHtml
-      ? `<div class="catalog-service-card__mid">${sizeHtml}${priceHtml}</div>`
+    sizeHtml || durationHtml || priceHtml
+      ? `<div class="catalog-service-card__mid">${sizeHtml}${durationHtml}${priceHtml}</div>`
       : '';
 
-  return `<a class="catalog-service-card" href="#"><div class="${mediaClass}" aria-hidden="true"${mediaStyle}></div><div class="catalog-service-card__body"><span class="catalog-service-card__title">${escapeHtml(style.title)}</span>${midHtml}</div></a>`;
+  const bookHref = style.id ? `/booking?style=${encodeURIComponent(style.id)}` : '/booking';
+  return `<a class="catalog-service-card" href="${bookHref}"><div class="${mediaClass}" aria-hidden="true"${mediaStyle}></div><div class="catalog-service-card__body"><span class="catalog-service-card__title">${escapeHtml(style.title)}</span>${midHtml}</div></a>`;
 }
 
 function buildCatalogServiceCardsHtml(styles: SitePreviewStyle[]): string {
@@ -265,28 +279,14 @@ function buildStylePillsHtml(styles: SitePreviewStyle[]): string {
       const imgHtml = style.imageUrl
         ? `<div class="style-pill__img--bg" style="background-image:url('${style.imageUrl.replace(/'/g, '%27')}')"></div>`
         : `<div class="style-pill__img"></div>`;
-      const desc = style.description ? `<div class="style-pill__desc">${escapeHtml(style.description)}</div>` : '';
-      const price = style.priceLabel ? `<span class="style-pill__price">${escapeHtml(style.priceLabel)}</span>` : '';
+      const metaBits = [style.durationLabel, style.priceLabel].filter(Boolean);
+      const descText = style.description || metaBits.join(' · ');
+      const desc = descText ? `<div class="style-pill__desc">${escapeHtml(descText)}</div>` : '';
+      const price = '';
       return `<a class="style-pill" href="#">${imgHtml}<div class="style-pill__body"><div class="style-pill__name">${escapeHtml(style.title)}</div>${desc}</div>${price}</a>`;
     })
     .join('');
   return `<div class="style-pill-list">${items}</div>`;
-}
-
-function buildInstagramPreviewHtml(content: SiteContent): string {
-  const handle = content.instagramHandle.replace(/^@/, '') || 'yourhandle';
-  const igUrl = `https://www.instagram.com/${encodeURIComponent(handle)}/`;
-  const slides = [
-    { title: 'Recent work', caption: 'Tap to view on Instagram' },
-    { title: 'Client features', caption: 'Fresh styles & transformations' },
-  ];
-
-  return slides
-    .map(
-      (slide) =>
-        `<div class="reels-carousel__slide"><a class="ig-reel-card" href="${escapeHtml(igUrl)}" target="_blank" rel="noopener noreferrer"><span class="ig-reel-card__media"><span class="ig-reel-card__play">▶</span></span><span class="ig-reel-card__body"><span class="ig-reel-card__handle">@${escapeHtml(handle)}</span><strong>${escapeHtml(slide.title)}</strong><span>${escapeHtml(slide.caption)}</span></span></a></div>`,
-    )
-    .join('');
 }
 
 function isSectionHidden(content: SiteContent, section: SiteSection): boolean {
@@ -304,22 +304,14 @@ export function buildSitePreviewHtml(
 ): string {
   const address = formatSiteAddress(content);
   const instagram = content.instagramHandle.replace(/^@/, '');
-  const mapSrc =
-    content.mapEmbedUrl ||
-    'https://www.openstreetmap.org/export/embed.html?bbox=-124.5%2C24.5%2C-66.9%2C49.5&layer=mapnik';
+  const mapsSearchUrl = buildGoogleMapsSearchUrl(address);
+  const mapSrc = buildGoogleMapsEmbedUrl(content);
 
   const viewportContent = theme.zoomedOut
     ? 'width=800'
     : 'width=device-width,initial-scale=1,maximum-scale=1';
 
   const colorOverrideCss = buildColorOverrideCss(theme);
-
-  const socialSection = isSectionHidden(content, 'social')
-    ? ''
-    : `<section class="section section-alt section--reels-showcase"><div class="container"><div class="section-head">
-<h2>${escapeHtml(content.reelsTitle)}</h2><p>${escapeHtml(content.reelsBlurb)}</p></div>
-<div class="reels-carousel reels-carousel--cards"><div class="reels-carousel__shell"><div class="reels-carousel__viewport"><div class="reels-carousel__track">${buildInstagramPreviewHtml(content)}</div></div></div></div>
-<p class="video-note video-note--reels">Follow <a href="https://www.instagram.com/${escapeHtml(instagram)}/" target="_blank" rel="noopener noreferrer">@${escapeHtml(instagram)}</a></p></div></section>`;
 
   const isPillLayout = theme.styleCardLayout === 'pill';
   const menuInner = isPillLayout ? buildStylePillsHtml(styles) : buildCatalogServiceCardsHtml(styles);
@@ -334,17 +326,31 @@ ${menuInner}</div></section>`;
     : `<section class="section"><div class="container"><div class="section-head">
 <h2>${escapeHtml(content.aboutTitle)}</h2><p>${escapeHtml(content.aboutBody)}</p></div></div></section>`;
 
+  const addressLine2 = [content.addressLine2, content.city, content.state, content.zip]
+    .filter(Boolean)
+    .join(', ');
   const addressBlock = isLocationPartHidden(content, 'address')
     ? ''
-    : `<p><strong>${escapeHtml(content.addressLine1)}</strong></p><p>${escapeHtml(address)}</p>`;
+    : address.trim()
+      ? `<a class="location-address-link" href="${escapeHtml(mapsSearchUrl)}" target="_blank" rel="noopener noreferrer">${
+          content.addressLine1
+            ? `<p><strong>${escapeHtml(content.addressLine1)}</strong></p>`
+            : ''
+        }${addressLine2 ? `<p>${escapeHtml(addressLine2)}</p>` : ''}${
+          !content.addressLine1 && !addressLine2
+            ? `<p><strong>${escapeHtml(address)}</strong></p>`
+            : ''
+        }</a>`
+      : '';
 
   const contactBlock = isLocationPartHidden(content, 'contact')
     ? ''
     : `<p>${escapeHtml(content.phoneDisplay)}</p><p>@${escapeHtml(instagram)}</p>${content.email ? `<p>${escapeHtml(content.email)}</p>` : ''}`;
 
-  const mapBlock = isLocationPartHidden(content, 'map')
-    ? ''
-    : `<div class="location-map-wrap"><iframe class="location-map" title="Map" loading="lazy" src="${escapeHtml(mapSrc)}"></iframe></div>`;
+  const mapBlock =
+    isLocationPartHidden(content, 'map') || !mapSrc
+      ? ''
+      : `<div class="location-map-wrap"><iframe class="location-map" title="Map to ${escapeHtml(address || 'location')}" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="${escapeHtml(mapSrc)}"></iframe></div>`;
 
   const visitSection = isSectionHidden(content, 'visit')
     ? ''
@@ -372,18 +378,17 @@ ${addressBlock}${contactBlock}${mapBlock}
 <div class="hero-landing__bg"></div><div class="hero-landing__vignette"></div>
 <header class="hero-nav"><div class="container hero-nav__inner">
 <a class="hero-brand" href="#"><span class="hero-brand__logo"></span><span>${escapeHtml(content.brandName)}</span></a>
-<div class="hero-nav__panel"><nav class="hero-nav__links"><a href="#">Home</a><a href="#preview-menu-section">Menu</a><a href="#">Gallery</a></nav>
+<div class="hero-nav__panel"><nav class="hero-nav__links"><a href="#">Home</a></nav>
 <a class="hero-btn" href="#preview-visit-section">Book Now</a></div></div></header>
 <div class="container hero-landing__content">${buildHeroInnerHtml(content, theme)}</div>
 </section>
 <main>
-${socialSection}
 ${menuSection}
 ${aboutSection}
 ${visitSection}
 </main>
-<footer class="site-footer"><div class="container">
+<footer class="site-footer site-footer--home-promo"><div class="container footer-bottom">
 <p>&copy; ${escapeHtml(content.brandName)}</p>
-<p>${escapeHtml(content.footerText)}</p></div></footer>
+<p class="footer-built-by"><a class="footer-built-by__link" href="https://styldd.com" target="_blank" rel="noopener noreferrer"><img class="footer-built-by__logo" src="https://styldd.com/assets/styld-icon.png" alt="" width="22" height="22" decoding="async"/><span>Built with Styld</span></a></p></div></footer>
 </body></html>`;
 }

@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Great+Vibes&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/css/styles.css?v=30" />
+    <link rel="stylesheet" href="/css/styles.css?v=40" />
     <style>
       #tenant-status {
         position: fixed;
@@ -61,12 +61,10 @@
 
           <div id="hero-nav-panel" class="hero-nav__panel">
             <nav class="hero-nav__links" aria-label="Main">
-              <a href="#">Home</a>
-              <a href="#preview-menu-section">Menu</a>
-              <a href="#">Gallery</a>
+              <a href="/">Home</a>
             </nav>
             <div class="hero-nav__actions">
-              <a class="hero-btn hero-btn--nav" href="#">Book Now</a>
+              <a class="hero-btn hero-btn--nav" href="/booking">Book Now</a>
             </div>
           </div>
         </div>
@@ -94,7 +92,7 @@
             </h1>
             <div class="hero-ctas hero-ctas--landing hero-ctas--scale">
               <a class="hero-btn hero-btn--outline-light hero-btn--lg" href="#preview-menu-section">Browse menu &amp; prices</a>
-              <a class="hero-btn hero-btn--gold hero-btn--lg" href="#preview-visit-section">Book now</a>
+              <a class="hero-btn hero-btn--gold hero-btn--lg" href="/booking">Book now</a>
             </div>
           </div>
         </div>
@@ -102,26 +100,7 @@
     </section>
 
     <main>
-      <section class="section section-alt section--reels-showcase">
-        <div class="container">
-          <div class="section-head">
-            <h2 id="preview-reels-title">Put your video or social section title here</h2>
-            <p id="preview-reels-blurb">Replace this blurb with how you show work.</p>
-          </div>
-          <div id="preview-reels-carousel" class="reels-carousel reels-carousel--cards" data-reels-carousel>
-            <div class="reels-carousel__shell">
-              <button type="button" class="reels-carousel__btn reels-carousel__btn--prev" aria-label="Previous reel">‹</button>
-              <div class="reels-carousel__viewport">
-                <div class="reels-carousel__track" id="preview-reels-track"></div>
-              </div>
-              <button type="button" class="reels-carousel__btn reels-carousel__btn--next" aria-label="Next reel">›</button>
-            </div>
-          </div>
-          <p class="video-note video-note--reels" id="preview-reels-note"></p>
-        </div>
-      </section>
-
-      <section class="section section-popular-styles" id="preview-menu-section">
+      <section class="section section-popular-styles" id="preview-menu-section" data-site-section="menu">
         <div class="container">
           <div class="section-head section-head--popular">
             <h2 id="preview-menu-title">Menu</h2>
@@ -131,7 +110,7 @@
         </div>
       </section>
 
-      <section class="section">
+      <section class="section" data-site-section="about">
         <div class="container">
           <div class="section-head">
             <h2 id="preview-about-title">About</h2>
@@ -140,7 +119,7 @@
         </div>
       </section>
 
-      <section class="section section-alt" id="preview-visit-section">
+      <section class="section section-alt" id="preview-visit-section" data-site-section="visit">
         <div class="container">
           <div class="section-head">
             <h2 id="preview-visit-title">Visit &amp; connect</h2>
@@ -150,13 +129,14 @@
             <article class="info-card info-card--location">
               <h3>Location</h3>
               <div class="info-card-body">
-                <p><strong id="preview-address"></strong></p>
-                <p id="preview-city-line"></p>
-                <p id="preview-phone"></p>
-                <p id="preview-instagram"></p>
+                <div data-location-part="address"></div>
+                <div data-location-part="contact">
+                  <p id="preview-phone"></p>
+                  <p id="preview-instagram"></p>
+                </div>
               </div>
-              <div class="location-map-wrap">
-                <iframe id="preview-map" class="location-map" title="Map" loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox=-124.5%2C24.5%2C-66.9%2C49.5&amp;layer=mapnik"></iframe>
+              <div class="location-map-wrap" data-location-part="map">
+                <iframe id="preview-map" class="location-map" title="Map" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
               </div>
             </article>
           </div>
@@ -167,15 +147,33 @@
     <footer class="site-footer site-footer--home-promo">
       <div class="container footer-bottom">
         <p id="preview-footer-brand">&copy; Your brand name</p>
-        <p class="footer-built-by"><span id="preview-footer-text"></span></p>
+        <p class="footer-built-by">
+          <a
+            class="footer-built-by__link"
+            id="preview-footer-styld-link"
+            href="https://styldd.com"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <img
+              class="footer-built-by__logo"
+              src="/assets/styld-icon.png"
+              alt=""
+              width="22"
+              height="22"
+              decoding="async"
+            />
+            <span>Built with Styld</span>
+          </a>
+        </p>
       </div>
     </footer>
 
-    <script src="/js/styld-tenant-config.js?v=30"></script>
-    <script src="/js/styld-tenant-config.local.js?v=30"></script>
-    <script src="/js/preview-content.js?v=30"></script>
-    <script src="/js/tenant-site.js?v=30"></script>
+    <script src="/js/styld-tenant-config.js?v=35"></script>
+    <script src="/js/styld-tenant-config.local.js?v=35"></script>
+    <script src="/js/styld-tenant-shared.js?v=39"></script>
+    <script src="/js/preview-content.js?v=40"></script>
+    <script src="/js/tenant-site.js?v=35"></script>
     <script src="/js/hero-nav.js" defer></script>
-    <script src="/js/reels-carousel.js" defer></script>
   </body>
 </html>

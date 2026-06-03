@@ -15,6 +15,8 @@ import {
 import {
   createStyleId,
   DEFAULT_STYLE_CATEGORY,
+  DEFAULT_STYLE_DURATION_MINUTES,
+  normalizeStyleDurationMinutes,
   StyleCatalogMeta,
   StyleMetaEntry,
 } from '../data/siteStyles';
@@ -33,6 +35,7 @@ export type StyleUpsertInput = {
   title: string;
   description: string;
   price: number;
+  durationMinutes?: number;
   category?: string;
   venue?: ServiceVenue;
 };
@@ -210,6 +213,11 @@ export function ServiceCatalogProvider({ children }: { children: React.ReactNode
         title,
         description: input.description.trim(),
         category: input.category?.trim() || DEFAULT_STYLE_CATEGORY,
+        durationMinutes: normalizeStyleDurationMinutes(
+          input.durationMinutes ??
+            styleMetaRef.current[id]?.durationMinutes ??
+            DEFAULT_STYLE_DURATION_MINUTES,
+        ),
       };
 
       const nextMeta = { ...styleMetaRef.current, [id]: entry };

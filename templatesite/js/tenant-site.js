@@ -63,6 +63,22 @@
     return '$' + Math.round(amount);
   }
 
+  function normalizeDurationMinutes(value) {
+    var parsed = typeof value === 'number' ? value : Number(value);
+    if (!Number.isFinite(parsed) || parsed <= 0) return 120;
+    return Math.min(720, Math.max(15, Math.round(parsed)));
+  }
+
+  function formatStyleDuration(minutes) {
+    var mins = normalizeDurationMinutes(minutes);
+    var hours = Math.floor(mins / 60);
+    var remainder = mins % 60;
+    if (hours <= 0) return remainder + ' min';
+    if (remainder === 0) return hours === 1 ? '1 hr' : hours + ' hrs';
+    if (hours === 1) return '1 hr ' + remainder + ' min';
+    return hours + ' hrs ' + remainder + ' min';
+  }
+
   function sizeLabelFromStyleId(styleId) {
     var parts = String(styleId || '').split('-');
     var last = parts[parts.length - 1];
@@ -172,13 +188,15 @@
         .map(function (styleId) {
           var item = meta[styleId] || {};
           var sizeLabel = item.sizeLabel || item.variant || sizeLabelFromStyleId(styleId);
-          return {
-            title: item.title || styleId,
-            description: item.description || '',
-            priceLabel: formatPrice(prices[styleId]),
-            sizeLabel: sizeLabel || undefined,
-            imageUrl: coverUrl(covers[styleId]),
-          };
+        return {
+          id: styleId,
+          title: item.title || styleId,
+          description: item.description || '',
+          priceLabel: formatPrice(prices[styleId]),
+          sizeLabel: sizeLabel || undefined,
+          durationLabel: formatStyleDuration(item.durationMinutes),
+          imageUrl: coverUrl(covers[styleId]),
+        };
         });
 
       window.__STYLD_SITE_STYLES__ = styles;

@@ -259,6 +259,8 @@ function toAppointmentDetail(booking: SiteBookingRecord): AppointmentDetail {
 
 function toCalendarEvent(booking: SiteBookingRecord): CalendarEvent | null {
   if (!booking.startsAt) return null;
+  const statusKey = booking.bookingStatus.toLowerCase();
+  if (statusKey === 'cancelled' || statusKey === 'canceled') return null;
 
   const end = new Date(booking.startsAt.getTime() + booking.durationMinutes * 60_000);
   const status = mapBookingStatus(booking.bookingStatus, booking.startsAt);

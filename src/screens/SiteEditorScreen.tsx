@@ -20,6 +20,7 @@ import { useSiteTheme } from '../context/SiteThemeContext';
 import { useOnboarding } from '../context/OnboardingContext';
 import { formatStylePrice } from '../data/siteStyles';
 import { LOCATION_PARTS, LocationPart, SITE_SECTIONS, SiteSection } from '../data/siteContent';
+import { DEFAULT_STYLE_DURATION_MINUTES, formatStyleDuration } from '../data/siteStyles';
 import { SitePreviewTheme } from '../lib/sitePreviewHtml';
 import { SiteStackParamList } from '../navigation/SiteNavigator';
 import { colors } from '../theme';
@@ -200,10 +201,14 @@ export default function SiteEditorScreen({ navigation }: Props) {
         const meta = getStyleMeta(service.id);
         const price = getPrice(service.id);
         return {
+          id: service.id,
           title: meta?.title ?? service.name,
           description: meta?.description ?? service.description ?? '',
           priceLabel: formatStylePrice(price),
           sizeLabel: service.variant !== 'STANDARD' ? service.variant : undefined,
+          durationLabel: formatStyleDuration(
+            meta?.durationMinutes ?? DEFAULT_STYLE_DURATION_MINUTES,
+          ),
           imageUrl: getCoverUrl(service.id),
         };
       }),
@@ -380,24 +385,6 @@ export default function SiteEditorScreen({ navigation }: Props) {
                 visible={isSectionVisible(id)}
                 onToggle={toggleSection}
               >
-                {id === 'social' ? (
-                  <>
-                    <Field
-                      label="Section title"
-                      value={content.reelsTitle}
-                      onChangeText={(reelsTitle) => updateContent({ reelsTitle })}
-                      placeholder="Our work"
-                    />
-                    <Field
-                      label="Section blurb"
-                      value={content.reelsBlurb}
-                      onChangeText={(reelsBlurb) => updateContent({ reelsBlurb })}
-                      multiline
-                      placeholder="Instagram / social showcase copy"
-                    />
-                  </>
-                ) : null}
-
                 {id === 'menu' ? (
                   <>
                     <Field

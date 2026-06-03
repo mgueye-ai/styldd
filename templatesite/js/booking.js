@@ -29,6 +29,7 @@
       saturdayLastStartMinute: 0,
       sameDayLeadMinutes: 30,
       concurrentAppointmentCapacity: 2,
+      closedWeekdays: [],
       blackoutRanges: [],
       googleMapsApiKey: null,
     },
@@ -49,6 +50,17 @@
     fulanipassiontwists: "studio-fulani-passion-twists",
     fulaniquickweave: "studio-wig-fulani-quickweave",
   };
+
+  const TENANT_BOOKING = window.__STYLD_TENANT_BOOKING__ || null;
+
+  function catalogStyles() {
+    if (TENANT_BOOKING && Array.isArray(TENANT_BOOKING.styles) && TENANT_BOOKING.styles.length) {
+      return TENANT_BOOKING.styles.concat([
+        { id: "other", name: "Other / custom quote (price TBD)", base: 0 },
+      ]);
+    }
+    return STYLES;
+  }
 
   const STYLES = [
     { id: "studio-knotless-sm", name: "Studio · Your service · Small", base: 155 },
@@ -395,13 +407,13 @@
     if (!els.styleSelect) return;
     els.styleSelect.innerHTML =
       '<option value="">Choose a style</option>' +
-      STYLES.map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
+      catalogStyles().map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
   }
 
   function getSelectedStyle() {
     const opt = els.styleSelect?.selectedOptions[0];
     if (!opt || !opt.value) return null;
-    const def = STYLES.find((s) => s.id === opt.value);
+    const def = catalogStyles().find((s) => s.id === opt.value);
     const base = def && Number.isFinite(def.base) ? def.base : 0;
     return { id: opt.value, name: opt.textContent, base };
   }
@@ -445,10 +457,20 @@
     return 0;
   }
 
+  function durationMinutesForStyle(style) {
+    if (!style || style.id === "other") return null;
+    if (style.id && isHouseStyleId(style.id)) return fullSalonDayMinutes();
+    if (typeof style.durationMinutes === "number" && style.durationMinutes > 0) {
+      return style.durationMinutes;
+    }
+    if (style.id) return baseDurationMinutesForStyle(style.id);
+    return 90;
+  }
+
   function totalDurationMinutes() {
     const style = getSelectedStyle();
     if (!style || style.id === "other") return null;
-    return Math.max(30, baseDurationMinutesForStyle(style.id) + hairLengthExtraMinutes());
+    return Math.max(30, durationMinutesForStyle(style) + hairLengthExtraMinutes());
   }
 
   function formatDurationHuman(mins) {
@@ -494,8 +516,16 @@
     return false;
   }
 
+  function isClosedWeekday(isoDate) {
+    const closed = Array.isArray(CFG.closedWeekdays) ? CFG.closedWeekdays : [];
+    if (!closed.length) return false;
+    const dow = parseIsoDateLocal(isoDate).weekday % 7;
+    return closed.includes(dow);
+  }
+
   function calendarDayDisabledReason(isoDate) {
     if (isPastCalendarDay(isoDate)) return "Past dates cannot be booked.";
+    if (isClosedWeekday(isoDate)) return "Closed this day.";
     if (isBlackedOut(isoDate)) return "Unavailable this week.";
     if (isCalendarDayBlockedByLeadDays(isoDate))
       return `Appointments require at least ${BOOKING_LEAD_DAYS} full days advance notice.`;
@@ -521,10 +551,13 @@
     const sb = window.salonSupabaseClient;
     if (!sb) return;
     const range = visibleGridIsoRange();
-    const { data, error } = await sb.rpc("booking_dates_in_range", {
-      p_start: range.p_start,
-      p_end: range.p_end,
-    });
+    const rpcName = TENANT_BOOKING?.subdomain
+      ? "styld_tenant_booking_dates_in_range"
+      : "booking_dates_in_range";
+    const rpcArgs = TENANT_BOOKING?.subdomain
+      ? { p_subdomain: TENANT_BOOKING.subdomain, p_start: range.p_start, p_end: range.p_end }
+      : { p_start: range.p_start, p_end: range.p_end };
+    const { data, error } = await sb.rpc(rpcName, rpcArgs);
     if (error) {
       console.warn("booking_dates_in_range", error);
       return;
@@ -631,7 +664,8 @@
         const s = new Date(String(start)).getTime();
         const e = new Date(String(end)).getTime();
         if (!Number.isFinite(s) || !Number.isFinite(e)) return null;
-        return { start: s, end: e };
+        const kind = x.kind ?? x.type ?? "booking";
+        return { start: s, end: e, isBlock: kind === "block" };
       })
       .filter(Boolean);
   }
@@ -639,7 +673,13 @@
   async function fetchUnavailableIntervals(dateIso) {
     const sb = window.salonSupabaseClient;
     if (!sb || !dateIso) return [];
-    const { data, error } = await sb.rpc("get_unavailable_times_for_day", { p_date: dateIso });
+    const rpcName = TENANT_BOOKING?.subdomain
+      ? "styld_tenant_get_unavailable_times_for_day"
+      : "get_unavailable_times_for_day";
+    const rpcArgs = TENANT_BOOKING?.subdomain
+      ? { p_subdomain: TENANT_BOOKING.subdomain, p_date: dateIso }
+      : { p_date: dateIso };
+    const { data, error } = await sb.rpc(rpcName, rpcArgs);
     if (error) {
       console.warn("get_unavailable_times_for_day", error);
       return [];
@@ -698,7 +738,9 @@
   function overlapCount(candidateStartMs, candidateEndMs) {
     let n = 0;
     for (const u of cachedUnavailable) {
-      if (intervalsOverlap(candidateStartMs, candidateEndMs, u.start, u.end)) n++;
+      if (!intervalsOverlap(candidateStartMs, candidateEndMs, u.start, u.end)) continue;
+      if (u.isBlock) return Math.max(1, CFG.concurrentAppointmentCapacity || 1);
+      n++;
     }
     return n;
   }
@@ -1202,6 +1244,17 @@
 
     const row = buildRowPayload(bookingId, paths, apptIso, durationMinutes, stripePaymentIntentId);
 
+    if (TENANT_BOOKING?.subdomain) {
+      const { data: tenantId, error: tenantErr } = await sb.rpc("styld_tenant_insert_booking", {
+        p_subdomain: TENANT_BOOKING.subdomain,
+        p_booking: row,
+      });
+      if (tenantErr) throw tenantErr;
+      const id = tenantId || row.id;
+      if (!id) throw new Error("No booking id returned");
+      return { id, paths };
+    }
+
     const { data, error } = await sb.from("bookings").insert(row).select("id").single();
     if (error) throw error;
     const id = data?.id;
@@ -1408,8 +1461,13 @@
       () => {
         void refreshUnavailableForSelection();
       },
-      5 * 60 * 1000,
+      60 * 1000,
     );
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && selectedIsoDate) {
+        void refreshUnavailableForSelection();
+      }
+    });
   }
 
   readStripeReturnParams();

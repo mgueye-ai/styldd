@@ -21,6 +21,7 @@ import { useServiceCatalog } from '../context/ServiceCatalogContext';
 import { useSiteContent } from '../context/SiteContentContext';
 import { useSiteTheme } from '../context/SiteThemeContext';
 import { formatStylePrice } from '../data/siteStyles';
+import { DEFAULT_STYLE_DURATION_MINUTES, formatStyleDuration } from '../data/siteStyles';
 import { SitePreviewTheme } from '../lib/sitePreviewHtml';
 import { getSiteRootDomain, normalizeSubdomain } from '../data/sitePublish';
 import { useOnboarding } from '../context/OnboardingContext';
@@ -121,10 +122,14 @@ function SitePreviewPanel({ loading }: { loading: boolean }) {
         const meta = getStyleMeta(service.id);
         const price = getPrice(service.id);
         return {
+          id: service.id,
           title: meta?.title ?? service.name,
           description: meta?.description ?? service.description ?? '',
           priceLabel: formatStylePrice(price),
           sizeLabel: service.variant !== 'STANDARD' ? service.variant : undefined,
+          durationLabel: formatStyleDuration(
+            meta?.durationMinutes ?? DEFAULT_STYLE_DURATION_MINUTES,
+          ),
           imageUrl: getCoverUrl(service.id),
         };
       }),
