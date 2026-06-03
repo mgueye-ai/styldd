@@ -17,32 +17,45 @@ import { DashboardStackParamList } from '../navigation/DashboardNavigator';
 import { colors } from '../theme';
 import { maskMoney } from '../utils/money';
 import { getInitials } from '../data/clients';
+import type { AppointmentDetail } from '../data/appointments';
+import type { SiteBookingRecord } from '../lib/siteData';
 
 type Props = NativeStackScreenProps<DashboardStackParamList, 'DashboardHome'>;
 
-type DashboardAppointment = {
-  id: string;
-  time: string;
-  service: string;
-  styleId?: string;
-  vehicle: string;
-  location: string;
-  price: string;
-};
+const MONTH_VALUE = 0;
 
-function toDashboardAppointment(appointment: import('../data/appointments').AppointmentDetail): DashboardAppointment {
-  return {
-    id: appointment.id,
-    time: appointment.time,
-    service: appointment.service,
-    styleId: appointment.styleId,
-    vehicle: appointment.clientName,
-    location: appointment.location,
-    price: `$${appointment.price}`,
-  };
+// ─── helpers ─────────────────────────────────────────────────────────────────
+
+function timeAgo(date: Date): string {
+  const diff = Date.now() - date.getTime();
+  const mins = Math.floor(diff / 60_000);
+  if (mins < 2) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  const days = Math.floor(hrs / 24);
+  if (days === 1) return 'yesterday';
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
-const MONTH_VALUE = 0;
+function bookingStatusLabel(status: string, depositPaid: boolean): string {
+  if (status === 'confirmed') return 'Confirmed';
+  if (status === 'cancelled' || status === 'canceled') return 'Cancelled';
+  if (status === 'completed') return 'Completed';
+  if (depositPaid) return 'Deposit paid';
+  if (status === 'pending_payment') return 'Awaiting payment';
+  return 'Pending';
+}
+
+function bookingStatusColor(status: string, depositPaid: boolean): string {
+  if (status === 'completed') return '#15803d';
+  if (status === 'cancelled' || status === 'canceled') return '#dc2626';
+  if (depositPaid || status === 'confirmed') return colors.accentPink;
+  return colors.textMuted;
+}
+
+// ─── sub-components ──────────────────────────────────────────────────────────
 
 function JobsProgressBar({ progress }: { progress: number }) {
   return (
@@ -62,60 +75,118 @@ function JobsProgressBar({ progress }: { progress: number }) {
   );
 }
 
-function AppointmentCard({
+/** Grouped day header */
+function DayHeader({ label, count }: { label: string; count: number }) {
+  const isToday = label.startsWith('Today');
+  return (
+    <View style={styles.dayHeader}>
+      <View style={[styles.dayDot, isToday && styles.dayDotToday]} />
+      <Text style={[styles.dayLabel, isToday && styles.dayLabelToday]}>{label}</Text>
+      <View style={styles.dayCount}>
+        <Text style={styles.dayCountText}>{count}</Text>
+      </View>
+    </View>
+  );
+}
+
+/** Compact appointment row inside a day group card */
+function AppointmentRow({
   appointment,
-  status,
+  isLast,
   privacyMode,
   onPress,
 }: {
-  appointment: DashboardAppointment;
-  status: 'upcoming' | 'completed';
+  appointment: AppointmentDetail;
+  isLast: boolean;
   privacyMode: boolean;
   onPress: () => void;
 }) {
-  const isCompleted = status === 'completed';
-
   return (
-    <Pressable style={styles.card} onPress={onPress}>
-      <View style={styles.appointmentHeader}>
-        <View style={styles.appointmentHeaderLeft}>
-          <Text style={styles.appointmentTime}>{appointment.time}</Text>
-          <View style={isCompleted ? styles.completedBadge : styles.upcomingBadge}>
-            <Text style={isCompleted ? styles.completedBadgeText : styles.upcomingBadgeText}>
-              {isCompleted ? 'Completed' : 'Upcoming'}
-            </Text>
-          </View>
-        </View>
-        <Ionicons name="chevron-forward" size={17} color={colors.textMuted} />
+    <Pressable
+      style={[styles.apptRow, !isLast && styles.apptRowBorder]}
+      onPress={onPress}
+    >
+      {/* Time column */}
+      <View style={styles.apptTimeCol}>
+        <Text style={styles.apptTimeText}>
+          {appointment.time.split(' – ')[0]}
+        </Text>
+        <Text style={styles.apptDuration}>{appointment.duration}</Text>
       </View>
 
-      <View style={styles.appointmentBody}>
-        <ServiceImage
-          styleId={appointment.styleId}
-          serviceName={appointment.service}
-          size={52}
-          circular
-          style={styles.appointmentImage}
-        />
-        <View style={styles.appointmentDetails}>
-          <Text style={styles.serviceText}>{appointment.service}</Text>
-          <View style={styles.detailRow}>
-            <Ionicons name="person-outline" size={15} color={colors.textMuted} />
-            <Text style={styles.detailText}>{appointment.vehicle}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Ionicons name="location-outline" size={15} color={colors.textMuted} />
-            <Text style={styles.detailText}>{appointment.location}</Text>
-          </View>
-        </View>
+      {/* Service image */}
+      <ServiceImage
+        styleId={appointment.styleId}
+        serviceName={appointment.service}
+        size={44}
+        circular
+        style={styles.apptImage}
+      />
 
-        <Text style={styles.appointmentPrice}>
-          {maskMoney(appointment.price, privacyMode)}
+      {/* Info */}
+      <View style={styles.apptInfo}>
+        <Text style={styles.apptClient} numberOfLines={1}>{appointment.clientName}</Text>
+        <Text style={styles.apptService} numberOfLines={1}>{appointment.service}</Text>
+        <View style={styles.apptLocationRow}>
+          <Ionicons name="location-outline" size={12} color={colors.textMuted} />
+          <Text style={styles.apptLocationText} numberOfLines={1}>{appointment.location}</Text>
+        </View>
+      </View>
+
+      {/* Price + chevron */}
+      <View style={styles.apptRight}>
+        <Text style={styles.apptPrice}>
+          {maskMoney(`$${appointment.price}`, privacyMode)}
         </Text>
+        {appointment.depositPaid ? (
+          <View style={styles.depositBadge}>
+            <Text style={styles.depositBadgeText}>dep.</Text>
+          </View>
+        ) : null}
+        <Ionicons name="chevron-forward" size={15} color={colors.textMuted} style={{ marginTop: 4 }} />
       </View>
     </Pressable>
   );
 }
+
+/** Recent booking row */
+function RecentBookingRow({
+  booking,
+  isLast,
+  privacyMode,
+}: {
+  booking: SiteBookingRecord;
+  isLast: boolean;
+  privacyMode: boolean;
+}) {
+  const initials = getInitials(booking.fullName);
+  const statusLabel = bookingStatusLabel(booking.bookingStatus, booking.depositPaid);
+  const statusColor = bookingStatusColor(booking.bookingStatus, booking.depositPaid);
+
+  return (
+    <View style={[styles.recentRow, !isLast && styles.recentRowBorder]}>
+      {/* Avatar */}
+      <View style={styles.recentAvatar}>
+        <Text style={styles.recentAvatarText}>{initials}</Text>
+      </View>
+
+      {/* Info */}
+      <View style={styles.recentInfo}>
+        <Text style={styles.recentName} numberOfLines={1}>{booking.fullName}</Text>
+        <Text style={styles.recentService} numberOfLines={1}>{booking.service}</Text>
+        <Text style={styles.recentTime}>{timeAgo(booking.createdAt)}</Text>
+      </View>
+
+      {/* Amount + status */}
+      <View style={styles.recentRight}>
+        <Text style={styles.recentAmount}>{maskMoney(`$${booking.price}`, privacyMode)}</Text>
+        <Text style={[styles.recentStatus, { color: statusColor }]}>{statusLabel}</Text>
+      </View>
+    </View>
+  );
+}
+
+// ─── main screen ─────────────────────────────────────────────────────────────
 
 export default function DashboardScreen({ navigation }: Props) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -131,12 +202,10 @@ export default function DashboardScreen({ navigation }: Props) {
     getRevenueForPeriod,
     getTodayJobStats,
     getUpcomingAppointments,
-    getCompletedAppointments,
   } = useSiteData();
 
   const notifications = useMemo<AppNotification[]>(() => {
     if (!hasLinkedSite) return [];
-
     return buildNotificationsFromBookings(bookings).map((item) => ({
       ...item,
       unread: !readNotificationIds.has(item.id),
@@ -145,71 +214,66 @@ export default function DashboardScreen({ navigation }: Props) {
 
   const revenueValue = getRevenueForPeriod(selectedPeriod);
   const jobStats = getTodayJobStats();
-  const upcomingAppointments = getUpcomingAppointments();
-  const completedAppointments = getCompletedAppointments();
+  const upcomingAppointments = getUpcomingAppointments(20);
   const businessInitials = getInitials(businessLabel || 'Styld');
 
+  // Group upcoming appointments by their date label
+  const groupedUpcoming = useMemo(() => {
+    const map = new Map<string, AppointmentDetail[]>();
+    for (const appt of upcomingAppointments) {
+      const key = appt.date;
+      const group = map.get(key) ?? [];
+      group.push(appt);
+      map.set(key, group);
+    }
+    return Array.from(map.entries()).map(([date, appointments]) => ({ date, appointments }));
+  }, [upcomingAppointments]);
+
+  // Recent bookings: sorted by when they were PLACED, newest first
+  const recentBookings = useMemo(
+    () =>
+      [...bookings]
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+        .slice(0, 8),
+    [bookings],
+  );
+
   const rafRef = useRef<ReturnType<typeof requestAnimationFrame> | null>(null);
+
   const switchPeriod = (key: Period) => {
     if (key === selectedPeriod) return;
-
     const oldValue = getRevenueForPeriod(selectedPeriod);
     const newValue = getRevenueForPeriod(key);
-
     setSelectedPeriod(key);
-
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
-
     const DURATION = 480;
     const startTime = performance.now();
-    const startVal = oldValue;
-
     const tick = (now: number) => {
       const elapsed = now - startTime;
       const t = Math.min(elapsed / DURATION, 1);
       const eased = 1 - Math.pow(1 - t, 3);
-      setDisplayValue(Math.round(startVal + (newValue - startVal) * eased));
+      setDisplayValue(Math.round(oldValue + (newValue - oldValue) * eased));
       if (t < 1) rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
   };
 
-  useEffect(() => {
-    setDisplayValue(revenueValue);
-  }, [revenueValue]);
-
-  useEffect(() => {
-    return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
-  }, []);
+  useEffect(() => { setDisplayValue(revenueValue); }, [revenueValue]);
+  useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); }, []);
 
   const unreadCount = useMemo(
-    () => notifications.filter((item) => item.unread).length,
+    () => notifications.filter((n) => n.unread).length,
     [notifications],
   );
-
-  const markNotificationRead = (id: string) => {
-    setReadNotificationIds((current) => new Set(current).add(id));
-  };
-
-  const markAllNotificationsRead = () => {
-    setReadNotificationIds((current) => {
-      const next = new Set(current);
-      notifications.forEach((item) => next.add(item.id));
-      return next;
-    });
-  };
 
   return (
     <View style={styles.container}>
       <ScreenGradient />
 
       <SafeAreaView style={styles.safeArea} edges={['top']}>
-        <ScrollView
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+
+          {/* Header */}
           <View style={styles.headerRow}>
             <View style={styles.businessHeader}>
               {hasLinkedSite ? (
@@ -219,11 +283,10 @@ export default function DashboardScreen({ navigation }: Props) {
                   <Text style={styles.avatarText}>{businessInitials}</Text>
                 </View>
               )}
-            <Text style={styles.businessName} numberOfLines={1}>
-              {hasLinkedSite ? businessLabel : 'Styld'}
-            </Text>
+              <Text style={styles.businessName} numberOfLines={1}>
+                {hasLinkedSite ? businessLabel : 'Styld'}
+              </Text>
             </View>
-
             <Pressable
               style={styles.notificationButton}
               onPress={() => setNotificationsOpen(true)}
@@ -237,9 +300,9 @@ export default function DashboardScreen({ navigation }: Props) {
             </Pressable>
           </View>
 
+          {/* Revenue */}
           <View style={styles.revenueSection}>
             <PeriodSelector selectedPeriod={selectedPeriod} onPeriodChange={switchPeriod} />
-
             <Pressable
               style={styles.revenueAmountWrap}
               onPress={() => navigation.navigate('EarningDetails')}
@@ -250,12 +313,12 @@ export default function DashboardScreen({ navigation }: Props) {
             </Pressable>
           </View>
 
+          {/* Today's jobs card */}
           <View style={[styles.card, styles.jobsCard]}>
             <View style={styles.jobsRow}>
               <View style={styles.jobsIconWrap}>
                 <Ionicons name="checkmark" size={16} color={colors.accentPink} />
               </View>
-
               <View style={styles.jobsContent}>
                 <View style={styles.jobsHeader}>
                   <Text style={styles.jobsLabel}>Today's jobs completed</Text>
@@ -268,7 +331,13 @@ export default function DashboardScreen({ navigation }: Props) {
             </View>
           </View>
 
-          <Text style={styles.sectionTitle}>Upcoming</Text>
+          {/* ── Upcoming section ── */}
+          <View style={styles.sectionRow}>
+            <Text style={styles.sectionTitle}>Upcoming</Text>
+            {upcomingAppointments.length > 0 && (
+              <Text style={styles.sectionCount}>{upcomingAppointments.length} total</Text>
+            )}
+          </View>
 
           {!hasLinkedSite ? (
             <View style={styles.emptyCard}>
@@ -276,44 +345,61 @@ export default function DashboardScreen({ navigation }: Props) {
             </View>
           ) : isLoading ? (
             <View style={styles.emptyCard}>
-              <Text style={styles.emptyCardText}>Loading bookings...</Text>
+              <Text style={styles.emptyCardText}>Loading…</Text>
             </View>
-          ) : upcomingAppointments.length === 0 ? (
+          ) : groupedUpcoming.length === 0 ? (
             <View style={styles.emptyCard}>
+              <Ionicons name="calendar-outline" size={22} color={colors.textMuted} style={{ marginBottom: 8 }} />
               <Text style={styles.emptyCardText}>No upcoming bookings.</Text>
             </View>
           ) : (
-            upcomingAppointments.map((appointment) => (
-              <AppointmentCard
-                key={appointment.id}
-                appointment={toDashboardAppointment(appointment)}
-                status="upcoming"
-                privacyMode={privacyMode}
-                onPress={() =>
-                  navigation.navigate('AppointmentDetail', { appointmentId: appointment.id })
-                }
-              />
+            groupedUpcoming.map(({ date, appointments }) => (
+              <View key={date} style={styles.dayGroup}>
+                <DayHeader label={date} count={appointments.length} />
+                <View style={styles.dayCard}>
+                  {appointments.map((appt, idx) => (
+                    <AppointmentRow
+                      key={appt.id}
+                      appointment={appt}
+                      isLast={idx === appointments.length - 1}
+                      privacyMode={privacyMode}
+                      onPress={() =>
+                        navigation.navigate('AppointmentDetail', { appointmentId: appt.id })
+                      }
+                    />
+                  ))}
+                </View>
+              </View>
             ))
           )}
 
-          <Text style={styles.sectionTitle}>Completed</Text>
+          {/* ── Recent bookings section ── */}
+          {hasLinkedSite && !isLoading && (
+            <>
+              <View style={styles.sectionRow}>
+                <Text style={styles.sectionTitle}>Recent bookings</Text>
+                {recentBookings.length > 0 && (
+                  <Text style={styles.sectionCount}>last placed</Text>
+                )}
+              </View>
 
-          {!hasLinkedSite || isLoading ? null : completedAppointments.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyCardText}>No completed bookings yet.</Text>
-            </View>
-          ) : (
-            completedAppointments.map((appointment) => (
-              <AppointmentCard
-                key={appointment.id}
-                appointment={toDashboardAppointment(appointment)}
-                status="completed"
-                privacyMode={privacyMode}
-                onPress={() =>
-                  navigation.navigate('AppointmentDetail', { appointmentId: appointment.id })
-                }
-              />
-            ))
+              {recentBookings.length === 0 ? (
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyCardText}>No bookings yet.</Text>
+                </View>
+              ) : (
+                <View style={styles.card}>
+                  {recentBookings.map((booking, idx) => (
+                    <RecentBookingRow
+                      key={booking.id}
+                      booking={booking}
+                      isLast={idx === recentBookings.length - 1}
+                      privacyMode={privacyMode}
+                    />
+                  ))}
+                </View>
+              )}
+            </>
           )}
         </ScrollView>
       </SafeAreaView>
@@ -323,107 +409,60 @@ export default function DashboardScreen({ navigation }: Props) {
         notifications={notifications}
         privacyMode={privacyMode}
         onClose={() => setNotificationsOpen(false)}
-        onMarkRead={markNotificationRead}
-        onMarkAllRead={markAllNotificationsRead}
+        onMarkRead={(id) => setReadNotificationIds((s) => new Set(s).add(id))}
+        onMarkAllRead={() =>
+          setReadNotificationIds((s) => {
+            const next = new Set(s);
+            notifications.forEach((n) => next.add(n.id));
+            return next;
+          })
+        }
       />
     </View>
   );
 }
 
+// ─── styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  safeArea: {
-    flex: 1,
-  },
-  content: {
-    paddingHorizontal: 20,
-    paddingTop: 6,
-    paddingBottom: 120,
-  },
+  container: { flex: 1, backgroundColor: colors.background },
+  safeArea: { flex: 1 },
+  content: { paddingHorizontal: 20, paddingTop: 6, paddingBottom: 120 },
+
+  /* Header */
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     marginBottom: 28,
   },
-  businessHeader: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingRight: 12,
-  },
+  businessHeader: { flex: 1, flexDirection: 'row', alignItems: 'center', paddingRight: 12 },
   avatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: colors.card, borderWidth: 1, borderColor: colors.cardBorder,
+    alignItems: 'center', justifyContent: 'center', marginRight: 10,
   },
-  logoAvatar: {
-    marginRight: 10,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-  },
-  avatarText: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  businessName: {
-    flex: 1,
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: -0.2,
-  },
-  notificationButton: {
-    width: 38,
-    height: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  logoAvatar: { marginRight: 10, borderWidth: 1, borderColor: colors.cardBorder },
+  avatarText: { color: colors.text, fontSize: 13, fontWeight: '700' },
+  businessName: { flex: 1, color: colors.text, fontSize: 15, fontWeight: '600', letterSpacing: -0.2 },
+  notificationButton: { width: 38, height: 38, alignItems: 'center', justifyContent: 'center' },
   notificationBadge: {
-    position: 'absolute',
-    top: 1,
-    right: 1,
-    minWidth: 16,
-    height: 16,
-    borderRadius: 8,
+    position: 'absolute', top: 1, right: 1,
+    minWidth: 16, height: 16, borderRadius: 8,
     backgroundColor: colors.notificationBadge,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
+    alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4,
   },
-  notificationBadgeText: {
-    color: colors.text,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  revenueSection: {
-    alignItems: 'center',
-    marginBottom: 28,
-    paddingBottom: 4,
-  },
-  revenueAmountWrap: {
-    width: '100%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  notificationBadgeText: { color: colors.text, fontSize: 10, fontWeight: '700' },
+
+  /* Revenue */
+  revenueSection: { alignItems: 'center', marginBottom: 28, paddingBottom: 4 },
+  revenueAmountWrap: { width: '100%', alignItems: 'center', justifyContent: 'center' },
   revenueAmount: {
-    color: colors.text,
-    fontSize: 64,
-    fontWeight: '700',
-    letterSpacing: -2,
-    textAlign: 'center',
-    lineHeight: 68,
+    color: colors.text, fontSize: 64, fontWeight: '700',
+    letterSpacing: -2, textAlign: 'center', lineHeight: 68,
   },
+
+  /* Card base */
   card: {
     backgroundColor: colors.card,
     borderRadius: 22,
@@ -433,160 +472,138 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     marginBottom: 12,
   },
-  jobsCard: {
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  jobsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+
+  /* Jobs */
+  jobsCard: { paddingHorizontal: 14, paddingVertical: 12 },
+  jobsRow: { flexDirection: 'row', alignItems: 'center' },
   jobsIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 34, height: 34, borderRadius: 17,
     backgroundColor: 'rgba(252, 97, 163, 0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-    shadowColor: colors.accentPink,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
+    alignItems: 'center', justifyContent: 'center', marginRight: 12,
+    shadowColor: colors.accentPink, shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35, shadowRadius: 8,
   },
-  jobsContent: {
-    flex: 1,
-  },
-  jobsHeader: {
+  jobsContent: { flex: 1 },
+  jobsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+  jobsLabel: { color: colors.text, fontSize: 14, fontWeight: '600', letterSpacing: -0.2, flex: 1, paddingRight: 8 },
+  jobsCount: { color: colors.textMuted, fontSize: 13, fontWeight: '500' },
+  progressTrack: { height: 6, borderRadius: 3, backgroundColor: colors.progressTrack, overflow: 'hidden' },
+  progressFillWrap: { height: '100%', borderRadius: 3, overflow: 'hidden', shadowColor: colors.accentPink, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 6 },
+
+  /* Section headers */
+  sectionRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  jobsLabel: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-    letterSpacing: -0.2,
-    flex: 1,
-    paddingRight: 8,
-  },
-  jobsCount: {
-    color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  progressTrack: {
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.progressTrack,
-    overflow: 'hidden',
-  },
-  progressFillWrap: {
-    height: '100%',
-    borderRadius: 3,
-    overflow: 'hidden',
-    shadowColor: colors.accentPink,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 6,
-  },
-  appointmentHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  appointmentHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  appointmentTime: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: -0.2,
-  },
-  upcomingBadge: {
-    backgroundColor: colors.accentOrangeBadge,
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-  },
-  upcomingBadgeText: {
-    color: colors.accentOrange,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  completedBadge: {
-    backgroundColor: '#1a3d2f',
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-  },
-  completedBadgeText: {
-    color: '#6ecf8f',
-    fontSize: 11,
-    fontWeight: '600',
+    marginBottom: 10,
+    marginTop: 8,
   },
   sectionTitle: {
     color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.3,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.6,
     textTransform: 'uppercase',
-    marginBottom: 10,
-    marginTop: 4,
   },
-  serviceText: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 6,
-  },
-  appointmentBody: {
+  sectionCount: { color: colors.textMuted, fontSize: 12, fontWeight: '500' },
+
+  /* Day group */
+  dayGroup: { marginBottom: 16 },
+  dayHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  appointmentImage: {
-    marginRight: 12,
-  },
-  appointmentDetails: {
-    flex: 1,
-    paddingRight: 12,
     gap: 8,
+    marginBottom: 8,
+    paddingHorizontal: 2,
   },
-  detailRow: {
+  dayDot: {
+    width: 8, height: 8, borderRadius: 4,
+    backgroundColor: colors.textMuted,
+  },
+  dayDotToday: { backgroundColor: colors.accentPink },
+  dayLabel: { flex: 1, color: colors.textMuted, fontSize: 13, fontWeight: '600' },
+  dayLabelToday: { color: colors.text },
+  dayCount: {
+    backgroundColor: colors.progressTrack,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  dayCountText: { color: colors.textMuted, fontSize: 11, fontWeight: '600' },
+  dayCard: {
+    backgroundColor: colors.card,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    overflow: 'hidden',
+  },
+
+  /* Appointment row */
+  apptRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 10,
   },
-  detailText: {
-    color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '500',
+  apptRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.cardBorder,
   },
-  appointmentPrice: {
-    color: colors.chartBlue,
-    fontSize: 18,
-    fontWeight: '600',
-    letterSpacing: -0.3,
+  apptTimeCol: { width: 52, alignItems: 'flex-start' },
+  apptTimeText: { color: colors.text, fontSize: 13, fontWeight: '700', letterSpacing: -0.2 },
+  apptDuration: { color: colors.textMuted, fontSize: 11, fontWeight: '500', marginTop: 2 },
+  apptImage: { flexShrink: 0 },
+  apptInfo: { flex: 1, minWidth: 0 },
+  apptClient: { color: colors.text, fontSize: 14, fontWeight: '700', marginBottom: 2 },
+  apptService: { color: colors.textMuted, fontSize: 12, fontWeight: '500', marginBottom: 3 },
+  apptLocationRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  apptLocationText: { color: colors.textMuted, fontSize: 11, fontWeight: '500', flex: 1 },
+  apptRight: { alignItems: 'flex-end', gap: 4 },
+  apptPrice: { color: colors.chartBlue, fontSize: 15, fontWeight: '700', letterSpacing: -0.3 },
+  depositBadge: {
+    backgroundColor: colors.accentPinkMuted,
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
   },
+  depositBadgeText: { color: colors.accentPink, fontSize: 10, fontWeight: '700' },
+
+  /* Recent booking row */
+  recentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    gap: 12,
+  },
+  recentRowBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.cardBorder,
+  },
+  recentAvatar: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: colors.progressTrack,
+    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  },
+  recentAvatarText: { color: colors.textMuted, fontSize: 13, fontWeight: '700' },
+  recentInfo: { flex: 1, minWidth: 0 },
+  recentName: { color: colors.text, fontSize: 14, fontWeight: '600', marginBottom: 2 },
+  recentService: { color: colors.textMuted, fontSize: 12, fontWeight: '500', marginBottom: 2 },
+  recentTime: { color: colors.textMuted, fontSize: 11 },
+  recentRight: { alignItems: 'flex-end', gap: 3 },
+  recentAmount: { color: colors.text, fontSize: 14, fontWeight: '700' },
+  recentStatus: { fontSize: 11, fontWeight: '600' },
+
+  /* Empty states */
   emptyCard: {
     backgroundColor: colors.card,
     borderRadius: 22,
     borderWidth: 1,
     borderColor: colors.cardBorder,
     paddingHorizontal: 18,
-    paddingVertical: 20,
+    paddingVertical: 24,
     marginBottom: 12,
+    alignItems: 'center',
   },
-  emptyCardText: {
-    color: colors.textMuted,
-    fontSize: 14,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
+  emptyCardText: { color: colors.textMuted, fontSize: 14, fontWeight: '500', textAlign: 'center' },
 });

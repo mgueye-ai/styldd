@@ -48,7 +48,7 @@ type SiteDataContextValue = {
   getCalendarEventsForDateKey: (dateKey: string) => CalendarEvent[];
   getRevenueForPeriod: (period: Period) => number;
   getTodayJobStats: () => { completed: number; total: number; progress: number };
-  getUpcomingAppointments: () => AppointmentDetail[];
+  getUpcomingAppointments: (limit?: number) => AppointmentDetail[];
   getCompletedAppointments: () => AppointmentDetail[];
 };
 
@@ -106,7 +106,7 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
         findCalendarEventsForDateKey(snapshot, dateKey),
       getRevenueForPeriod: (period: Period) => getRevenueForPeriodFromBookings(snapshot, period),
       getTodayJobStats: () => getTodayJobStats(snapshot),
-      getUpcomingAppointments: () => getUpcomingAppointments(snapshot),
+      getUpcomingAppointments: (limit?: number) => getUpcomingAppointments(snapshot, limit ?? 5),
       getCompletedAppointments: () => getCompletedAppointments(snapshot),
     }),
     [snapshot, isLoading, error, refresh],
