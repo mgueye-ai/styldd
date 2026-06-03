@@ -20,6 +20,7 @@ import {
   fetchMerchantFinanceSummary,
   type MerchantFinanceSummary,
 } from '../lib/merchantFinance';
+import InstitutionAvatar from '../components/InstitutionAvatar';
 import { ProfileStackParamList } from '../navigation/ProfileNavigator';
 import { colors } from '../theme';
 
@@ -135,9 +136,10 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
           <ActivityIndicator color={colors.accentPink} style={styles.loader} />
         ) : summary?.payoutBankLinked ? (
           <View style={styles.accountCard}>
-            <View style={styles.bankIcon}>
-              <Ionicons name="business-outline" size={22} color={colors.text} />
-            </View>
+            <InstitutionAvatar
+              institutionName={summary.payoutBankName}
+              size={44}
+            />
             <View style={styles.bankInfo}>
               <Text style={styles.bankName}>{summary.payoutBankName || 'Linked bank'}</Text>
               <Text style={styles.bankMask}>
@@ -204,16 +206,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-  },
-  bankIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   bankInfo: { flex: 1 },
   bankName: { fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: 2 },
