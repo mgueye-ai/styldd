@@ -5,6 +5,9 @@
 
 Both are served by the **templatesite** Vercel project (`stylddsite`).
 
+**Critical:** In Vercel → Project → Settings → General, set **Root Directory** to `templatesite`.  
+If it points at the repo root, pushes to GitHub will not update live tenant sites.
+
 ## One-time setup
 
 1. **Vercel project env vars** (Project → Settings → Environment Variables):
@@ -49,7 +52,11 @@ Both are served by the **templatesite** Vercel project (`stylddsite`).
 
 ## How it works
 
-- App **Publish** saves subdomain + site data in Supabase, then triggers a **Vercel production redeploy** via the `vercel-redeploy` Edge Function.
+- App **Publish** saves subdomain + site data in Supabase, then triggers a **new Vercel production build from Git** via the `vercel-redeploy` Edge Function (not a replay of an old deployment).
 - Visiting `slug.styldd.com` hits Vercel middleware → `/tenant/index.html` → loads site records for that slug.
+
+After changing `templatesite/` CSS or JS, push to GitHub and wait for Vercel to finish building, or run `npx vercel deploy --prod` from this folder. Hard-refresh the live site afterward.
+
+**App preview vs live site:** The Expo app preview can use bundled HTML (`sitePreviewHtml.ts`). Live `*.styldd.com` sites always use the files in this folder on Vercel — they only match after a successful deploy.
 
 If you see **DEPLOYMENT_NOT_FOUND**, the wildcard domain is not linked to a production deployment yet — complete steps 2–3 above.

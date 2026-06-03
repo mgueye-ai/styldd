@@ -21,61 +21,45 @@ async function triggerDeployHook(hookUrl: string): Promise<{ ok: true; method: '
   return { ok: true, method: 'hook' };
 }
 
-async function redeployLatestProduction(
+/** Build production from the project's linked Git repo (latest commit on production branch). */
+async function deployProductionFromGit(
   token: string,
   projectId: string,
   teamId?: string,
 ): Promise<{ ok: true; method: 'api'; deploymentId: string }> {
-  const teamQuery = teamId ? `&teamId=${encodeURIComponent(teamId)}` : '';
-  const listUrl = `https://api.vercel.com/v6/deployments?projectId=${encodeURIComponent(projectId)}&limit=1&target=production${teamQuery}`;
-
-  const listResponse = await fetch(listUrl, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-  if (!listResponse.ok) {
-    const detail = await listResponse.text();
-    if (listResponse.status === 403) {
-      throw new Error(
-        'Vercel token rejected (403). Create a new token at vercel.com/account/tokens and update Supabase secret VERCEL_ACCESS_TOKEN.',
-      );
-    }
-    throw new Error(`Could not list Vercel deployments (${listResponse.status}): ${detail}`);
-  }
-
-  const listPayload = await listResponse.json();
-  const latest = listPayload.deployments?.[0];
-  if (!latest?.uid) {
-    throw new Error(
-      'No production deployment on Vercel yet. Run one deploy of templatesite from the Vercel dashboard or CLI first.',
-    );
-  }
-
-  const redeployUrl = `https://api.vercel.com/v13/deployments${teamQuery ? `?${teamQuery.slice(1)}` : ''}`;
-  const redeployResponse = await fetch(redeployUrl, {
+  const query = teamId ? `?teamId=${encodeURIComponent(teamId)}` : '';
+  const deployResponse = await fetch(`https://api.vercel.com/v13/deployments${query}`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      deploymentId: latest.uid,
-      name: latest.name,
+      name: 'templatesite',
+      project: projectId,
       target: 'production',
     }),
   });
 
-  if (!redeployResponse.ok) {
-    const detail = await redeployResponse.text();
-    throw new Error(`Vercel redeploy failed (${redeployResponse.status}): ${detail}`);
+  if (!deployResponse.ok) {
+    const detail = await deployResponse.text();
+    if (deployResponse.status === 403) {
+      throw new Error(
+        'Vercel token rejected (403). Create a new token at vercel.com/account/tokens and update Supabase secret VERCEL_ACCESS_TOKEN.',
+      );
+    }
+    throw new Error(
+      `Could not start a Git production deploy (${deployResponse.status}): ${detail}. Link the Vercel project to GitHub (root directory: templatesite) or set VERCEL_DEPLOY_HOOK_URL.`,
+    );
   }
 
-  const redeployPayload = await redeployResponse.json();
-  return {
-    ok: true,
-    method: 'api',
-    deploymentId: redeployPayload.id || redeployPayload.uid || latest.uid,
-  };
+  const payload = await deployResponse.json();
+  const deploymentId = payload.id || payload.uid;
+  if (!deploymentId) {
+    throw new Error('Vercel deploy started but no deployment id was returned.');
+  }
+
+  return { ok: true, method: 'api', deploymentId };
 }
 
 Deno.serve(async (req) => {
@@ -118,7 +102,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const result = await redeployLatestProduction(token, projectId, teamId || undefined);
+    const result = await deployProductionFromGit(token, projectId, teamId || undefined);
     return jsonResponse(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unknown error';

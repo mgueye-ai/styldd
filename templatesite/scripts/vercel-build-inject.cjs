@@ -30,6 +30,22 @@ const styldAnonKey =
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   "";
 const styldRootDomain = process.env.STYLD_ROOT_DOMAIN || process.env.EXPO_PUBLIC_STYLD_ROOT_DOMAIN || "styldd.com";
+const assetVersion =
+  (process.env.VERCEL_GIT_COMMIT_SHA || "").slice(0, 8) ||
+  String(Date.now());
+
+function bumpAssetVersion(filePath) {
+  if (!fs.existsSync(filePath)) return;
+  const html = fs.readFileSync(filePath, "utf8");
+  const next = html.replace(/\?v=[^"']+/g, `?v=${assetVersion}`);
+  if (next !== html) {
+    fs.writeFileSync(filePath, next, "utf8");
+    console.log("[vercel-build-inject] Bumped asset ?v= in", path.relative(root, filePath));
+  }
+}
+
+bumpAssetVersion(path.join(root, "tenant", "index.html"));
+bumpAssetVersion(path.join(root, "preview.html"));
 
 const supabasePath = path.join(root, "js", "supabase-config.local.js");
 const stripePath = path.join(root, "js", "stripe-config.local.js");

@@ -134,10 +134,7 @@ export default function SiteDeployScreen({ navigation }: Props) {
             <Text style={styles.viewLiveBtnText}>View live site</Text>
           </Pressable>
 
-          <Pressable
-            style={styles.doneBtn}
-            onPress={() => navigation.navigate('SiteEditor')}
-          >
+          <Pressable style={styles.doneBtn} onPress={() => navigation.goBack()}>
             <Text style={styles.doneBtnText}>Back to editor</Text>
           </Pressable>
         </View>

@@ -58,9 +58,9 @@
     return cfg.supabaseUrl.replace(/\/$/, '') + '/storage/v1/object/public/style-covers/' + String(path).replace(/^\/+/, '');
   }
 
-  function formatPrice(cents) {
-    if (typeof cents !== 'number' || Number.isNaN(cents)) return '';
-    return '$' + (cents / 100).toFixed(cents % 100 === 0 ? 0 : 2);
+  function formatPrice(amount) {
+    if (typeof amount !== 'number' || Number.isNaN(amount) || amount <= 0) return 'Price TBD';
+    return '$' + Math.round(amount);
   }
 
   function sizeLabelFromStyleId(styleId) {
@@ -156,17 +156,30 @@
         })();
       }
 
-      var styles = Object.keys(meta).slice(0, 8).map(function (styleId) {
-        var item = meta[styleId] || {};
-        var sizeLabel = item.sizeLabel || item.variant || sizeLabelFromStyleId(styleId);
-        return {
-          title: item.title || styleId,
-          description: item.description || '',
-          priceLabel: formatPrice(prices[styleId]),
-          sizeLabel: sizeLabel || undefined,
-          imageUrl: coverUrl(covers[styleId]),
-        };
+      var styleIds = {};
+      Object.keys(meta || {}).forEach(function (id) {
+        styleIds[id] = true;
       });
+      Object.keys(prices || {}).forEach(function (id) {
+        styleIds[id] = true;
+      });
+      Object.keys(covers || {}).forEach(function (id) {
+        styleIds[id] = true;
+      });
+
+      var styles = Object.keys(styleIds)
+        .slice(0, 12)
+        .map(function (styleId) {
+          var item = meta[styleId] || {};
+          var sizeLabel = item.sizeLabel || item.variant || sizeLabelFromStyleId(styleId);
+          return {
+            title: item.title || styleId,
+            description: item.description || '',
+            priceLabel: formatPrice(prices[styleId]),
+            sizeLabel: sizeLabel || undefined,
+            imageUrl: coverUrl(covers[styleId]),
+          };
+        });
 
       window.__STYLD_SITE_STYLES__ = styles;
 
