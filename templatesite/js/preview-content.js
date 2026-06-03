@@ -164,45 +164,64 @@
       .join('');
   }
 
-  function buildMenuStyleCardsHtml(styles) {
+  function buildCatalogServiceCardHtml(style) {
+    var mediaClass = style.imageUrl
+      ? 'catalog-service-card__media catalog-service-card__media--photo'
+      : 'catalog-service-card__media';
+    var media = style.imageUrl
+      ? ' style="background-image:url(\'' +
+        String(style.imageUrl).replace(/'/g, '%27') +
+        '\');"'
+      : '';
+    var sizeHtml = style.sizeLabel
+      ? '<span class="catalog-service-card__size">' + escapeHtml(style.sizeLabel) + '</span>'
+      : '';
+    var priceHtml = style.priceLabel
+      ? '<span class="catalog-service-card__price">' + escapeHtml(style.priceLabel) + '</span>'
+      : '';
+    var midHtml =
+      sizeHtml || priceHtml
+        ? '<div class="catalog-service-card__mid">' + sizeHtml + priceHtml + '</div>'
+        : '';
+
+    return (
+      '<a class="catalog-service-card" href="#">' +
+      '<div class="' +
+      mediaClass +
+      '" aria-hidden="true"' +
+      media +
+      '></div>' +
+      '<div class="catalog-service-card__body">' +
+      '<span class="catalog-service-card__title">' +
+      escapeHtml(style.title || '') +
+      '</span>' +
+      midHtml +
+      '</div></a>'
+    );
+  }
+
+  function buildMenuCatalogCardsHtml(styles) {
     if (!styles || !styles.length) {
       return (
-        '<div class="style-card-wrap"><article class="style-card">' +
-        '<div class="style-card__media"></div>' +
-        '<div class="style-card__body"><h3>Add styles</h3>' +
-        '<p>Your service menu appears here once you add styles in the app.</p></div>' +
-        '</article></div>'
+        '<div class="catalog-service-cards catalog-service-cards--popular">' +
+        buildCatalogServiceCardHtml({
+          title: 'Add styles',
+          description: '',
+          priceLabel: '',
+          sizeLabel: 'Your menu',
+        }) +
+        '</div>'
       );
     }
 
-    return styles
-      .slice(0, 12)
-      .map(function (style) {
-        var media = style.imageUrl
-          ? ' style="background-image:url(\'' +
-            String(style.imageUrl).replace(/'/g, '%27') +
-            '\');background-size:cover;background-position:center;"'
-          : '';
-        var desc = style.description || 'Book this style online.';
-        var price = style.priceLabel || '';
-        return (
-          '<a class="style-card-wrap" href="#">' +
-          '<article class="style-card">' +
-          '<div class="style-card__media"' +
-          media +
-          '></div>' +
-          '<div class="style-card__body">' +
-          '<h3>' +
-          escapeHtml(style.title || '') +
-          '</h3>' +
-          '<p>' +
-          escapeHtml(desc) +
-          '</p>' +
-          (price ? '<p class="price">' + escapeHtml(price) + '</p>' : '') +
-          '</div></article></a>'
-        );
-      })
-      .join('');
+    return (
+      '<div class="catalog-service-cards catalog-service-cards--popular">' +
+      styles
+        .slice(0, 12)
+        .map(buildCatalogServiceCardHtml)
+        .join('') +
+      '</div>'
+    );
   }
 
   function buildMenuStylePillsHtml(styles) {
@@ -326,7 +345,8 @@
         grid.className = 'style-pill-list';
         grid.innerHTML = buildMenuStylePillsHtml(window.__STYLD_SITE_STYLES__ || []);
       } else {
-        grid.innerHTML = buildMenuStyleCardsHtml(window.__STYLD_SITE_STYLES__ || []);
+        grid.className = '';
+        grid.innerHTML = buildMenuCatalogCardsHtml(window.__STYLD_SITE_STYLES__ || []);
       }
     }
   };

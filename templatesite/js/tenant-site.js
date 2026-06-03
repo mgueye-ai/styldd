@@ -63,6 +63,17 @@
     return '$' + (cents / 100).toFixed(cents % 100 === 0 ? 0 : 2);
   }
 
+  function sizeLabelFromStyleId(styleId) {
+    var parts = String(styleId || '').split('-');
+    var last = parts[parts.length - 1];
+    var sizes = {
+      sm: 'SMALL',
+      md: 'MEDIUM',
+      lg: 'LARGE',
+    };
+    return sizes[last] || '';
+  }
+
   Promise.all([
     rest('styld_site_subdomains?subdomain=eq.' + encodeURIComponent(subdomain) + '&select=user_id,published_at'),
     Promise.resolve(null),
@@ -147,10 +158,12 @@
 
       var styles = Object.keys(meta).slice(0, 8).map(function (styleId) {
         var item = meta[styleId] || {};
+        var sizeLabel = item.sizeLabel || item.variant || sizeLabelFromStyleId(styleId);
         return {
           title: item.title || styleId,
           description: item.description || '',
           priceLabel: formatPrice(prices[styleId]),
+          sizeLabel: sizeLabel || undefined,
           imageUrl: coverUrl(covers[styleId]),
         };
       });

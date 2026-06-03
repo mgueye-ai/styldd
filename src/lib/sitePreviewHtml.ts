@@ -38,11 +38,17 @@ const SITE_PREVIEW_CSS = `
 .section{padding:2.5rem 0}.section-alt{background:var(--white);border-block:1px solid rgba(184,134,11,.12)}
 .section-head{text-align:center;max-width:640px;margin:0 auto 1.5rem}.section-head h2{font-family:var(--font-display);font-size:clamp(1.5rem,3vw,2rem);margin:0 0 .5rem}.section-head p{margin:0;color:var(--muted)}
 .card-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem}
-.catalog-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:1.75rem}
-.section-popular-styles .style-card{border-color:rgba(219,39,119,.2)}
 .section-head--popular h2{font-family:var(--font-display);font-size:clamp(2.1rem,4.5vw,3rem);font-weight:700;margin:0;display:inline-block;padding-bottom:.5rem;border-bottom:2px solid var(--pink)}
-.style-card h3{font-family:var(--font-display);font-size:1.35rem;margin:0 0 .35rem}
-.style-card .price{font-weight:700;color:var(--pink-dark);font-size:.95rem;margin:.5rem 0 0}
+.section-popular-styles .catalog-service-cards--popular{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.75rem 1.25rem}
+.section-popular-styles .catalog-service-card{display:flex;flex-direction:row;align-items:stretch;gap:1rem;padding:.85rem 1rem;border-radius:14px;border:1px solid rgba(219,39,119,.14);background:var(--white);box-shadow:0 2px 12px rgba(13,13,13,.05);text-decoration:none;color:inherit;transition:border-color .15s ease,box-shadow .15s ease}
+.section-popular-styles .catalog-service-card:hover{border-color:rgba(219,39,119,.35);box-shadow:0 4px 18px rgba(219,39,119,.12)}
+.section-popular-styles .catalog-service-card__media{width:90px;min-width:90px;min-height:90px;align-self:center;border-radius:12px;background:linear-gradient(145deg,#ebe7df 0%,#d8d3c9 100%);border:1px dashed rgba(15,23,42,.12)}
+.section-popular-styles .catalog-service-card__media--photo{background-size:cover;background-position:center;background-repeat:no-repeat;border:1px solid rgba(15,23,42,.1);box-shadow:inset 0 0 0 1px rgba(255,255,255,.25)}
+.section-popular-styles .catalog-service-card__body{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center;gap:.35rem}
+.section-popular-styles .catalog-service-card__title{font-family:var(--font-display);font-size:1.1rem;font-weight:700;color:var(--ink);line-height:1.25}
+.section-popular-styles .catalog-service-card__mid{display:flex;flex-direction:row;align-items:baseline;justify-content:space-between;gap:.75rem}
+.section-popular-styles .catalog-service-card__size{font-size:.85rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.section-popular-styles .catalog-service-card__price{font-size:1.1rem;font-weight:700;color:var(--pink-dark);white-space:nowrap}
 .section--reels-showcase{background:linear-gradient(180deg,rgba(253,242,248,.42) 0%,#fff 100%);border-block:1px solid rgba(219,39,119,.09)}
 .reels-carousel__track{display:flex;gap:1rem;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:.5rem}
 .reels-carousel__slide{flex:0 0 min(18rem,calc(100vw - 3rem));scroll-snap-align:start}
@@ -52,17 +58,12 @@ const SITE_PREVIEW_CSS = `
 .ig-reel-card__body{padding:1rem;display:grid;gap:.25rem}
 .ig-reel-card__handle{color:var(--pink-dark);font-size:.78rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
 .video-note--reels{margin-top:1.5rem;text-align:center;color:var(--muted)}
-.style-card{background:var(--cream);border-radius:var(--radius);border:1px solid rgba(184,134,11,.2);overflow:hidden}
-.style-card__media{aspect-ratio:4/5;background:linear-gradient(145deg,#e8e4dc 0%,#d4cfc5 100%)}
-.style-card__body{padding:1rem}.style-card__body strong{display:block;margin-bottom:.35rem}
-.style-card__price{margin:.5rem 0 0;font-weight:700;color:var(--pink);font-size:.95rem}
 .info-card{background:var(--white);border-radius:var(--radius);padding:1.5rem;border:1px solid rgba(181,154,91,.28);box-shadow:var(--shadow)}
 .info-card h3{font-family:var(--font-display);color:var(--pink-heading);margin:0 0 1rem}
 .info-card p{margin:.25rem 0;color:var(--muted-soft)}.location-map{width:100%;height:220px;border:0;margin-top:1rem;border-radius:10px}
 .site-footer{padding:2rem 0 2.5rem;background:#111;color:#fafafa;text-align:center}.site-footer p{margin:.35rem 0;font-size:.9rem;color:#a1a1aa}
-.style-card__body{padding:1rem}.style-card__body strong{display:block;margin-bottom:.35rem}
-.style-card-wrap{display:block;text-decoration:none;color:inherit}
 @media (max-width:767px){.hero-scale-title__grid{display:flex;flex-direction:column;align-items:center;gap:1.15rem}.hero-scale-visual{order:-1;max-width:min(360px,90vw);margin-bottom:.25rem}.hero-scale-col--left,.hero-scale-col--right{align-items:center;text-align:center}.hero-scale-display--brand{align-items:center;text-align:center}.hero-nav__burger{display:inline-flex}.hero-nav__panel{display:none;flex-direction:column;align-items:stretch;width:100%;order:3;gap:1rem;margin-top:.35rem;padding:1rem 1.1rem 1.2rem;background:rgba(255,255,255,.98);border-radius:14px;border:1px solid rgba(244,114,182,.28)}.hero-nav__panel.hero-nav__panel--open{display:flex}.hero-nav__links{flex-direction:column;align-items:stretch}.hero-nav__actions{flex-direction:column;width:100%}.hero-nav__actions .hero-btn--nav{width:100%;justify-content:center}}
+@media (max-width:720px){.section-popular-styles .catalog-service-cards--popular{grid-template-columns:1fr}}
 .style-pill-list{display:flex;flex-direction:column;gap:.6rem;width:100%}
 .style-pill{display:flex;align-items:center;gap:.85rem;padding:.6rem 1rem .6rem .6rem;border-radius:999px;background:#fff;border:1px solid rgba(0,0,0,.08);box-shadow:0 2px 8px rgba(0,0,0,.05);text-decoration:none;color:inherit;transition:box-shadow .15s}
 .style-pill:hover{box-shadow:0 4px 16px rgba(0,0,0,.1)}
@@ -72,7 +73,7 @@ const SITE_PREVIEW_CSS = `
 .style-pill__name{font-weight:700;font-size:.92rem;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--ink)}
 .style-pill__desc{font-size:.75rem;color:var(--muted);margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .style-pill__price{font-weight:800;font-size:.9rem;color:var(--pink);flex-shrink:0;white-space:nowrap}
-@media (max-width:768px){.section{padding:2.4rem 0}.section-head{margin-bottom:1.65rem;text-align:center}.card-grid,.catalog-grid{display:flex;flex-wrap:nowrap;gap:1rem;overflow-x:auto;scroll-snap-type:x mandatory;padding:0 .25rem .85rem;margin-inline:-.25rem;-webkit-overflow-scrolling:touch}.card-grid>*,.catalog-grid>*{flex:0 0 min(18.25rem,calc(100vw - 3rem));scroll-snap-align:start;max-width:min(18.25rem,calc(100vw - 3rem))}.info-cards{display:grid;grid-template-columns:1fr;gap:1rem}.location-map{height:220px}.hero-ctas--scale{flex-direction:column;align-items:stretch;width:100%;max-width:360px;margin-inline:auto}.hero-ctas--scale .hero-btn--lg{width:100%;justify-content:center}}
+@media (max-width:768px){.section{padding:2.4rem 0}.section-head{margin-bottom:1.65rem;text-align:center}.card-grid{display:flex;flex-wrap:nowrap;gap:1rem;overflow-x:auto;scroll-snap-type:x mandatory;padding:0 .25rem .85rem;margin-inline:-.25rem;-webkit-overflow-scrolling:touch}.card-grid>*{flex:0 0 min(18.25rem,calc(100vw - 3rem));scroll-snap-align:start;max-width:min(18.25rem,calc(100vw - 3rem))}.info-cards{display:grid;grid-template-columns:1fr;gap:1rem}.location-map{height:220px}.hero-ctas--scale{flex-direction:column;align-items:stretch;width:100%;max-width:360px;margin-inline:auto}.hero-ctas--scale .hero-btn--lg{width:100%;justify-content:center}}
 `;
 
 function escapeHtml(value: string): string {
@@ -88,6 +89,7 @@ export type SitePreviewStyle = {
   title: string;
   description: string;
   priceLabel: string;
+  sizeLabel?: string;
   imageUrl?: string | null;
 };
 
@@ -218,24 +220,39 @@ function buildHeroInnerHtml(content: SiteContent, theme: SitePreviewTheme): stri
 </span></h1>${ctas}</div>`;
 }
 
-function buildStyleCardsHtml(styles: SitePreviewStyle[]): string {
+function buildCatalogServiceCardHtml(style: SitePreviewStyle): string {
+  const mediaClass = style.imageUrl
+    ? 'catalog-service-card__media catalog-service-card__media--photo'
+    : 'catalog-service-card__media';
+  const mediaStyle = style.imageUrl
+    ? ` style="background-image:url('${style.imageUrl.replace(/'/g, '%27')}');"`
+    : '';
+  const sizeHtml = style.sizeLabel
+    ? `<span class="catalog-service-card__size">${escapeHtml(style.sizeLabel)}</span>`
+    : '';
+  const priceHtml = style.priceLabel
+    ? `<span class="catalog-service-card__price">${escapeHtml(style.priceLabel)}</span>`
+    : '';
+  const midHtml =
+    sizeHtml || priceHtml
+      ? `<div class="catalog-service-card__mid">${sizeHtml}${priceHtml}</div>`
+      : '';
+
+  return `<a class="catalog-service-card" href="#"><div class="${mediaClass}" aria-hidden="true"${mediaStyle}></div><div class="catalog-service-card__body"><span class="catalog-service-card__title">${escapeHtml(style.title)}</span>${midHtml}</div></a>`;
+}
+
+function buildCatalogServiceCardsHtml(styles: SitePreviewStyle[]): string {
   if (!styles.length) {
-    return `<div class="style-card-wrap"><article class="style-card"><div class="style-card__media"></div><div class="style-card__body"><h3>Add styles</h3><p>Your service menu appears here once you add styles in the editor.</p></div></article></div>`;
+    return `<div class="catalog-service-cards catalog-service-cards--popular">${buildCatalogServiceCardHtml({
+      title: 'Add styles',
+      description: '',
+      priceLabel: '',
+      sizeLabel: 'Your menu',
+    })}</div>`;
   }
 
-  return styles
-    .slice(0, 12)
-    .map((style) => {
-      const mediaStyle = style.imageUrl
-        ? ` style="background-image:url('${style.imageUrl.replace(/'/g, '%27')}');background-size:cover;background-position:center;"`
-        : '';
-      const description = style.description || 'Book this style online.';
-      const price = style.priceLabel
-        ? `<p class="price">${escapeHtml(style.priceLabel)}</p>`
-        : '';
-      return `<a class="style-card-wrap" href="#"><article class="style-card"><div class="style-card__media"${mediaStyle}></div><div class="style-card__body"><h3>${escapeHtml(style.title)}</h3><p>${escapeHtml(description)}</p>${price}</div></article></a>`;
-    })
-    .join('');
+  const cards = styles.slice(0, 12).map(buildCatalogServiceCardHtml).join('');
+  return `<div class="catalog-service-cards catalog-service-cards--popular">${cards}</div>`;
 }
 
 function buildStylePillsHtml(styles: SitePreviewStyle[]): string {
@@ -305,15 +322,12 @@ export function buildSitePreviewHtml(
 <p class="video-note video-note--reels">Follow <a href="https://www.instagram.com/${escapeHtml(instagram)}/" target="_blank" rel="noopener noreferrer">@${escapeHtml(instagram)}</a></p></div></section>`;
 
   const isPillLayout = theme.styleCardLayout === 'pill';
-  const menuInner = isPillLayout
-    ? buildStylePillsHtml(styles)
-    : buildStyleCardsHtml(styles);
-  const menuGridClass = isPillLayout ? 'style-pill-list' : 'catalog-grid';
+  const menuInner = isPillLayout ? buildStylePillsHtml(styles) : buildCatalogServiceCardsHtml(styles);
   const menuSection = isSectionHidden(content, 'menu')
     ? ''
     : `<section class="section section-popular-styles" id="preview-menu-section"><div class="container"><div class="section-head section-head--popular">
 <h2>${escapeHtml(content.menuTitle || 'Menu')}</h2><p>${escapeHtml(content.menuBlurb || 'Browse our services & prices — book online.')}</p></div>
-<div class="${menuGridClass}">${menuInner}</div></div></section>`;
+${menuInner}</div></section>`;
 
   const aboutSection = isSectionHidden(content, 'about')
     ? ''

@@ -124,6 +124,7 @@ function SitePreviewPanel({ loading }: { loading: boolean }) {
           title: meta?.title ?? service.name,
           description: meta?.description ?? service.description ?? '',
           priceLabel: formatStylePrice(price),
+          sizeLabel: service.variant !== 'STANDARD' ? service.variant : undefined,
           imageUrl: getCoverUrl(service.id),
         };
       }),
