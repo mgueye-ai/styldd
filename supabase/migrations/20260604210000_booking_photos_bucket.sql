@@ -9,19 +9,42 @@ values (
 )
 on conflict (id) do nothing;
 
--- Allow anyone to INSERT into booking-photos (clients uploading hair photos)
-create policy "anon_insert_booking_photos"
-  on storage.objects for insert
-  to anon, authenticated
-  with check (bucket_id = 'booking-photos');
+-- Policies (idempotent)
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'storage' and tablename = 'objects' and policyname = 'anon_insert_booking_photos'
+  ) then
+    execute $p$
+      create policy "anon_insert_booking_photos"
+        on storage.objects for insert
+        to anon, authenticated
+        with check (bucket_id = 'booking-photos')
+    $p$;
+  end if;
 
--- Allow authenticated users (salon owner) to SELECT/DELETE their site's photos
-create policy "auth_select_booking_photos"
-  on storage.objects for select
-  to authenticated
-  using (bucket_id = 'booking-photos');
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'storage' and tablename = 'objects' and policyname = 'auth_select_booking_photos'
+  ) then
+    execute $p$
+      create policy "auth_select_booking_photos"
+        on storage.objects for select
+        to authenticated
+        using (bucket_id = 'booking-photos')
+    $p$;
+  end if;
 
-create policy "auth_delete_booking_photos"
-  on storage.objects for delete
-  to authenticated
-  using (bucket_id = 'booking-photos');
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'storage' and tablename = 'objects' and policyname = 'auth_delete_booking_photos'
+  ) then
+    execute $p$
+      create policy "auth_delete_booking_photos"
+        on storage.objects for delete
+        to authenticated
+        using (bucket_id = 'booking-photos')
+    $p$;
+  end if;
+end$$;

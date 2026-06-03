@@ -17,8 +17,17 @@ create table if not exists public.styld_stripe_accounts (
 
 alter table public.styld_stripe_accounts enable row level security;
 
-create policy "owner_all" on public.styld_stripe_accounts
-  for all using (auth.uid() = user_id);
+do $$
+begin
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public'
+      and tablename  = 'styld_stripe_accounts'
+      and policyname = 'owner_all'
+  ) then
+    execute 'create policy "owner_all" on public.styld_stripe_accounts for all using (auth.uid() = user_id)';
+  end if;
+end$$;
 
 -- Allow service role full access (edge functions)
 grant select, insert, update, delete
