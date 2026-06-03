@@ -116,21 +116,20 @@
       .then(function (mod) {
         var sb = mod.createClient(cfg.supabaseUrl, cfg.supabaseAnonKey);
         window.salonSupabaseClient = sb;
-        window.__STYLD_UNIT_PAYMENTS_READY__ = false;
-        return sb.functions
-          .invoke('unit-merchant-status', { body: { subdomain: site.subdomain } })
-          .then(function (res) {
-            window.__STYLD_UNIT_PAYMENTS_READY__ = !!(res.data && res.data.ready);
-          })
-          .catch(function () {
-            window.__STYLD_UNIT_PAYMENTS_READY__ = false;
-          })
-          .then(function () {
-            var script = document.createElement('script');
-            script.src = '/js/booking.js?v=44';
-            script.defer = true;
-            document.body.appendChild(script);
-          });
+
+        // Initialize Stripe for card payments
+        var stripePk = cfg.stripePk || '';
+        if (stripePk && window.Stripe) {
+          window.__STYLD_STRIPE__ = window.Stripe(stripePk);
+          window.__STYLD_STRIPE_READY__ = true;
+        } else {
+          window.__STYLD_STRIPE_READY__ = false;
+        }
+
+        var script = document.createElement('script');
+        script.src = '/js/booking.js?v=45';
+        script.defer = true;
+        document.body.appendChild(script);
       })
       .catch(function (err) {
         showError(err && err.message ? err.message : 'Could not start booking.');

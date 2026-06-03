@@ -1310,7 +1310,7 @@
     } catch (uploadErr) {
       console.warn(uploadErr);
       throw new Error(
-        "Photos could not be uploaded. Create the Storage bucket and policies in Supabase (see supabase/schema.sql), or try again.",
+        "Your hair photo could not be uploaded. Please check your connection and try again.",
       );
     }
 
