@@ -1,39 +1,43 @@
+import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useFocusEffect } from '@react-navigation/native';
 import { usePrivacyMode } from '../context/PrivacyContext';
 import { useSiteData } from '../context/SiteDataContext';
 import {
-  fetchMerchantFinanceSummary,
+  fetchStripeConnectStatus,
   formatUsdFromCents,
-  requestMerchantPayout,
-  startUnitWalletOnboarding,
-  syncUnitWallet,
-  type MerchantFinanceSummary,
-} from '../lib/merchantFinance';
+  requestStripeConnectPayout,
+  startStripeConnectOnboarding,
+  syncStripeConnect,
+  type StripeConnectSummary,
+} from '../lib/stripeConnect';
 import { colors } from '../theme';
 
 type Props = {
-  onSummaryChange?: (summary: MerchantFinanceSummary | null) => void;
+  onSummaryChange?: (summary: StripeConnectSummary | null) => void;
 };
+
+const RETURN_URL = 'styldd.com/connect/return';
+const REFRESH_URL = 'styldd.com/connect/refresh';
 
 export default function WalletBalanceSection({ onSummaryChange }: Props) {
   const { hasLinkedSite } = useSiteData();
   const { privacyMode } = usePrivacyMode();
-  const [summary, setSummary] = useState<MerchantFinanceSummary | null>(null);
+  const [summary, setSummary] = useState<StripeConnectSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [unitFormUrl, setUnitFormUrl] = useState<string | null>(null);
+  const [connectUrl, setConnectUrl] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!hasLinkedSite) return;
     setLoading(true);
     try {
-      const data = await fetchMerchantFinanceSummary();
+      const data = await fetchStripeConnectStatus();
       setSummary(data);
       onSummaryChange?.(data);
-    } catch (err) {
+    } catch {
       onSummaryChange?.(null);
     } finally {
       setLoading(false);
@@ -46,28 +50,20 @@ export default function WalletBalanceSection({ onSummaryChange }: Props) {
     }, [refresh]),
   );
 
-  const walletReady = Boolean(summary?.accountId);
-  const applicationPending =
-    !walletReady &&
-    (summary?.status === 'pending' ||
-      summary?.status === 'pending_review' ||
-      summary?.status === 'approved');
-  const needsOnboarding = !walletReady && !applicationPending;
-  const canPayout = walletReady && summary?.payoutBankLinked && (summary?.availableCents ?? 0) >= 100;
+  const isReady = summary?.status === 'ready';
+  const isPending = summary?.status === 'pending_review' || summary?.status === 'onboarding';
+  const needsOnboarding = !summary?.hasAccount || summary?.status === 'not_started';
+  const canPayout = isReady && (summary?.balanceAvailableCents ?? 0) >= 100;
   const masked = (cents: number) => (privacyMode ? '••••' : formatUsdFromCents(cents));
 
-  async function handleSetupWallet() {
+  async function handleSetupPayments() {
     setBusy(true);
     try {
-      const result = await startUnitWalletOnboarding();
-      if (result.status === 'ready') {
-        await refresh();
-        return;
-      }
-      if (result.applicationFormUrl) {
-        setUnitFormUrl(result.applicationFormUrl);
+      const result = await startStripeConnectOnboarding();
+      if ('alreadyOnboarded' in result && result.alreadyOnboarded) {
+        setConnectUrl(result.dashboardUrl);
       } else {
-        Alert.alert('Setup', result.message || 'Check back shortly.');
+        setConnectUrl(result.onboardingUrl);
       }
     } catch (err) {
       Alert.alert('Setup failed', err instanceof Error ? err.message : 'Try again');
@@ -76,63 +72,60 @@ export default function WalletBalanceSection({ onSummaryChange }: Props) {
     }
   }
 
-  async function handleUnitFormDone() {
-    setUnitFormUrl(null);
+  async function handleSyncAfterOnboarding() {
     setBusy(true);
     try {
-      let result: Record<string, unknown> = {};
-      for (let attempt = 0; attempt < 5; attempt++) {
-        if (attempt > 0) await new Promise((r) => setTimeout(r, 3000));
-        result = await syncUnitWallet();
-        if (result.status === 'ready') break;
+      for (let i = 0; i < 4; i++) {
+        if (i > 0) await new Promise((r) => setTimeout(r, 2500));
+        const result = await syncStripeConnect();
+        if (result.status === 'ready' || result.status === 'pending_review') {
+          await refresh();
+          if (result.status === 'pending_review') {
+            Alert.alert(
+              'Almost there',
+              'Stripe is reviewing your account. Payouts will be enabled shortly — check back in a few minutes.',
+            );
+          }
+          return;
+        }
       }
       await refresh();
-      if (result.status !== 'ready') {
-        Alert.alert(
-          'Application submitted',
-          (result.message as string) ||
-            'Your application is under review. Tap "Check status" in a few minutes.',
-        );
-      }
     } catch (err) {
-      Alert.alert('Sync', err instanceof Error ? err.message : 'Try again');
+      Alert.alert('Sync error', err instanceof Error ? err.message : 'Try again');
     } finally {
       setBusy(false);
     }
   }
 
-  async function handlePayoutAll() {
-    const cents = summary?.availableCents ?? 0;
-    if (!summary?.payoutBankLinked) {
-      Alert.alert('No bank linked', 'Add a payout account under "Payout account" first.');
-      return;
-    }
+  async function handlePayout() {
+    const cents = summary?.balanceAvailableCents ?? 0;
     if (cents < 100) {
       Alert.alert('Nothing to withdraw', 'Available balance must be at least $1.00.');
       return;
     }
-    const amountLabel = formatUsdFromCents(cents);
     Alert.alert(
       'Withdraw?',
-      `${amountLabel} → ${summary.payoutBankName || 'your bank'} ····${summary.payoutAccountMask || '****'}`,
+      `${formatUsdFromCents(cents)} will be sent to your bank account (1–2 business days).`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Withdraw',
-          onPress: () => {
+          onPress: () =>
             void (async () => {
               setBusy(true);
               try {
-                await requestMerchantPayout(cents, 'Styld payout');
+                const result = await requestStripeConnectPayout();
                 await refresh();
-                Alert.alert('Payout started', `${amountLabel} is on its way (1–3 business days).`);
+                Alert.alert(
+                  'Payout started!',
+                  `${formatUsdFromCents(result.amountCents)} is on its way to your bank. Usually arrives within 1–2 business days.`,
+                );
               } catch (err) {
                 Alert.alert('Payout failed', err instanceof Error ? err.message : 'Try again');
               } finally {
                 setBusy(false);
               }
-            })();
-          },
+            })(),
         },
       ],
     );
@@ -141,7 +134,7 @@ export default function WalletBalanceSection({ onSummaryChange }: Props) {
   if (!hasLinkedSite) {
     return (
       <View style={styles.card}>
-        <Text style={styles.emptyText}>Link your booking site to see earnings.</Text>
+        <Text style={styles.emptyText}>Link your booking site to start collecting payments.</Text>
       </View>
     );
   }
@@ -149,13 +142,13 @@ export default function WalletBalanceSection({ onSummaryChange }: Props) {
   return (
     <>
       <View style={styles.card}>
-        {/* Balance */}
+        {/* Balance header */}
         <View style={styles.balanceRow}>
           {loading ? (
-            <ActivityIndicator color={colors.accentPink} />
+            <ActivityIndicator color={colors.accentPink} style={{ marginBottom: 4 }} />
           ) : (
             <Text style={styles.balanceValue}>
-              {summary ? masked(summary.availableCents) : '$0.00'}
+              {isReady ? masked(summary?.balanceAvailableCents ?? 0) : '—'}
             </Text>
           )}
           <Pressable onPress={() => void refresh()} hitSlop={12} disabled={loading}>
@@ -164,79 +157,122 @@ export default function WalletBalanceSection({ onSummaryChange }: Props) {
         </View>
         <Text style={styles.balanceLabel}>Available balance</Text>
 
-        {/* Action */}
+        {isReady && (summary?.balancePendingCents ?? 0) > 0 && (
+          <Text style={styles.pendingLine}>
+            {masked(summary?.balancePendingCents ?? 0)} processing
+          </Text>
+        )}
+
+        {/* Status badge */}
+        {!loading && (
+          <View style={styles.badgeRow}>
+            {isReady ? (
+              <View style={[styles.badge, styles.badgeGreen]}>
+                <Ionicons name="checkmark-circle" size={13} color="#15803d" />
+                <Text style={[styles.badgeText, { color: '#15803d' }]}>Payments active</Text>
+              </View>
+            ) : isPending ? (
+              <View style={[styles.badge, styles.badgeAmber]}>
+                <Ionicons name="time-outline" size={13} color="#92400e" />
+                <Text style={[styles.badgeText, { color: '#92400e' }]}>
+                  {summary?.status === 'pending_review' ? 'Under review' : 'Setup incomplete'}
+                </Text>
+              </View>
+            ) : (
+              <View style={[styles.badge, styles.badgeGray]}>
+                <Ionicons name="card-outline" size={13} color={colors.textMuted} />
+                <Text style={[styles.badgeText, { color: colors.textMuted }]}>Not set up</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Action buttons */}
         {needsOnboarding ? (
           <Pressable
             style={[styles.actionBtn, busy && styles.btnDisabled]}
             disabled={busy}
-            onPress={() => void handleSetupWallet()}
+            onPress={() => void handleSetupPayments()}
           >
             {busy ? (
               <ActivityIndicator color="#fff" size="small" />
             ) : (
-              <Text style={styles.actionBtnText}>Set up payment wallet</Text>
+              <>
+                <Ionicons name="card-outline" size={18} color="#fff" />
+                <Text style={styles.actionBtnText}>Set up payments with Stripe</Text>
+              </>
             )}
           </Pressable>
-        ) : applicationPending ? (
+        ) : isPending ? (
           <Pressable
             style={[styles.actionBtn, styles.actionBtnMuted, busy && styles.btnDisabled]}
             disabled={busy}
-            onPress={async () => {
-              setBusy(true);
-              try {
-                await syncUnitWallet();
-                await refresh();
-              } catch (err) {
-                Alert.alert('Sync', err instanceof Error ? err.message : 'Try again');
-              } finally {
-                setBusy(false);
-              }
-            }}
+            onPress={() => void handleSyncAfterOnboarding()}
           >
             {busy ? (
               <ActivityIndicator color="#fff" size="small" />
             ) : (
-              <Text style={styles.actionBtnText}>
-                {summary?.status === 'approved' ? 'Setting up account…' : 'Check approval status'}
-              </Text>
+              <Text style={styles.actionBtnText}>Check status</Text>
             )}
           </Pressable>
         ) : (
           <Pressable
-            style={[
-              styles.payoutBtn,
-              (!canPayout || busy) && styles.btnDisabled,
-            ]}
+            style={[styles.payoutBtn, (!canPayout || busy) && styles.btnDisabled]}
             disabled={!canPayout || busy}
-            onPress={() => void handlePayoutAll()}
+            onPress={() => void handlePayout()}
           >
             {busy ? (
               <ActivityIndicator color={colors.accentPink} size="small" />
             ) : (
               <Text style={[styles.payoutBtnText, !canPayout && styles.payoutBtnTextMuted]}>
                 {canPayout
-                  ? `Withdraw ${masked(summary?.availableCents ?? 0)}`
-                  : summary?.payoutBankLinked
-                    ? 'Balance under $1.00'
-                    : 'Add a payout account below'}
+                  ? `Withdraw ${masked(summary?.balanceAvailableCents ?? 0)}`
+                  : 'Balance under $1.00'}
               </Text>
             )}
           </Pressable>
         )}
+
+        {/* Stripe branding */}
+        <Text style={styles.poweredBy}>Powered by Stripe</Text>
       </View>
 
-      {/* Unit onboarding form modal */}
-      <Modal visible={!!unitFormUrl} animationType="slide" onRequestClose={() => setUnitFormUrl(null)}>
-        <View style={styles.modalHeader}>
-          <Pressable onPress={() => void handleUnitFormDone()}>
-            <Text style={styles.modalDone}>Done</Text>
-          </Pressable>
-          <Text style={styles.modalTitle}>Payment wallet setup</Text>
-          <Pressable onPress={() => setUnitFormUrl(null)}>
-            <Text style={styles.modalDone}>Cancel</Text>
-          </Pressable>
-        </View>
-        {unitFormUrl ? <WebView source={{ uri: unitFormUrl }} style={{ flex: 1 }} /> : null}
+      {/* Stripe Connect onboarding / dashboard modal */}
+      <Modal visible={!!connectUrl} animationType="slide" onRequestClose={() => setConnectUrl(null)}>
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Pressable onPress={() => setConnectUrl(null)} hitSlop={12}>
+              <Ionicons name="close" size={22} color={colors.text} />
+            </Pressable>
+            <Text style={styles.modalTitle}>Stripe Payments</Text>
+            <Pressable
+              onPress={() => {
+                setConnectUrl(null);
+                void handleSyncAfterOnboarding();
+              }}
+              hitSlop={12}
+            >
+              <Text style={styles.modalDone}>Done</Text>
+            </Pressable>
+          </View>
+          {connectUrl ? (
+            <WebView
+              source={{ uri: connectUrl }}
+              style={{ flex: 1 }}
+              onShouldStartLoadWithRequest={(request) => {
+                if (
+                  request.url.includes(RETURN_URL) ||
+                  request.url.includes(REFRESH_URL)
+                ) {
+                  setConnectUrl(null);
+                  void handleSyncAfterOnboarding();
+                  return false;
+                }
+                return true;
+              }}
+            />
+          ) : null}
+        </SafeAreaView>
       </Modal>
     </>
   );
@@ -267,7 +303,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted,
     fontWeight: '500',
-    marginBottom: 16,
+    marginBottom: 4,
+  },
+  pendingLine: {
+    fontSize: 12,
+    color: colors.textMuted,
+    marginBottom: 4,
   },
   refreshLink: {
     fontSize: 20,
@@ -280,23 +321,39 @@ const styles = StyleSheet.create({
     lineHeight: 19,
   },
 
-  /* Setup / pending button */
+  /* Status badge */
+  badgeRow: {
+    flexDirection: 'row',
+    marginBottom: 16,
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 20,
+  },
+  badgeGreen: { backgroundColor: '#dcfce7' },
+  badgeAmber: { backgroundColor: '#fef3c7' },
+  badgeGray: { backgroundColor: colors.progressTrack },
+  badgeText: { fontSize: 12, fontWeight: '600' },
+
+  /* Setup button */
   actionBtn: {
     backgroundColor: colors.accentPink,
     borderRadius: 12,
-    paddingVertical: 12,
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
-  actionBtnMuted: {
-    backgroundColor: colors.progressTrack,
-  },
-  actionBtnText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  actionBtnMuted: { backgroundColor: colors.progressTrack },
+  actionBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
 
-  /* Payout button — subtle, inline feel */
+  /* Withdraw button */
   payoutBtn: {
     borderWidth: 1,
     borderColor: colors.accentPinkBorder,
@@ -304,28 +361,26 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 14,
     alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
   },
-  payoutBtnText: {
-    color: colors.accentPink,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  payoutBtnTextMuted: {
-    color: colors.textMuted,
-  },
+  payoutBtnText: { color: colors.accentPink, fontSize: 14, fontWeight: '600' },
+  payoutBtnTextMuted: { color: colors.textMuted },
   btnDisabled: { opacity: 0.5 },
 
-  /* Unit form modal */
+  poweredBy: {
+    fontSize: 11,
+    color: colors.textMuted,
+    marginTop: 12,
+    textAlign: 'center',
+  },
+
+  /* Modal */
+  modalContainer: { flex: 1, backgroundColor: colors.background },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingTop: 56,
-    paddingBottom: 12,
-    backgroundColor: colors.background,
+    paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.cardBorder,
   },
