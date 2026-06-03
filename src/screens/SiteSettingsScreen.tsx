@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ScreenGradient from '../components/ScreenGradient';
+import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { SiteStackParamList } from '../navigation/SiteNavigator';
 import { colors } from '../theme';
 
@@ -99,7 +100,53 @@ export default function SiteSettingsScreen({ navigation }: Props) {
   const [clientMessages, setClientMessages] = useState(false);
   const [sitePublished, setSitePublished] = useState(true);
 
+  const settingsSnapshot = useMemo(
+    () =>
+      JSON.stringify({
+        businessName,
+        tagline,
+        siteUrl,
+        onlineBooking,
+        showPrices,
+        requireDeposit,
+        showInstagram,
+        clientMessages,
+        sitePublished,
+      }),
+    [
+      businessName,
+      tagline,
+      siteUrl,
+      onlineBooking,
+      showPrices,
+      requireDeposit,
+      showInstagram,
+      clientMessages,
+      sitePublished,
+    ],
+  );
+
+  const savedSnapshotRef = useRef(settingsSnapshot);
+  const isDirty = settingsSnapshot !== savedSnapshotRef.current;
+
+  const markSaved = () => {
+    savedSnapshotRef.current = settingsSnapshot;
+    return true;
+  };
+
+  const { guardedGoBack, unsavedChangesDialog } = useUnsavedChangesGuard({
+    hasUnsavedChanges: isDirty,
+    onSave: async () => markSaved(),
+    message: 'Save your changes before leaving?',
+  });
+
+  const handleSave = () => {
+    markSaved();
+    navigation.goBack();
+  };
+
   return (
+    <>
     <View style={styles.container}>
       <ScreenGradient />
 
@@ -109,7 +156,7 @@ export default function SiteSettingsScreen({ navigation }: Props) {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.topBar}>
-            <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Pressable style={styles.backButton} onPress={guardedGoBack}>
               <Ionicons name="chevron-back" size={22} color={colors.text} />
             </Pressable>
             <Text style={styles.title}>Site Settings</Text>
@@ -195,12 +242,14 @@ export default function SiteSettingsScreen({ navigation }: Props) {
             />
           </View>
 
-          <Pressable style={styles.saveButton} onPress={() => navigation.goBack()}>
+          <Pressable style={styles.saveButton} onPress={handleSave}>
             <Text style={styles.saveButtonText}>Save changes</Text>
           </Pressable>
         </ScrollView>
       </SafeAreaView>
     </View>
+    {unsavedChangesDialog}
+    </>
   );
 }
 

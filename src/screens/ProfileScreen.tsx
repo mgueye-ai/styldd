@@ -3,6 +3,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BrandLogo from '../components/BrandLogo';
+import WalletBalanceSection from '../components/WalletBalanceSection';
 import { useAuth } from '../context/AuthContext';
 import { usePrivacyMode } from '../context/PrivacyContext';
 import { useSiteData } from '../context/SiteDataContext';
@@ -17,45 +18,21 @@ type MenuItem = {
   route?: keyof ProfileStackParamList;
 };
 
-const BUSINESS_MENU_LIVE: MenuItem[] = [
-  { label: 'Styles', icon: 'cut-outline', route: 'Styles' },
+const MANAGE_MENU: MenuItem[] = [
+  { label: 'Styles & Services', icon: 'cut-outline', route: 'Styles' },
+  { label: 'Booking payments', icon: 'card-outline', route: 'BookingPayment' },
   { label: 'Working hours', icon: 'time-outline', route: 'WorkingHours' },
   { label: 'Schedule', icon: 'calendar-outline', route: 'Schedule' },
   { label: 'Add appointment', icon: 'add-circle-outline', route: 'AddAppointment' },
 ];
 
-const BUSINESS_MENU_VIEW: MenuItem[] = [
+const ANALYTICS_MENU: MenuItem[] = [
   { label: 'Stats', icon: 'stats-chart-outline', route: 'BusinessStats' },
   { label: 'Calendar', icon: 'calendar-clear-outline', route: 'BusinessCalendar' },
 ];
 
-function StatCard({
-  label,
-  value,
-  variant,
-  style,
-}: {
-  label: string;
-  value: string;
-  variant: 'blue' | 'dark';
-  style?: object;
-}) {
-  const isBlue = variant === 'blue';
-
-  return (
-    <View
-      style={[
-        styles.statCard,
-        isBlue ? styles.statCardBlue : styles.statCardDark,
-        style,
-      ]}
-    >
-      <Text style={[styles.statLabel, isBlue && styles.statLabelBlue]} numberOfLines={2}>
-        {label}
-      </Text>
-      <Text style={[styles.statValue, isBlue && styles.statValueBlue]}>{value}</Text>
-    </View>
-  );
+function SectionLabel({ title }: { title: string }) {
+  return <Text style={styles.sectionLabel}>{title.toUpperCase()}</Text>;
 }
 
 function MenuRow({
@@ -73,9 +50,25 @@ function MenuRow({
         <Ionicons name={item.icon} size={18} color={colors.textMuted} />
       </View>
       <Text style={styles.menuLabel}>{item.label}</Text>
-      <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+      <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
     </Pressable>
   );
+}
+
+/** Returns a short human duration like "3mo", "1yr", "8d" since an ISO date. */
+function timeSince(isoDate: string | null | undefined): string {
+  if (!isoDate) return '—';
+  const diffMs = Date.now() - new Date(isoDate).getTime();
+  const days = Math.floor(diffMs / 86_400_000);
+  if (days < 1) return 'Today';
+  if (days < 7) return `${days}d`;
+  const weeks = Math.floor(days / 7);
+  if (days < 30) return `${weeks}w`;
+  const months = Math.floor(days / 30.44);
+  if (months < 12) return `${months}mo`;
+  const years = Math.floor(months / 12);
+  const rem = months % 12;
+  return rem > 0 ? `${years}yr ${rem}mo` : `${years}yr`;
 }
 
 export default function ProfileScreen({ navigation }: Props) {
@@ -83,7 +76,8 @@ export default function ProfileScreen({ navigation }: Props) {
   const { profile, user, signOut } = useAuth();
   const { clients, appointments, hasLinkedSite } = useSiteData();
 
-  const completedJobs = appointments.filter((appointment) => appointment.status === 'completed').length;
+  const completedJobs = appointments.filter((a) => a.status === 'completed').length;
+  const memberSince = timeSince(profile?.created_at ?? user?.created_at);
 
   const displayName =
     profile?.full_name?.trim() ||
@@ -91,25 +85,25 @@ export default function ProfileScreen({ navigation }: Props) {
     user?.email?.split('@')[0] ||
     'Stylist';
 
-  const initials = displayName
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase() ?? '')
-    .join('') || 'S';
+  const initials =
+    displayName
+      .split(' ')
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((p) => p[0]?.toUpperCase() ?? '')
+      .join('') || 'S';
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+
+        {/* ── Profile header ── */}
         <View style={styles.profileHeader}>
           <View style={styles.avatarWrap}>
             {hasLinkedSite ? (
               <BrandLogo
                 circular
-                size={96}
+                size={72}
                 style={{ borderWidth: 1, borderColor: colors.cardBorder }}
               />
             ) : (
@@ -117,91 +111,99 @@ export default function ProfileScreen({ navigation }: Props) {
                 <Text style={styles.avatarText}>{initials}</Text>
               </View>
             )}
-            <View style={styles.avatarUpload}>
-              <Ionicons name="share-outline" size={12} color={colors.text} />
-            </View>
           </View>
-
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>{displayName}</Text>
             <Text style={styles.profileEmail}>{user?.email}</Text>
-            <View style={styles.earnerBadge}>
-              <Text style={styles.earnerBadgeText}>High Earner</Text>
-            </View>
           </View>
         </View>
 
-        <View style={styles.statsGrid}>
-          <StatCard
-            label="Total Clients"
-            value={hasLinkedSite ? `${clients.length}` : '—'}
-            variant="dark"
-            style={styles.statLeft}
-          />
-          <StatCard
-            label="Jobs Completed"
-            value={hasLinkedSite ? `${completedJobs}` : '—'}
-            variant="blue"
-            style={styles.statMiddle}
-          />
-          <StatCard
-            label="Time in Business"
-            value={hasLinkedSite ? 'Live' : '—'}
-            variant="dark"
-            style={styles.statRight}
-          />
+        {/* ── Overview ── always visible ── */}
+        <SectionLabel title="Overview" />
+        <View style={styles.statsRow}>
+          <View style={[styles.statCard, styles.statCardDark]}>
+            <Text style={styles.statValue}>{hasLinkedSite ? clients.length : '—'}</Text>
+            <Text style={styles.statLabel}>Clients</Text>
+          </View>
+          <View style={[styles.statCard, styles.statCardAccent]}>
+            <Text style={[styles.statValue, styles.statValueAccent]}>
+              {hasLinkedSite ? completedJobs : '—'}
+            </Text>
+            <Text style={[styles.statLabel, styles.statLabelAccent]}>Jobs done</Text>
+          </View>
+          <View style={[styles.statCard, styles.statCardDark]}>
+            <Text style={styles.statValue}>{memberSince}</Text>
+            <Text style={styles.statLabel}>In business</Text>
+          </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Preferences</Text>
+        {/* ── Earnings ── */}
+        <SectionLabel title="Earnings" />
+        <WalletBalanceSection />
 
+        {/* ── Payout account ── */}
+        <SectionLabel title="Payout account" />
+        <View style={styles.menuCard}>
+          <Pressable
+            style={styles.menuRow}
+            onPress={() => navigation.navigate('ConnectedAccounts')}
+          >
+            <View style={styles.menuIconWrap}>
+              <Ionicons name="wallet-outline" size={18} color={colors.textMuted} />
+            </View>
+            <Text style={styles.menuLabel}>Connected accounts</Text>
+            <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+          </Pressable>
+        </View>
+
+        {/* ── Manage business ── */}
+        <SectionLabel title="Manage" />
+        <View style={styles.menuCard}>
+          {MANAGE_MENU.map((item, i) => (
+            <MenuRow
+              key={item.label}
+              item={item}
+              isLast={i === MANAGE_MENU.length - 1}
+              onPress={item.route ? () => navigation.navigate(item.route!) : undefined}
+            />
+          ))}
+        </View>
+
+        {/* ── Analytics ── */}
+        <SectionLabel title="Analytics" />
+        <View style={styles.menuCard}>
+          {ANALYTICS_MENU.map((item, i) => (
+            <MenuRow
+              key={item.label}
+              item={item}
+              isLast={i === ANALYTICS_MENU.length - 1}
+              onPress={item.route ? () => navigation.navigate(item.route!) : undefined}
+            />
+          ))}
+        </View>
+
+        {/* ── Preferences ── */}
+        <SectionLabel title="Preferences" />
         <View style={styles.menuCard}>
           <View style={styles.preferenceRow}>
             <View style={styles.menuIconWrap}>
               <Ionicons name="eye-off-outline" size={18} color={colors.textMuted} />
             </View>
             <View style={styles.preferenceContent}>
-              <Text style={styles.menuLabel}>Privacy Mode</Text>
-              <Text style={styles.preferenceHint}>Hide money values across the app</Text>
+              <Text style={styles.menuLabel}>Privacy mode</Text>
+              <Text style={styles.preferenceHint}>Hide money amounts across the app</Text>
             </View>
             <Switch
               value={privacyMode}
               onValueChange={setPrivacyMode}
-              trackColor={{ false: colors.progressTrack, true: colors.accentBlueMuted }}
-              thumbColor={privacyMode ? colors.chartBlue : colors.textMuted}
+              trackColor={{ false: colors.progressTrack, true: colors.accentPink }}
+              thumbColor="#fff"
             />
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Business</Text>
-        <Text style={styles.sectionHint}>Updates your live site</Text>
-
-        <View style={styles.menuCard}>
-          {BUSINESS_MENU_LIVE.map((item, index) => (
-            <MenuRow
-              key={item.label}
-              item={item}
-              isLast={index === BUSINESS_MENU_LIVE.length - 1}
-              onPress={item.route ? () => navigation.navigate(item.route!) : undefined}
-            />
-          ))}
-        </View>
-
-        <Text style={[styles.sectionTitle, styles.sectionTitleSpaced]}>Insights</Text>
-        <Text style={styles.sectionHint}>View only</Text>
-
-        <View style={styles.menuCard}>
-          {BUSINESS_MENU_VIEW.map((item, index) => (
-            <MenuRow
-              key={item.label}
-              item={item}
-              isLast={index === BUSINESS_MENU_VIEW.length - 1}
-              onPress={item.route ? () => navigation.navigate(item.route!) : undefined}
-            />
-          ))}
-        </View>
-
-        <Text style={styles.sectionTitle}>Account</Text>
-
+        {/* ── Account ── */}
+        <SectionLabel title="Account" />
         <View style={styles.menuCard}>
           <Pressable style={styles.menuRow} onPress={signOut}>
             <View style={styles.menuIconWrap}>
@@ -210,6 +212,7 @@ export default function ProfileScreen({ navigation }: Props) {
             <Text style={styles.signOutLabel}>Sign out</Text>
           </Pressable>
         </View>
+
       </ScrollView>
     </SafeAreaView>
   );
@@ -222,21 +225,22 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingTop: 12,
     paddingBottom: 120,
   },
+
+  /* Profile header */
   profileHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 28,
+    gap: 14,
   },
-  avatarWrap: {
-    marginRight: 18,
-  },
+  avatarWrap: {},
   avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.cardBorder,
@@ -245,129 +249,88 @@ const styles = StyleSheet.create({
   },
   avatarText: {
     color: colors.text,
-    fontSize: 32,
+    fontSize: 26,
     fontWeight: '700',
   },
-  avatarUpload: {
-    position: 'absolute',
-    right: 0,
-    bottom: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.navbar,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  profileInfo: {
-    flex: 1,
-  },
+  profileInfo: { flex: 1 },
   profileName: {
     color: colors.text,
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '700',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   profileEmail: {
     color: colors.textMuted,
     fontSize: 13,
-    fontWeight: '500',
-    marginBottom: 10,
+    fontWeight: '400',
   },
-  earnerBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.eventCompletedBadge,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  earnerBadgeText: {
-    color: colors.text,
-    fontSize: 12,
+
+  /* Section labels */
+  sectionLabel: {
+    color: colors.textMuted,
+    fontSize: 11,
     fontWeight: '600',
+    letterSpacing: 0.8,
+    marginBottom: 10,
+    marginLeft: 2,
   },
-  statsGrid: {
+
+  /* Stats row */
+  statsRow: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 24,
+    marginBottom: 28,
   },
   statCard: {
     flex: 1,
-    minHeight: 72,
     borderRadius: 16,
+    paddingVertical: 14,
     paddingHorizontal: 10,
-    paddingVertical: 12,
-    justifyContent: 'space-between',
-  },
-  statCardBlue: {
-    backgroundColor: colors.profileBlue,
+    alignItems: 'center',
+    gap: 4,
   },
   statCardDark: {
     backgroundColor: colors.card,
     borderWidth: 1,
     borderColor: colors.cardBorder,
   },
-  statLeft: {
-    borderTopRightRadius: 22,
-    borderBottomRightRadius: 22,
-  },
-  statMiddle: {
-    borderRadius: 16,
-  },
-  statRight: {
-    borderTopLeftRadius: 22,
-    borderBottomLeftRadius: 22,
-  },
-  statLabel: {
-    color: colors.textMuted,
-    fontSize: 10,
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  statLabelBlue: {
-    color: 'rgba(10, 10, 10, 0.65)',
+  statCardAccent: {
+    backgroundColor: colors.accentPink,
   },
   statValue: {
     color: colors.text,
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '700',
   },
-  statValueBlue: {
-    color: colors.background,
+  statValueAccent: {
+    color: '#fff',
   },
-  sectionTitle: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-  sectionTitleSpaced: {
-    marginTop: 8,
-  },
-  sectionHint: {
+  statLabel: {
     color: colors.textMuted,
-    fontSize: 13,
+    fontSize: 11,
     fontWeight: '500',
-    marginBottom: 12,
   },
+  statLabelAccent: {
+    color: 'rgba(255,255,255,0.7)',
+  },
+
+  /* Menu card */
   menuCard: {
     backgroundColor: colors.card,
-    borderRadius: 20,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.cardBorder,
     overflow: 'hidden',
-    marginBottom: 28,
+    marginBottom: 24,
   },
   menuRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 15,
   },
   menuRowBorder: {
-    borderBottomWidth: 1,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.cardBorder,
   },
   menuIconWrap: {
@@ -381,11 +344,13 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
   },
+
+  /* Preference row */
   preferenceRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 15,
   },
   preferenceContent: {
     flex: 1,
@@ -394,9 +359,9 @@ const styles = StyleSheet.create({
   preferenceHint: {
     color: colors.textMuted,
     fontSize: 12,
-    fontWeight: '500',
     marginTop: 2,
   },
+
   signOutLabel: {
     flex: 1,
     color: '#f87171',

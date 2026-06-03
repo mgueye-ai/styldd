@@ -182,6 +182,7 @@
             var prices = {};
             var covers = {};
             var bookingHours = null;
+            var bookingPayment = null;
 
             records.forEach(function (record) {
               var value = settingValue(record);
@@ -197,6 +198,9 @@
               }
               if (record.record_type === 'site_setting' && record.record_key === 'booking_hours') {
                 bookingHours = value;
+              }
+              if (record.record_type === 'site_setting' && record.record_key === 'booking_payment') {
+                bookingPayment = value;
               }
               if (record.record_type === 'style_cover_image' && record.record_key) {
                 var coverPath = coverStoragePath(value);
@@ -215,6 +219,7 @@
               prices: prices,
               covers: covers,
               bookingHours: bookingHours,
+              bookingPayment: bookingPayment,
               bookingStyles: buildBookingStyles(meta, prices),
               catalogCards: buildCatalogCards(meta, prices, covers, cfg.supabaseUrl),
             };

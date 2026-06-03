@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useEffect, useMemo, useState } from 'react';
+import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import {
   Modal,
   Pressable,
@@ -238,6 +239,12 @@ export default function SiteEditorScreen({ navigation }: Props) {
 
   const isSavingAny = isSaving || isSavingStyles || isSavingTheme;
 
+  const { unsavedChangesDialog } = useUnsavedChangesGuard({
+    hasUnsavedChanges: isSavingAny,
+    message: 'Your site is still saving. Wait a moment or leave without finishing?',
+    title: 'Still saving',
+  });
+
   const toggleSection = (sectionId: SiteSection) => {
     const current = content.hiddenSections ?? [];
     const next = current.includes(sectionId)
@@ -263,6 +270,7 @@ export default function SiteEditorScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
 
   return (
+    <>
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
@@ -555,6 +563,8 @@ export default function SiteEditorScreen({ navigation }: Props) {
         </View>
       </Modal>
     </SafeAreaView>
+    {unsavedChangesDialog}
+    </>
   );
 }
 

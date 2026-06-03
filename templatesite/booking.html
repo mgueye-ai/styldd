@@ -290,11 +290,14 @@
               <strong>Estimated total:</strong> <span id="line-total">$0.00</span>
             </p>
             <p>
-              <strong>Required deposit:</strong> <span id="line-deposit">$0.00</span>
+              <strong id="line-online-label">Due when booking:</strong> <span id="line-deposit">$0.00</span>
             </p>
             <p class="deposit-note" id="line-deposit-detail"></p>
+            <p class="deposit-note" id="deposit-note-in-person" hidden>
+              No payment is required now. Pay your stylist in person when you arrive for your appointment.
+            </p>
             <p class="deposit-note" id="deposit-note-studio" hidden>
-              A deposit is required to secure your appointment. The remaining balance is due at the time of service.
+              A deposit is required to secure your appointment. The remaining balance is due in person at your appointment.
             </p>
             <p class="deposit-note" id="deposit-note-house-call" hidden>
               A deposit is required to secure your appointment. House-call bookings include a <strong>$15</strong> house
@@ -305,21 +308,24 @@
 
           <section class="form-section hidden" id="payment-section" aria-hidden="true">
             <h2>Payment</h2>
-            <p class="payment-stripe-trust" id="payment-stripe-trust" hidden>
-              Enter your card details below. When you tap the button at the bottom, your deposit is confirmed securely with Stripe.
+            <p class="payment-bank-trust" id="payment-bank-trust" hidden>
+              Pay securely from your bank account. Link your bank below, then confirm with the button at the bottom.
             </p>
             <div class="payment-placeholder">
               <p><strong>Name:</strong> <span id="pay-name-preview">—</span></p>
               <p><strong>Email:</strong> <span id="pay-email-preview">—</span></p>
-              <p><strong>Deposit:</strong> <span id="pay-deposit-preview">$0.00</span></p>
+              <p><strong>Due now:</strong> <span id="pay-deposit-preview">$0.00</span></p>
             </div>
-            <div id="stripe-payment-element" class="payment-element-host"></div>
-            <p id="stripe-payment-error" class="booking-feedback booking-feedback--error" hidden></p>
+            <button type="button" id="plaid-link-btn" class="btn btn-secondary hidden" style="width: 100%; margin-bottom: 0.75rem">
+              Connect bank to pay
+            </button>
+            <p id="plaid-link-status" class="deposit-note" hidden></p>
+            <p id="plaid-payment-error" class="booking-feedback booking-feedback--error" hidden></p>
           </section>
 
           <section class="form-section">
             <div id="booking-feedback" class="booking-feedback" role="status" aria-live="polite" hidden></div>
-            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 1rem; font-size: 1.05rem">
+            <button type="submit" id="booking-submit-btn" class="btn btn-primary" style="width: 100%; padding: 1rem; font-size: 1.05rem">
               Confirm payment
             </button>
           </section>
@@ -340,7 +346,7 @@
             <span id="side-total">$0.00</span>
           </div>
           <div class="price-line deposit">
-            <span>Deposit due</span>
+            <span id="side-online-label">Due when booking</span>
             <span id="side-deposit">$0.00</span>
           </div>
           <p class="deposit-note" id="side-deposit-note">All deposits non-refundable.</p>
@@ -374,30 +380,37 @@
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.5.0/build/global/luxon.min.js"></script>
-    <script src="https://js.stripe.com/v3"></script>
+    <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
     <script src="js/booking-config.js"></script>
-    <script src="js/stripe-config.js"></script>
-    <script src="js/stripe-config.local.js"></script>
     <script src="/js/styld-tenant-config.js?v=37"></script>
     <script src="/js/styld-tenant-config.local.js?v=37"></script>
     <script src="/js/styld-tenant-shared.js?v=39"></script>
-    <script src="/js/styld-tenant-booking.js?v=39"></script>
+    <script src="/js/styld-tenant-booking.js?v=44"></script>
     <script src="js/supabase-config.js"></script>
     <script src="js/supabase-config.local.js"></script>
     <script id="booking-fallback-bootstrap">
       (function () {
         if (window.StyldTenant && window.StyldTenant.getSubdomain()) return;
+        window.__STYLD_UNIT_PAYMENTS_READY__ = false;
+        var tenantBooking = window.__STYLD_TENANT_BOOKING__ || {};
         var module = document.createElement('script');
         module.type = 'module';
         module.textContent =
           'import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";' +
           'const c = window.__SALON_SITE_SUPABASE;' +
-          'if (c && c.url && c.anonKey) { window.salonSupabaseClient = createClient(c.url, c.anonKey); }';
+          'if (!c || !c.url || !c.anonKey) return;' +
+          'const sb = createClient(c.url, c.anonKey);' +
+          'window.salonSupabaseClient = sb;' +
+          'const sub = ' + JSON.stringify(tenantBooking.subdomain || '') + ';' +
+          'if (sub) {' +
+          '  const { data } = await sb.functions.invoke("unit-merchant-status", { body: { subdomain: sub } });' +
+          '  window.__STYLD_UNIT_PAYMENTS_READY__ = !!(data && data.ready);' +
+          '}' +
+          'const booking = document.createElement("script");' +
+          'booking.src = "js/booking.js?v=44";' +
+          'booking.defer = true;' +
+          'document.body.appendChild(booking);';
         document.body.appendChild(module);
-        var booking = document.createElement('script');
-        booking.src = 'js/booking.js?v=36';
-        booking.defer = true;
-        document.body.appendChild(booking);
       })();
     </script>
     <script>

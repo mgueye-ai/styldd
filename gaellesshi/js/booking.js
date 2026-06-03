@@ -4,52 +4,37 @@
  */
 (function () {
   const STORAGE_BUCKET = "booking-photos";
-  const GCAL = window.__NADJAE_GOOGLE_CALENDAR || {};
-  const LOCAL_BOOKINGS_KEY = "nadjae_bookings_local";
-  const STRIPE_RETURN_BOOKING_KEY = "nadjae_stripe_booking_id";
-  const BOOKING_NOTICE_KEY = "nadjae_booking_notice";
-  const DETAILS_BOOKING_KEY = "nadjae_details_booking_id";
+  const GCAL = window.__SALON_SITE_GOOGLE_CALENDAR || {};
+  const LOCAL_BOOKINGS_KEY = "salon_site_bookings_local";
+  const MIN_ONLINE_PAYMENT_CENTS = 50;
+  const BOOKING_NOTICE_KEY = "salon_site_booking_notice";
+  const DETAILS_BOOKING_KEY = "salon_site_details_booking_id";
 
   const DT = window.luxon && window.luxon.DateTime ? window.luxon.DateTime : null;
   if (!DT) {
     console.error("Luxon is required for salon timezone scheduling (see booking.html).");
   }
 
-  function buildCfg() {
-    return Object.assign(
-      {
-        salonTimeZone: "America/New_York",
-        salonPhoneDisplay: "(860) 822-7448",
-        salonPhoneTel: "+18608227448",
-        slotDayStartHour: 8,
-        slotDayStartMinute: 0,
-        slotDayEndHour: 19,
-        slotDayEndMinute: 30,
-        slotStepMinutes: 30,
-        saturdayLastStartHour: 14,
-        saturdayLastStartMinute: 0,
-        sameDayLeadMinutes: 30,
-        concurrentAppointmentCapacity: 2,
-        closedWeekdays: [],
-        blackoutRanges: [],
-        googleMapsApiKey: null,
-      },
-      window.__NADJAE_BOOKING || {},
-    );
-  }
-
-  let CFG = buildCfg();
-
-  function reloadBookingCfg() {
-    CFG = buildCfg();
-    if (selectedIsoDate) void refreshUnavailableForSelection();
-    else {
-      renderCalendar();
-      renderSlots();
-    }
-  }
-
-  document.addEventListener("nadjae-booking-hours-updated", reloadBookingCfg);
+  const CFG = Object.assign(
+    {
+      salonTimeZone: "America/New_York",
+      salonPhoneDisplay: "(555) 010-0199",
+      salonPhoneTel: "+15550100199",
+      slotDayStartHour: 8,
+      slotDayStartMinute: 0,
+      slotDayEndHour: 19,
+      slotDayEndMinute: 30,
+      slotStepMinutes: 30,
+      saturdayLastStartHour: 14,
+      saturdayLastStartMinute: 0,
+      sameDayLeadMinutes: 30,
+      concurrentAppointmentCapacity: 2,
+      closedWeekdays: [],
+      blackoutRanges: [],
+      googleMapsApiKey: null,
+    },
+    window.__SALON_SITE_BOOKING || {},
+  );
 
   let googleMapsLoadPromise = null;
 
@@ -66,17 +51,94 @@
     fulaniquickweave: "studio-wig-fulani-quickweave",
   };
 
-  const SP = window.__NADJAE_STYLE_PRICING;
-  if (!SP || typeof SP.getMergedStyles !== "function") {
-    console.error("Missing js/style-pricing.js (must load before booking.js).");
-    return;
+  const TENANT_BOOKING = window.__STYLD_TENANT_BOOKING__ || null;
+
+  const PAYMENT = Object.assign(
+    { mode: "deposit", depositKind: "percent", depositValue: 10 },
+    CFG.payment || {},
+  );
+
+  const USE_LEGACY_DEPOSIT_RULES = !TENANT_BOOKING && !CFG.payment;
+
+  function catalogStyles() {
+    if (TENANT_BOOKING && Array.isArray(TENANT_BOOKING.styles) && TENANT_BOOKING.styles.length) {
+      return TENANT_BOOKING.styles.concat([
+        { id: "other", name: "Other / custom quote (price TBD)", base: 0 },
+      ]);
+    }
+    return STYLES;
   }
 
-  function stylesList() {
-    return SP.getMergedStyles();
-  }
+  const STYLES = [
+    { id: "studio-knotless-sm", name: "Studio · Your service · Small", base: 155 },
+    { id: "studio-knotless-md", name: "Studio · Your service · Medium", base: 110 },
+    { id: "studio-knotless-lg", name: "Studio · Your service · Large", base: 95 },
+    { id: "studio-passion-sm", name: "Studio · Your service · Smedium", base: 175 },
+    { id: "studio-passion-md", name: "Studio · Your service · Medium", base: 135 },
+    { id: "studio-wig-install", name: "Studio · Your service · Install & style", base: 120 },
+    { id: "studio-wig-pony", name: "Studio · Your service · Ponytail", base: 90 },
+    { id: "studio-wig-qw", name: "Studio · Your service · Q/W", base: 100 },
+    { id: "studio-wig-fulani-quickweave", name: "Studio · Your service · Your add-on label", base: 110 },
+    { id: "studio-natural-2strand", name: "Studio · Your service · 2 strand", base: 50 },
+    { id: "studio-natural-cornrows", name: "Studio · Your service · Your option (add-on note)", base: 35 },
+    { id: "studio-natural-fulani", name: "Studio · Your service · Your option label", base: 45 },
+    { id: "studio-natural-box", name: "Studio · Your service · Your option label", base: 40 },
+    { id: "studio-natural-twist", name: "Studio · Your service · Regular twist", base: 35 },
+    { id: "studio-boho-sm", name: "Studio · Your service · Smedium", base: 185 },
+    { id: "studio-boho-md", name: "Studio · Your service · Medium", base: 135 },
+    { id: "studio-boho-lg", name: "Studio · Your service · Large", base: 100 },
+    { id: "studio-feedin-2", name: "Studio · Your service · 2", base: 75 },
+    { id: "studio-feedin-4", name: "Studio · Your service · 4", base: 85 },
+    { id: "studio-feedin-8", name: "Studio · Your service · 8", base: 100 },
+    { id: "studio-feedin-10plus", name: "Studio · Your service · 10+", base: 110 },
+    { id: "studio-locs-2strand", name: "Studio · Your service · 2 strand", base: 90 },
+    { id: "studio-locs-retwist", name: "Studio · Your service · Retwist", base: 70 },
+    { id: "studio-locs-barrels", name: "Studio · Your service · Barrels", base: 80 },
+    { id: "studio-locs-half-up", name: "Studio · Your service · Half up half down", base: 65 },
+    { id: "studio-locs-starter", name: "Studio · Your service · Starter loc", base: 100 },
+    { id: "studio-fulani-one", name: "Studio · Your service · One size", base: 155 },
+    { id: "studio-fulani-passion-twists", name: "Studio · Your combo service (edit)", base: 165 },
 
-  const MIN_STRIPE_DEPOSIT_CENTS = 50;
+    { id: "house-knotless-sm", name: "House call · Your service · Small", base: 185 },
+    { id: "house-knotless-md", name: "House call · Your service · Medium", base: 135 },
+    { id: "house-knotless-lg", name: "House call · Your service · Large", base: 110 },
+    { id: "house-passion-sm", name: "House call · Your service · Smedium", base: 175 },
+    { id: "house-passion-md", name: "House call · Your service · Medium", base: 145 },
+    { id: "house-boho-sm", name: "House call · Your service · Smedium", base: 200 },
+    { id: "house-boho-md", name: "House call · Your service · Medium", base: 160 },
+    { id: "house-boho-lg", name: "House call · Your service · Large", base: 115 },
+    { id: "house-feedin-2", name: "House call · Your service · 2", base: 90 },
+    { id: "house-feedin-4", name: "House call · Your service · 4", base: 100 },
+    { id: "house-feedin-8", name: "House call · Your service · 8", base: 115 },
+    { id: "house-feedin-10plus", name: "House call · Your service · 10+", base: 125 },
+    { id: "house-fulani-one", name: "House call · Your service · One size", base: 170 },
+    { id: "house-fulani-passion-twists", name: "House call · Your combo service (edit)", base: 185 },
+    { id: "house-wig-install", name: "House call · Your service · Install & style", base: 135 },
+    { id: "house-wig-pony", name: "House call · Your service · Ponytail", base: 100 },
+    { id: "house-wig-qw", name: "House call · Your service · Q/W", base: 115 },
+    { id: "house-wig-fulani-quickweave", name: "House call · Your service · Your add-on label", base: 125 },
+
+    { id: "kids-knotless-md", name: "Kids (12 & under) · Your service · Medium", base: 110 },
+    { id: "kids-knotless-lg", name: "Kids (12 & under) · Your service · Large", base: 85 },
+    { id: "kids-passion-sm", name: "Kids (12 & under) · Your service · Smedium", base: 135 },
+    { id: "kids-passion-md", name: "Kids (12 & under) · Your service · Medium", base: 115 },
+    { id: "kids-natural-2strand", name: "Kids (12 & under) · Your service · 2 strand", base: 40 },
+    { id: "kids-natural-cornrows", name: "Kids (12 & under) · Your service · Your option label", base: 25 },
+    { id: "kids-natural-box", name: "Kids (12 & under) · Your service · Your option label", base: 40 },
+    { id: "kids-natural-twist", name: "Kids (12 & under) · Your service · Regular twist", base: 35 },
+    { id: "kids-boho-md", name: "Kids (12 & under) · Your service · Medium", base: 120 },
+    { id: "kids-boho-lg", name: "Kids (12 & under) · Your service · Large", base: 100 },
+    { id: "kids-feedin-2", name: "Kids (12 & under) · Your service · 2", base: 55 },
+    { id: "kids-feedin-4", name: "Kids (12 & under) · Your service · 4", base: 65 },
+    { id: "kids-feedin-8", name: "Kids (12 & under) · Your service · 8", base: 90 },
+    { id: "kids-feedin-10plus", name: "Kids (12 & under) · Your service · 10+", base: 100 },
+    { id: "kids-fulani-one", name: "Kids (12 & under) · Your service · One size", base: 140 },
+    { id: "kids-fulani-passion-twists", name: "Kids (12 & under) · Your combo service (edit)", base: 150 },
+    { id: "kids-lemonade-one", name: "Kids (12 & under) · Your service · One size", base: 125 },
+
+    { id: "other", name: "Other / custom quote (price TBD)", base: 0 },
+  ];
+
   /** Must match booking lookup / reschedule minimum (calendar days). */
   const BOOKING_LEAD_DAYS = 3;
 
@@ -92,7 +154,7 @@
     return !!styleId && styleId.indexOf("house-") === 0;
   }
 
-  /** Extra length add-ons apply only to knotless, boho, Fulani, and cornrow families (studio, house, kids). */
+  /** Extra length add-ons: enabled when style id matches keywords in booking.js — adjust ids or logic when you rename services. */
   function styleSupportsExtraHairLength(styleId) {
     if (!styleId || styleId === "other") return false;
     const s = String(styleId).toLowerCase();
@@ -130,12 +192,10 @@
   let viewMonth;
   let selectedIsoDate = null;
   let selectedSlotIso = null;
-  let stripeClient = null;
-  let stripeElements = null;
-  let stripePaymentElement = null;
-  let stripeIntentFingerprint = "";
+  let plaidLinkHandler = null;
+  let plaidBankLink = null;
+  let plaidLinkToken = "";
   let pendingBookingId = "";
-  let pendingPaymentIntentId = "";
 
   const els = {
     form: document.getElementById("booking-form"),
@@ -177,43 +237,41 @@
     houseAddrZip: document.getElementById("house-addr-zip"),
     depositNoteStudio: document.getElementById("deposit-note-studio"),
     depositNoteHouseCall: document.getElementById("deposit-note-house-call"),
+    depositNoteInPerson: document.getElementById("deposit-note-in-person"),
     depositPolicyAlert: document.getElementById("deposit-policy-alert"),
     sideDepositNote: document.getElementById("side-deposit-note"),
+    lineOnlineLabel: document.getElementById("line-online-label"),
+    sideOnlineLabel: document.getElementById("side-online-label"),
+    submitBtn: document.getElementById("booking-submit-btn"),
   };
 
-  document.addEventListener("nadjae-pricing-updated", () => {
-    const prev = els.styleSelect?.value || "";
-    populateStyles();
-    if (prev && els.styleSelect) {
-      const has = Array.from(els.styleSelect.options).some((o) => o.value === prev);
-      if (has) els.styleSelect.value = prev;
-    }
-    syncBookingDependentFields();
-    renderPricing();
-  });
+  function getBookingSubdomain() {
+    var t = window.__STYLD_TENANT_BOOKING__;
+    return t && t.subdomain ? String(t.subdomain).trim().toLowerCase() : "";
+  }
 
   function setInlinePaymentError(message) {
-    var el = document.getElementById("stripe-payment-error");
+    var el = document.getElementById("plaid-payment-error");
     if (!el) return;
     el.hidden = !message;
     el.textContent = message || "";
   }
 
-  function clearEmbeddedPaymentElement() {
-    if (stripePaymentElement && typeof stripePaymentElement.unmount === "function") {
-      try {
-        stripePaymentElement.unmount();
-      } catch (_) {
-        /* ignore */
-      }
-    }
-    stripePaymentElement = null;
-    stripeElements = null;
-    stripeIntentFingerprint = "";
-    pendingPaymentIntentId = "";
+  function setPlaidLinkStatus(message) {
+    var el = document.getElementById("plaid-link-status");
+    if (!el) return;
+    el.hidden = !message;
+    el.textContent = message || "";
+  }
+
+  function clearPlaidPaymentState() {
+    plaidBankLink = null;
+    plaidLinkToken = "";
+    plaidLinkHandler = null;
     setInlinePaymentError("");
-    var host = document.getElementById("stripe-payment-element");
-    if (host) host.innerHTML = "";
+    setPlaidLinkStatus("");
+    var btn = document.getElementById("plaid-link-btn");
+    if (btn) btn.classList.remove("hidden");
   }
 
   function trimAddr(el) {
@@ -296,7 +354,7 @@
     if (googleMapsLoadPromise) return googleMapsLoadPromise;
     googleMapsLoadPromise = new Promise((resolve, reject) => {
       const s = document.createElement("script");
-      s.dataset.nadjaeMaps = "1";
+      s.dataset.salonSiteMaps = "1";
       s.async = true;
       s.defer = true;
       s.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places`;
@@ -312,8 +370,8 @@
 
   function attachPlacesAutocomplete() {
     const input = els.houseAddrStreet;
-    if (!input || !window.google?.maps?.places || input.dataset.nadjaeAc === "1") return;
-    input.dataset.nadjaeAc = "1";
+    if (!input || !window.google?.maps?.places || input.dataset.salonSiteAc === "1") return;
+    input.dataset.salonSiteAc = "1";
     const ac = new google.maps.places.Autocomplete(input, {
       componentRestrictions: { country: "us" },
       fields: ["address_components"],
@@ -362,13 +420,13 @@
     if (!els.styleSelect) return;
     els.styleSelect.innerHTML =
       '<option value="">Choose a style</option>' +
-      stylesList().map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
+      catalogStyles().map((s) => `<option value="${s.id}">${s.name}</option>`).join("");
   }
 
   function getSelectedStyle() {
     const opt = els.styleSelect?.selectedOptions[0];
     if (!opt || !opt.value) return null;
-    const def = stylesList().find((s) => s.id === opt.value);
+    const def = catalogStyles().find((s) => s.id === opt.value);
     const base = def && Number.isFinite(def.base) ? def.base : 0;
     return { id: opt.value, name: opt.textContent, base };
   }
@@ -412,10 +470,20 @@
     return 0;
   }
 
+  function durationMinutesForStyle(style) {
+    if (!style || style.id === "other") return null;
+    if (style.id && isHouseStyleId(style.id)) return fullSalonDayMinutes();
+    if (typeof style.durationMinutes === "number" && style.durationMinutes > 0) {
+      return style.durationMinutes;
+    }
+    if (style.id) return baseDurationMinutesForStyle(style.id);
+    return 90;
+  }
+
   function totalDurationMinutes() {
     const style = getSelectedStyle();
     if (!style || style.id === "other") return null;
-    return Math.max(30, baseDurationMinutesForStyle(style.id) + hairLengthExtraMinutes());
+    return Math.max(30, durationMinutesForStyle(style) + hairLengthExtraMinutes());
   }
 
   function formatDurationHuman(mins) {
@@ -462,22 +530,15 @@
   }
 
   function isClosedWeekday(isoDate) {
-    const closed = CFG.closedWeekdays || [];
+    const closed = Array.isArray(CFG.closedWeekdays) ? CFG.closedWeekdays : [];
     if (!closed.length) return false;
-    const lux = parseIsoDateLocal(isoDate).weekday;
-    const jsDay = lux === 7 ? 0 : lux;
-    return closed.includes(jsDay);
+    const dow = parseIsoDateLocal(isoDate).weekday % 7;
+    return closed.includes(dow);
   }
 
   function calendarDayDisabledReason(isoDate) {
     if (isPastCalendarDay(isoDate)) return "Past dates cannot be booked.";
-    if (isClosedWeekday(isoDate)) {
-      const BH = window.__NADJAE_BOOKING_HOURS;
-      const lux = parseIsoDateLocal(isoDate).weekday;
-      const jsDay = lux === 7 ? 0 : lux;
-      const label = BH && BH.closedWeekdayLabel ? BH.closedWeekdayLabel(jsDay) : "This day";
-      return `${label} is closed — choose another date.`;
-    }
+    if (isClosedWeekday(isoDate)) return "Closed this day.";
     if (isBlackedOut(isoDate)) return "Unavailable this week.";
     if (isCalendarDayBlockedByLeadDays(isoDate))
       return `Appointments require at least ${BOOKING_LEAD_DAYS} full days advance notice.`;
@@ -500,13 +561,16 @@
       datesWithBookings = new Set();
       return;
     }
-    const sb = window.nadjaeSupabaseClient;
+    const sb = window.salonSupabaseClient;
     if (!sb) return;
     const range = visibleGridIsoRange();
-    const { data, error } = await sb.rpc("booking_dates_in_range", {
-      p_start: range.p_start,
-      p_end: range.p_end,
-    });
+    const rpcName = TENANT_BOOKING?.subdomain
+      ? "styld_tenant_booking_dates_in_range"
+      : "booking_dates_in_range";
+    const rpcArgs = TENANT_BOOKING?.subdomain
+      ? { p_subdomain: TENANT_BOOKING.subdomain, p_start: range.p_start, p_end: range.p_end }
+      : { p_start: range.p_start, p_end: range.p_end };
+    const { data, error } = await sb.rpc(rpcName, rpcArgs);
     if (error) {
       console.warn("booking_dates_in_range", error);
       return;
@@ -613,15 +677,22 @@
         const s = new Date(String(start)).getTime();
         const e = new Date(String(end)).getTime();
         if (!Number.isFinite(s) || !Number.isFinite(e)) return null;
-        return { start: s, end: e };
+        const kind = x.kind ?? x.type ?? "booking";
+        return { start: s, end: e, isBlock: kind === "block" };
       })
       .filter(Boolean);
   }
 
   async function fetchUnavailableIntervals(dateIso) {
-    const sb = window.nadjaeSupabaseClient;
+    const sb = window.salonSupabaseClient;
     if (!sb || !dateIso) return [];
-    const { data, error } = await sb.rpc("get_unavailable_times_for_day", { p_date: dateIso });
+    const rpcName = TENANT_BOOKING?.subdomain
+      ? "styld_tenant_get_unavailable_times_for_day"
+      : "get_unavailable_times_for_day";
+    const rpcArgs = TENANT_BOOKING?.subdomain
+      ? { p_subdomain: TENANT_BOOKING.subdomain, p_date: dateIso }
+      : { p_date: dateIso };
+    const { data, error } = await sb.rpc(rpcName, rpcArgs);
     if (error) {
       console.warn("get_unavailable_times_for_day", error);
       return [];
@@ -680,17 +751,11 @@
   function overlapCount(candidateStartMs, candidateEndMs) {
     let n = 0;
     for (const u of cachedUnavailable) {
-      if (intervalsOverlap(candidateStartMs, candidateEndMs, u.start, u.end)) n++;
+      if (!intervalsOverlap(candidateStartMs, candidateEndMs, u.start, u.end)) continue;
+      if (u.isBlock) return Math.max(1, CFG.concurrentAppointmentCapacity || 1);
+      n++;
     }
     return n;
-  }
-
-  function formatCfgTime12(hour, minute) {
-    const BH = window.__NADJAE_BOOKING_HOURS;
-    if (BH && typeof BH.formatTime12 === "function") return BH.formatTime12(hour, minute);
-    const h = hour % 12 || 12;
-    const ap = hour >= 12 ? "PM" : "AM";
-    return `${h}:${String(minute).padStart(2, "0")} ${ap}`;
   }
 
   function classifySlot(slotStart, durationMin) {
@@ -699,17 +764,16 @@
     const nowMs = Date.now();
     const isSat = slotStart.weekday === 6;
     const satClose = saturdayCutoff(slotStart.toFormat("yyyy-MM-dd"));
-    const satLabel = formatCfgTime12(CFG.saturdayLastStartHour, CFG.saturdayLastStartMinute);
     if (isSat) {
       if (slotStart >= satClose)
-        return { kind: "full", reason: `Saturday appointments cannot start at or after ${satLabel}.` };
+        return { kind: "full", reason: "Saturday appointments cannot start at or after 2:00 PM." };
       const endDt = slotStart.plus({ minutes: durationMin });
       if (endDt > satClose)
-        return { kind: "full", reason: `Service would extend past Saturday closing (${satLabel}).` };
+        return { kind: "full", reason: "Service would extend past closing (2:00 PM Saturday)." };
     }
     const today = nowZoned().startOf("day");
     if (slotStart.startOf("day").equals(today) && startMs < nowMs + CFG.sameDayLeadMinutes * 60 * 1000) {
-      return { kind: "full", reason: `Too soon — allow at least ${CFG.sameDayLeadMinutes} minutes lead time today.` };
+      return { kind: "full", reason: "Too soon — allow at least 30 minutes lead time today." };
     }
 
     const cap = Math.max(1, CFG.concurrentAppointmentCapacity | 0);
@@ -778,6 +842,45 @@
     }
   }
 
+  function onlineChargeForTotal(total, style) {
+    const mode = PAYMENT.mode || "deposit";
+    if (mode === "in_person") return 0;
+    if (mode === "full") return round2(total);
+
+    let amount;
+    if (PAYMENT.depositKind === "fixed") {
+      amount = round2(Number(PAYMENT.depositValue) || 0);
+    } else {
+      const pct = Math.min(100, Math.max(0, Number(PAYMENT.depositValue) || 10));
+      amount = round2(total * (pct / 100));
+    }
+
+    if (USE_LEGACY_DEPOSIT_RULES && style && isHouseStyleId(style.id)) {
+      amount = round2(amount + 15);
+    }
+
+    return round2(Math.min(total, amount));
+  }
+
+  function paymentMode() {
+    return PAYMENT.mode || "deposit";
+  }
+
+  function wantsOnlinePayment() {
+    const { deposit, mode } = computeTotals();
+    if (mode === "in_person") return false;
+    const cents = Math.round(Number(deposit || 0) * 100);
+    return cents >= MIN_ONLINE_PAYMENT_CENTS;
+  }
+
+  function needsOnlinePayment() {
+    return wantsOnlinePayment() && !!window.__STYLD_UNIT_PAYMENTS_READY__;
+  }
+
+  function merchantPaymentsNotReady() {
+    return wantsOnlinePayment() && !window.__STYLD_UNIT_PAYMENTS_READY__;
+  }
+
   function computeTotals() {
     const style = getSelectedStyle();
     const base = style ? style.base : 0;
@@ -786,7 +889,8 @@
     const total = Math.max(0, round2(base + lengthUsd));
     const pctDeposit = round2(total * 0.1);
     const houseFee = style && isHouseStyleId(style.id) ? 15 : 0;
-    const deposit = round2(pctDeposit + houseFee);
+    const deposit = onlineChargeForTotal(total, style);
+    const balanceDue = round2(Math.max(0, total - deposit));
 
     return {
       base,
@@ -794,15 +898,20 @@
       subtotal: base,
       total,
       deposit,
+      balanceDue,
       pctDeposit,
       houseFee,
       style,
+      mode: paymentMode(),
     };
   }
 
   function renderPricing() {
-    const { base, lengthUsd, total, deposit, pctDeposit, houseFee, style } = computeTotals();
+    const { base, lengthUsd, total, deposit, balanceDue, pctDeposit, houseFee, style, mode } = computeTotals();
     const dur = totalDurationMinutes();
+    const online = needsOnlinePayment();
+    const hasPricedStyle = !!(style && style.id !== "other");
+    const isHouseBooking = houseFee > 0 && USE_LEGACY_DEPOSIT_RULES;
 
     if (els.durationStrip) {
       if (!style || style.id === "other") {
@@ -815,29 +924,59 @@
     if (els.subtotalOut) els.subtotalOut.textContent = money(base);
     if (els.lengthAddonOut) els.lengthAddonOut.textContent = lengthUsd > 0 ? money(lengthUsd) : "—";
     if (els.totalOut) els.totalOut.textContent = money(total);
-    if (els.depositOut) els.depositOut.textContent = money(deposit);
+    if (els.depositOut) {
+      els.depositOut.textContent = mode === "in_person" ? "$0.00" : money(deposit);
+    }
+
+    const onlineLabel =
+      mode === "full"
+        ? "Due when booking (full price):"
+        : mode === "in_person"
+          ? "Due when booking:"
+          : "Deposit due when booking:";
+    if (els.lineOnlineLabel) els.lineOnlineLabel.textContent = onlineLabel;
+    if (els.sideOnlineLabel) {
+      els.sideOnlineLabel.textContent =
+        mode === "full" ? "Due when booking" : mode === "in_person" ? "Due when booking" : "Deposit due";
+    }
+
     if (els.depositDetailOut) {
-      if (!style || style.id === "other") {
+      if (!hasPricedStyle) {
         els.depositDetailOut.textContent = "";
-      } else {
-        let detail =
-          houseFee > 0
-            ? `Includes ${money(pctDeposit)} (10% of your estimate) plus ${money(15)} house-call deposit. `
-            : `${money(pctDeposit)} is 10% of your estimated total. `;
-        detail += "All deposits are non-refundable.";
+      } else if (mode === "in_person") {
+        els.depositDetailOut.textContent =
+          balanceDue > 0
+            ? `Estimated total ${money(total)} — pay in person at your appointment.`
+            : "";
+      } else if (mode === "full") {
+        els.depositDetailOut.textContent =
+          "Pay the full estimated price online to secure your appointment. Final price may be adjusted after consultation.";
+      } else if (USE_LEGACY_DEPOSIT_RULES && isHouseBooking) {
+        let detail = `Includes ${money(pctDeposit)} (10% of your estimate) plus ${money(15)} house-call deposit. `;
+        detail += `Remaining balance ${money(balanceDue)} due in person at your appointment. All deposits are non-refundable.`;
         els.depositDetailOut.textContent = detail;
+      } else if (PAYMENT.depositKind === "fixed") {
+        els.depositDetailOut.textContent =
+          `${money(deposit)} deposit due now. Remaining balance ${money(balanceDue)} due in person at your appointment.`;
+      } else {
+        const pct = Math.min(100, Math.max(0, Number(PAYMENT.depositValue) || 10));
+        els.depositDetailOut.textContent =
+          `${money(deposit)} (${pct}% of your estimate) due now. Remaining balance ${money(balanceDue)} due in person at your appointment.`;
       }
     }
+
     if (els.sideSubtotal) els.sideSubtotal.textContent = money(base);
     if (els.sideLengthAddon) els.sideLengthAddon.textContent = lengthUsd > 0 ? money(lengthUsd) : "—";
     if (els.sideTotal) els.sideTotal.textContent = money(total);
-    if (els.sideDeposit) els.sideDeposit.textContent = money(deposit);
+    if (els.sideDeposit) {
+      els.sideDeposit.textContent = mode === "in_person" ? "$0.00" : money(deposit);
+    }
 
-    const hasPricedStyle = !!(style && style.id !== "other");
-    const isHouseBooking = houseFee > 0;
-
+    if (els.depositNoteInPerson) {
+      els.depositNoteInPerson.hidden = !hasPricedStyle || mode !== "in_person";
+    }
     if (els.depositNoteStudio) {
-      els.depositNoteStudio.hidden = !hasPricedStyle || isHouseBooking;
+      els.depositNoteStudio.hidden = !hasPricedStyle || mode !== "deposit" || isHouseBooking;
     }
     if (els.depositNoteHouseCall) {
       els.depositNoteHouseCall.hidden = !hasPricedStyle || !isHouseBooking;
@@ -846,52 +985,99 @@
     if (els.depositPolicyAlert) {
       if (!hasPricedStyle) {
         els.depositPolicyAlert.textContent =
-          "All deposits are non-refundable. Final price may be adjusted after consultation.";
+          mode === "in_person"
+            ? "Final price may be adjusted after consultation. Pay in person at your appointment."
+            : "Final price may be adjusted after consultation.";
+      } else if (mode === "in_person") {
+        els.depositPolicyAlert.textContent =
+          `No online payment required. Estimated total ${money(total)} — pay in person when you arrive.`;
+      } else if (mode === "full") {
+        els.depositPolicyAlert.textContent =
+          "Full payment online secures your appointment. Final price may be adjusted after consultation.";
       } else if (isHouseBooking) {
         els.depositPolicyAlert.textContent =
-          "All deposits are non-refundable (including style portion and house-call deposit). Final price may be adjusted after consultation.";
+          "Deposits are non-refundable (including style portion and house-call deposit). Balance due in person at your appointment.";
       } else {
         els.depositPolicyAlert.textContent =
-          "All deposits are non-refundable. Final price may be adjusted after consultation.";
+          `Deposit due online now; remaining balance ${money(balanceDue)} due in person at your appointment. Deposits are non-refundable.`;
       }
     }
 
     if (els.sideDepositNote) {
-      if (!hasPricedStyle) {
-        els.sideDepositNote.textContent = "All deposits non-refundable.";
+      if (mode === "in_person") {
+        els.sideDepositNote.textContent = "Pay in person at your appointment.";
+      } else if (mode === "full") {
+        els.sideDepositNote.textContent = "Full price charged when you book.";
       } else if (isHouseBooking) {
         els.sideDepositNote.textContent =
-          "10% style deposit plus $15 for house calls. All deposits non-refundable.";
+          "10% style deposit plus $15 for house calls. Balance due in person.";
       } else {
-        els.sideDepositNote.textContent = "10% style deposit. All deposits non-refundable.";
+        els.sideDepositNote.textContent = `Balance ${money(balanceDue)} due in person at your appointment.`;
       }
     }
-    const complete = isFormCompleteForPayment();
+
+    const complete = isFormCompleteForBooking();
+    const paymentsBlocked = merchantPaymentsNotReady();
+    const showPayment = complete && online;
     if (els.paymentBox) {
-      els.paymentBox.classList.toggle("hidden", !complete);
-      els.paymentBox.setAttribute("aria-hidden", complete ? "false" : "true");
+      els.paymentBox.classList.toggle("hidden", !showPayment && !paymentsBlocked);
+      els.paymentBox.setAttribute(
+        "aria-hidden",
+        showPayment || paymentsBlocked ? "false" : "true",
+      );
     }
 
-    const stripeTrust = document.getElementById("payment-stripe-trust");
-    if (stripeTrust) {
-      stripeTrust.hidden = !complete;
-      stripeTrust.textContent = complete
-        ? "Enter your card details below, then use the bottom button to confirm payment."
+    var paymentsBlockedEl = document.getElementById("payments-not-ready");
+    if (!paymentsBlockedEl && els.paymentBox) {
+      paymentsBlockedEl = document.createElement("p");
+      paymentsBlockedEl.id = "payments-not-ready";
+      paymentsBlockedEl.className = "booking-feedback booking-feedback--error";
+      paymentsBlockedEl.hidden = true;
+      els.paymentBox.insertBefore(paymentsBlockedEl, els.paymentBox.firstChild?.nextSibling || null);
+    }
+    if (paymentsBlockedEl) {
+      paymentsBlockedEl.hidden = !paymentsBlocked;
+      paymentsBlockedEl.textContent = paymentsBlocked
+        ? "Online payments are not active for this business yet. The owner must connect a payment account in the Styld app (Profile → Payments), or you can contact them to book another way."
         : "";
     }
 
-    const depOut = document.getElementById("pay-deposit-preview");
-    if (depOut) depOut.textContent = money(deposit);
+    const bankTrust = document.getElementById("payment-bank-trust");
+    if (bankTrust) {
+      bankTrust.hidden = !showPayment;
+      bankTrust.textContent = showPayment
+        ? mode === "full"
+          ? "Link your bank below, then use the bottom button to pay the full estimated price."
+          : "Link your bank below, then use the bottom button to pay your deposit."
+        : "";
+    }
 
-    if (!complete) {
-      clearEmbeddedPaymentElement();
-      pendingBookingId = "";
+    var plaidBtn = document.getElementById("plaid-link-btn");
+    if (plaidBtn) {
+      plaidBtn.classList.toggle("hidden", !showPayment);
+      if (showPayment && plaidBankLink) plaidBtn.classList.add("hidden");
+    }
+
+    const depOut = document.getElementById("pay-deposit-preview");
+    if (depOut) depOut.textContent = mode === "in_person" ? "$0.00" : money(deposit);
+
+    if (els.submitBtn) {
+      els.submitBtn.textContent = online
+        ? mode === "full"
+          ? "Pay full price & book"
+          : "Pay deposit & book"
+        : "Book appointment";
+    }
+
+    if (!showPayment) {
+      clearPlaidPaymentState();
+      if (!complete) pendingBookingId = "";
     } else {
-      void ensureEmbeddedPaymentReady();
+      void ensurePlaidLinkReady();
     }
   }
 
-  function isFormCompleteForPayment() {
+  function isFormCompleteForBooking() {
     const style = getSelectedStyle();
     const name = document.getElementById("full-name")?.value?.trim();
     const phone = document.getElementById("phone")?.value?.trim();
@@ -903,113 +1089,182 @@
     return !!(style && style.id !== "other" && name && phone && email && photoOk && slotOk && addrOk);
   }
 
-  function embeddedPaymentFingerprint(bookingId, email, styleId, deposit) {
-    return [bookingId, String(email || "").toLowerCase(), styleId || "", Number(deposit || 0).toFixed(2)].join("|");
+  async function ensurePlaidLinkReady() {
+    const sb = window.salonSupabaseClient;
+    const subdomain = getBookingSubdomain();
+    const { deposit } = computeTotals();
+    const depositCents = Math.round(Number(deposit || 0) * 100);
+
+    if (!sb || !subdomain || !window.Plaid || depositCents < MIN_ONLINE_PAYMENT_CENTS) return;
+
+    if (!pendingBookingId) pendingBookingId = crypto.randomUUID();
+    if (plaidLinkToken) return;
+
+    // Pass the current page URL so Plaid can redirect back after OAuth bank auth
+    var redirectUri = window.location.origin + window.location.pathname;
+
+    setInlinePaymentError("");
+    const { data, error } = await sb.functions.invoke("unit-booking-plaid-link", {
+      body: { subdomain, bookingId: pendingBookingId, redirectUri: redirectUri },
+    });
+
+    if (error) {
+      setInlinePaymentError(error.message || "Could not start bank link.");
+      return;
+    }
+    if (!data || !data.linkToken) {
+      setInlinePaymentError((data && data.error) || "Online payments are not available for this business.");
+      return;
+    }
+    plaidLinkToken = data.linkToken;
   }
 
-  async function invokeEmbeddedPaymentIntent(sb, payload) {
-    const { data, error } = await sb.functions.invoke("create-checkout-session", {
+  /**
+   * If the page loaded with ?oauth_state_id= from a Plaid OAuth redirect,
+   * re-open the Plaid handler so the bank link completes automatically.
+   */
+  function maybeResumeOAuthFlow() {
+    var params = new URLSearchParams(window.location.search);
+    var oauthStateId = params.get("oauth_state_id");
+    if (!oauthStateId || !window.Plaid) return;
+
+    // Restore pendingBookingId from sessionStorage if we have it
+    try {
+      var savedId = sessionStorage.getItem("styld_pending_booking_id");
+      if (savedId) pendingBookingId = savedId;
+    } catch (_) { /* ignore */ }
+
+    var receivedRedirectUri = window.location.href;
+
+    // Re-fetch a link token then re-open Plaid with receivedRedirectUri
+    var sb = window.salonSupabaseClient;
+    var subdomain = getBookingSubdomain();
+    if (!sb || !subdomain) return;
+
+    setPlaidLinkStatus("Resuming bank connection…");
+    sb.functions.invoke("unit-booking-plaid-link", {
+      body: { subdomain, bookingId: pendingBookingId, redirectUri: receivedRedirectUri },
+    }).then(function(result) {
+      var data = result.data;
+      var error = result.error;
+      if (error || !data || !data.linkToken) {
+        setInlinePaymentError("Could not resume bank connection. Please try again.");
+        setPlaidLinkStatus("");
+        return;
+      }
+      plaidLinkToken = data.linkToken;
+      var handler = window.Plaid.create({
+        token: plaidLinkToken,
+        receivedRedirectUri: receivedRedirectUri,
+        onSuccess: function(public_token, metadata) {
+          var acct = metadata && metadata.accounts && metadata.accounts[0];
+          if (!acct || !acct.id) {
+            setInlinePaymentError("No bank account was selected.");
+            return;
+          }
+          plaidBankLink = {
+            publicToken: public_token,
+            accountId: acct.id,
+            institutionName: metadata.institution && metadata.institution.name,
+          };
+          setPlaidLinkStatus(
+            "Bank connected" +
+              (plaidBankLink.institutionName ? " (" + plaidBankLink.institutionName + ")" : "") +
+              ". Tap the button below to pay and book.",
+          );
+          var btn = document.getElementById("plaid-link-btn");
+          if (btn) btn.classList.add("hidden");
+          // Clean up OAuth params from URL without reloading
+          try {
+            var clean = window.location.origin + window.location.pathname;
+            window.history.replaceState({}, document.title, clean);
+          } catch (_) { /* ignore */ }
+        },
+        onExit: function(err) {
+          setPlaidLinkStatus("");
+          if (err && err.error_message) setInlinePaymentError(err.error_message);
+        },
+      });
+      handler.open();
+    });
+  }
+
+  function openBookingPlaidLink() {
+    return new Promise(function (resolve, reject) {
+      if (!window.Plaid || !plaidLinkToken) {
+        reject(new Error("Bank link is not ready yet. Please wait a moment."));
+        return;
+      }
+      if (plaidLinkHandler && typeof plaidLinkHandler.destroy === "function") {
+        try { plaidLinkHandler.destroy(); } catch (_) { /* ignore */ }
+      }
+
+      // Save pendingBookingId so it can be restored after an OAuth redirect
+      try {
+        if (pendingBookingId) sessionStorage.setItem("styld_pending_booking_id", pendingBookingId);
+      } catch (_) { /* ignore */ }
+
+      plaidLinkHandler = window.Plaid.create({
+        token: plaidLinkToken,
+        onSuccess: function (public_token, metadata) {
+          var acct = metadata && metadata.accounts && metadata.accounts[0];
+          if (!acct || !acct.id) {
+            reject(new Error("No bank account selected."));
+            return;
+          }
+          plaidBankLink = {
+            publicToken: public_token,
+            accountId: acct.id,
+            institutionName: metadata.institution && metadata.institution.name,
+          };
+          setPlaidLinkStatus(
+            "Bank connected" +
+              (plaidBankLink.institutionName ? " (" + plaidBankLink.institutionName + ")" : "") +
+              ". Tap the button below to pay and book.",
+          );
+          var btn = document.getElementById("plaid-link-btn");
+          if (btn) btn.classList.add("hidden");
+          resolve(plaidBankLink);
+        },
+        onExit: function (err) {
+          if (err && err.error_message) reject(new Error(err.error_message));
+          else reject(new Error("Bank link was cancelled."));
+        },
+      });
+      plaidLinkHandler.open();
+    });
+  }
+
+  async function payBookingWithUnit(sb, payload) {
+    const { data, error } = await sb.functions.invoke("unit-booking-pay", {
       body: {
-        mode: "embedded",
-        booking_id: payload.bookingId,
-        email: payload.email,
-        style_id: payload.styleId,
-        style_name: payload.styleName,
-        deposit_amount: payload.deposit,
+        subdomain: payload.subdomain,
+        bookingId: payload.bookingId,
+        amountCents: payload.amountCents,
+        publicToken: payload.publicToken,
+        plaidAccountId: payload.plaidAccountId,
+        description: payload.description,
       },
     });
 
     if (error) {
-      let detail = error.message || "Payment could not be started";
+      let detail = error.message || "Payment failed";
       try {
         if (error.context && typeof error.context.json === "function") {
           const j = await error.context.json();
           if (j && typeof j.error === "string") detail = j.error;
-          if (j && typeof j.hint === "string" && j.hint.trim()) detail = `${detail} — ${j.hint.trim()}`;
         }
       } catch (_) {
         /* ignore */
       }
-      if (String(detail).includes("booking_id, success_url, and cancel_url are required")) {
-        detail =
-          "Payment backend is on an older version. Redeploy Supabase function `create-checkout-session`, then refresh this page.";
-      }
       return { ok: false, error: detail };
     }
 
-    if (!data || typeof data.client_secret !== "string" || !data.client_secret) {
-      return { ok: false, error: "Stripe did not return a payment client secret." };
+    if (!data || data.paid === false) {
+      return { ok: false, error: (data && data.error) || "Payment was not accepted." };
     }
 
-    return {
-      ok: true,
-      clientSecret: data.client_secret,
-      paymentIntentId: typeof data.payment_intent_id === "string" ? data.payment_intent_id : "",
-    };
-  }
-
-  async function ensureEmbeddedPaymentReady() {
-    const sb = window.nadjaeSupabaseClient;
-    const stripeCfg = window.__NADJAE_STRIPE || {};
-    const pk = stripeCfg.publishableKey && String(stripeCfg.publishableKey).trim();
-    const style = getSelectedStyle();
-    const email = (document.getElementById("email")?.value || "").trim();
-    const { deposit } = computeTotals();
-    const depositCents = Math.round(Number(deposit || 0) * 100);
-
-    if (!sb || !style || style.id === "other" || depositCents < MIN_STRIPE_DEPOSIT_CENTS) return;
-
-    if (!pk) {
-      const cfg = window.__NADJAE_STRIPE || {};
-      const liveHint = cfg.stripePublishableKeyMissingAtBuild
-        ? "Set Vercel environment variable STRIPE_PUBLISHABLE_KEY to your pk_test_… or pk_live_… (same mode as STRIPE_SECRET_KEY in Supabase), then redeploy."
-        : "Add your Stripe publishable key: on Vercel use STRIPE_PUBLISHABLE_KEY, or create js/stripe-config.local.js from js/stripe-config.example.js for local testing.";
-      setInlinePaymentError(
-        "Card form did not load — publishable key is missing. " + liveHint,
-      );
-      return;
-    }
-
-    if (!window.Stripe) {
-      setInlinePaymentError("Stripe.js did not load. Check your connection, disable blockers, and refresh.");
-      return;
-    }
-
-    if (!pendingBookingId) pendingBookingId = crypto.randomUUID();
-    const fingerprint = embeddedPaymentFingerprint(pendingBookingId, email, style.id, deposit);
-    if (stripeIntentFingerprint === fingerprint && stripePaymentElement) return;
-
-    clearEmbeddedPaymentElement();
-    setInlinePaymentError("");
-
-    const intent = await invokeEmbeddedPaymentIntent(sb, {
-      bookingId: pendingBookingId,
-      email,
-      styleId: style.id,
-      styleName: style.name,
-      deposit,
-    });
-
-    if (!intent.ok) {
-      setInlinePaymentError(intent.error || "Unable to load secure payment form.");
-      return;
-    }
-
-    try {
-      stripeClient = stripeClient || window.Stripe(pk);
-      stripeElements = stripeClient.elements({ clientSecret: intent.clientSecret });
-      stripePaymentElement = stripeElements.create("payment");
-      stripePaymentElement.mount("#stripe-payment-element");
-      pendingPaymentIntentId = intent.paymentIntentId || "";
-      stripeIntentFingerprint = fingerprint;
-    } catch (e) {
-      const msg = e && typeof e === "object" && "message" in e ? String(e.message) : String(e);
-      console.error("Stripe Payment Element mount failed:", e);
-      clearEmbeddedPaymentElement();
-      setInlinePaymentError(
-        `Could not start the card form (${msg}). Common fix: use pk_test_… in the site build with sk_test_… in Supabase (or both live) — keys must be the same Stripe mode.`,
-      );
-    }
+    return { ok: true, paymentId: data.paymentId, status: data.status };
   }
 
   function buildBookingDetailsUrl(params) {
@@ -1047,67 +1302,41 @@
     if (message && kind === "success") el.classList.add("booking-feedback--success");
   }
 
-  function readStripeReturnParams() {
+  function readPaidReturnParams() {
     const p = new URLSearchParams(window.location.search);
-    if (p.get("canceled") === "1") {
-      setBookingFeedback(
-        "Payment canceled. If you already submitted a booking, we still have it — you can try paying the deposit again from the link we email, or contact the salon.",
-        "error",
-      );
-      const style = p.get("style");
-      const path = window.location.pathname || "/booking.html";
-      window.history.replaceState(
-        {},
-        "",
-        style ? `${path}?style=${encodeURIComponent(style)}` : path,
-      );
-      return;
+    if (p.get("paid") !== "1") return;
+    const bookingId = (p.get("booking_id") || "").trim();
+    if (!bookingId) return;
+    try {
+      sessionStorage.setItem(DETAILS_BOOKING_KEY, bookingId);
+    } catch (_) {
+      /* ignore */
     }
-    if (p.get("paid") === "1" || p.get("session_id")) {
-      let bookingId = (p.get("booking_id") || "").trim();
-      if (!bookingId) {
-        try {
-          bookingId = (sessionStorage.getItem(STRIPE_RETURN_BOOKING_KEY) || "").trim();
-        } catch (_) {
-          bookingId = "";
-        }
-      }
-
-      if (bookingId) {
-        try {
-          sessionStorage.setItem(DETAILS_BOOKING_KEY, bookingId);
-        } catch (_) {
-          /* ignore */
-        }
-        const q = new URLSearchParams(window.location.search);
-        q.set("booking_id", bookingId);
-        q.set("paid", "1");
-        window.location.replace(buildBookingDetailsUrl(q));
-        return;
-      }
-
-      try {
-        sessionStorage.removeItem(STRIPE_RETURN_BOOKING_KEY);
-      } catch (_) {
-        /* ignore */
-      }
-
-      const idLine =
-        " Save your confirmation email; use Lookup Booking with the same name and email or phone you used here.";
-      setBookingFeedback(
-        `Deposit received. Thank you — you should get a Stripe receipt by email; we will confirm your appointment shortly.${idLine}`,
-        "success",
-      );
-      const style = p.get("style");
-      const path = window.location.pathname || "/booking.html";
-      const next = style ? `${path}?style=${encodeURIComponent(style)}` : path;
-      window.history.replaceState({}, "", next);
-    }
+    const q = new URLSearchParams();
+    q.set("booking_id", bookingId);
+    q.set("paid", "1");
+    window.location.replace(buildBookingDetailsUrl(q));
   }
 
   function sanitizeFilename(name) {
     const base = name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100);
     return base || "upload";
+  }
+
+  function saveLocalBooking(row) {
+    try {
+      const raw = localStorage.getItem(LOCAL_BOOKINGS_KEY);
+      const list = raw ? JSON.parse(raw) : [];
+      const next = Array.isArray(list) ? list : [];
+      next.unshift({
+        ...row,
+        id: row.id || crypto.randomUUID(),
+        created_at: row.created_at || new Date().toISOString(),
+      });
+      localStorage.setItem(LOCAL_BOOKINGS_KEY, JSON.stringify(next.slice(0, 500)));
+    } catch (e) {
+      console.warn("Local booking save failed:", e);
+    }
   }
 
   async function uploadBookingFiles(sb, bookingId, hairFile, refFile) {
@@ -1142,10 +1371,11 @@
     return DT.fromISO(iso, { zone: CFG.salonTimeZone }).toFormat("yyyy-MM-dd");
   }
 
-  function buildRowPayload(bookingId, paths, apptIso, durationMinutes, stripePaymentIntentId) {
+  function buildRowPayload(bookingId, paths, apptIso, durationMinutes, unitPaymentId) {
     const style = getSelectedStyle();
     const notes = document.getElementById("notes")?.value?.trim() || null;
-    const { total, deposit } = computeTotals();
+    const { total, deposit, mode } = computeTotals();
+    const payInPerson = mode === "in_person";
 
     const hk = getHairLengthKey();
     const hairLenLabel =
@@ -1171,20 +1401,21 @@
       appointment_slot: appointmentSlotLabelFromIso(apptIso),
       appointment_starts_at: apptIso,
       duration_minutes: durationMinutes,
-      booking_status: "pending_payment",
+      booking_status: payInPerson ? "confirmed" : "pending_payment",
       notes,
       promo_code: null,
       estimated_total: total,
-      deposit_amount: deposit,
+      deposit_amount: payInPerson ? 0 : deposit,
+      payment_status: payInPerson ? "in_person" : "pending",
       source: "website",
       google_calendar_id: GCAL.calendarId || null,
       pricing_situation: "catalog",
-      stripe_payment_intent_id: stripePaymentIntentId || null,
+      unit_payment_id: unitPaymentId || null,
       ...paths,
     };
   }
 
-  async function submitBookingRequest(sb, apptIso, durationMinutes, bookingId, stripePaymentIntentId) {
+  async function submitBookingRequest(sb, apptIso, durationMinutes, bookingId, unitPaymentId) {
     const style = getSelectedStyle();
     if (!style || style.id === "other") throw new Error("Choose a priced style to book.");
     const hairFile = els.photoHair?.files?.[0];
@@ -1200,7 +1431,18 @@
       );
     }
 
-    const row = buildRowPayload(bookingId, paths, apptIso, durationMinutes, stripePaymentIntentId);
+    const row = buildRowPayload(bookingId, paths, apptIso, durationMinutes, unitPaymentId);
+
+    if (TENANT_BOOKING?.subdomain) {
+      const { data: tenantId, error: tenantErr } = await sb.rpc("styld_tenant_insert_booking", {
+        p_subdomain: TENANT_BOOKING.subdomain,
+        p_booking: row,
+      });
+      if (tenantErr) throw tenantErr;
+      const id = tenantId || row.id;
+      if (!id) throw new Error("No booking id returned");
+      return { id, paths };
+    }
 
     const { data, error } = await sb.from("bookings").insert(row).select("id").single();
     if (error) throw error;
@@ -1274,6 +1516,20 @@
     if (els.calPrev) els.calPrev.addEventListener("click", () => navigateMonth(-1));
     if (els.calNext) els.calNext.addEventListener("click", () => navigateMonth(1));
 
+    var plaidBtn = document.getElementById("plaid-link-btn");
+    if (plaidBtn) {
+      plaidBtn.addEventListener("click", function () {
+        setInlinePaymentError("");
+        void ensurePlaidLinkReady()
+          .then(function () {
+            return openBookingPlaidLink();
+          })
+          .catch(function (err) {
+            setInlinePaymentError(err && err.message ? err.message : "Bank link failed.");
+          });
+      });
+    }
+
     if (els.form) {
       els.form.addEventListener("submit", async (e) => {
         e.preventDefault();
@@ -1284,7 +1540,7 @@
         let durationMinutes = durStr ? parseInt(durStr, 10) : totalDurationMinutes();
         if (!Number.isFinite(durationMinutes) || durationMinutes <= 0) durationMinutes = totalDurationMinutes();
 
-        if (!isFormCompleteForPayment() || !apptIso) {
+        if (!isFormCompleteForBooking() || !apptIso) {
           const st = getSelectedStyle();
           if (st && isHouseStyleId(st.id) && !isHouseAddressComplete()) {
             alert(
@@ -1296,7 +1552,7 @@
           return;
         }
 
-        const sb = window.nadjaeSupabaseClient;
+        const sb = window.salonSupabaseClient;
         const submitBtn = els.form.querySelector('button[type="submit"]');
 
         if (!sb) {
@@ -1311,41 +1567,74 @@
         }
 
         try {
-          await ensureEmbeddedPaymentReady();
-
-          const pkCheck = (window.__NADJAE_STRIPE || {}).publishableKey;
-          if (!pkCheck || !String(pkCheck).trim()) {
-            throw new Error("Stripe publishable key is missing — set STRIPE_PUBLISHABLE_KEY on deploy (pk_test_… or pk_live_…).");
-          }
-
-          if (!pendingBookingId || !stripeClient || !stripeElements) {
-            throw new Error("Secure payment form is not ready yet. Please wait a moment and try again.");
-          }
-
-          const paymentMounted = stripeElements.getElement && stripeElements.getElement("payment");
-          if (!paymentMounted) {
+          if (merchantPaymentsNotReady()) {
             throw new Error(
-              "Payment form is still loading. Wait until you see the card fields below, then try again.",
+              "Online payments are not set up for this business yet. Ask the owner to connect payments in the Styld app.",
             );
           }
 
-          const bookingId = pendingBookingId;
-          const { id, paths } = await submitBookingRequest(
-            sb,
-            apptIso,
-            durationMinutes,
-            bookingId,
-            pendingPaymentIntentId,
-          );
+          const online = needsOnlinePayment();
+          const bookingId = pendingBookingId || crypto.randomUUID();
+          pendingBookingId = bookingId;
+
+          if (online && !plaidBankLink) {
+            await ensurePlaidLinkReady();
+            await openBookingPlaidLink();
+          }
+
+          const { id, paths } = await submitBookingRequest(sb, apptIso, durationMinutes, bookingId, null);
           if (!id) throw new Error("Could not save booking id.");
-          // Await so POST finishes: fire-and-forget can abort the request after OPTIONS (no POST in Edge logs).
-          await invokeNotifySalon(sb, { booking_id: bookingId });
-          // Booking row is persisted in Supabase `bookings` — no localStorage duplicate.
-          if (submitBtn) submitBtn.textContent = "Confirming payment…";
+
+          if (!online) {
+            void invokeNotifySalon(sb, { booking_id: bookingId });
+            saveLocalBooking({
+              ...buildRowPayload(bookingId, paths, apptIso, durationMinutes, null),
+              created_at: new Date().toISOString(),
+              source: "website",
+            });
+            try {
+              sessionStorage.setItem(DETAILS_BOOKING_KEY, bookingId);
+              sessionStorage.removeItem(BOOKING_NOTICE_KEY);
+            } catch (_) {
+              /* ignore */
+            }
+            const detailsQ = new URLSearchParams();
+            detailsQ.set("booking_id", bookingId);
+            window.location.assign(buildBookingDetailsUrl(detailsQ));
+            return;
+          }
+
+          if (!plaidBankLink) {
+            throw new Error("Connect your bank account to pay before booking.");
+          }
+
+          if (submitBtn) submitBtn.textContent = "Processing payment…";
+
+          const { deposit } = computeTotals();
+          const amountCents = Math.round(Number(deposit || 0) * 100);
+          const subdomain = getBookingSubdomain();
+          const style = getSelectedStyle();
+          const payResult = await payBookingWithUnit(sb, {
+            subdomain,
+            bookingId,
+            amountCents,
+            publicToken: plaidBankLink.publicToken,
+            plaidAccountId: plaidBankLink.accountId,
+            description: `Booking ${style?.name || "appointment"}`.slice(0, 80),
+          });
+
+          if (!payResult.ok) throw new Error(payResult.error || "Payment failed.");
+
+          void invokeNotifySalon(sb, { booking_id: bookingId });
+          saveLocalBooking({
+            ...buildRowPayload(bookingId, paths, apptIso, durationMinutes, payResult.paymentId || null),
+            created_at: new Date().toISOString(),
+            source: "website",
+            payment_status: "deposit_paid",
+          });
 
           try {
             sessionStorage.setItem(DETAILS_BOOKING_KEY, bookingId);
-            sessionStorage.setItem(STRIPE_RETURN_BOOKING_KEY, bookingId);
             sessionStorage.removeItem(BOOKING_NOTICE_KEY);
           } catch (_) {
             /* ignore */
@@ -1354,27 +1643,7 @@
           const successQ = new URLSearchParams();
           successQ.set("booking_id", bookingId);
           successQ.set("paid", "1");
-          const returnUrl = buildBookingSuccessUrl(successQ);
-
-          const submitPayment = await stripeElements.submit();
-          if (submitPayment.error) {
-            throw new Error(submitPayment.error.message || "Please check your payment details and try again.");
-          }
-
-          const result = await stripeClient.confirmPayment({
-            elements: stripeElements,
-            confirmParams: { return_url: returnUrl },
-            redirect: "if_required",
-          });
-
-          if (result.error) {
-            throw new Error(result.error.message || "Payment confirmation failed.");
-          }
-          if (result.paymentIntent && result.paymentIntent.status === "succeeded") {
-            window.location.assign(returnUrl);
-            return;
-          }
-          window.location.assign(returnUrl);
+          window.location.assign(buildBookingDetailsUrl(successQ));
           return;
         } catch (err) {
           console.error(err);
@@ -1382,14 +1651,17 @@
             err && typeof err === "object" && "message" in err && err.message
               ? String(err.message)
               : String(err || "Unknown error");
-          setBookingFeedback(
-            `Could not save your booking. ${msg}. If this persists, confirm the \`bookings\` table and RLS in Supabase (see supabase/schema.sql).`,
-            "error",
-          );
+          const hint = msg.includes("Bank link") || msg.includes("Connect your bank")
+            ? " Tap Connect bank to pay above, then try again."
+            : msg.includes("UNIT_API_TOKEN") || msg.includes("not configured")
+              ? " The business owner must finish payment setup in the Styld app."
+              : "";
+          setBookingFeedback(`Could not complete your booking. ${msg}${hint}`, "error");
         } finally {
           if (submitBtn) {
             submitBtn.disabled = false;
-            submitBtn.textContent = submitBtn.dataset.originalText || "Submit booking request";
+            submitBtn.textContent =
+              submitBtn.dataset.originalText || (needsOnlinePayment() ? "Confirm payment" : "Book appointment");
           }
         }
       });
@@ -1424,12 +1696,18 @@
       () => {
         void refreshUnavailableForSelection();
       },
-      5 * 60 * 1000,
+      60 * 1000,
     );
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden && selectedIsoDate) {
+        void refreshUnavailableForSelection();
+      }
+    });
   }
 
-  readStripeReturnParams();
+  readPaidReturnParams();
   populateStyles();
+  maybeResumeOAuthFlow();
 
   const presetRaw = new URLSearchParams(window.location.search).get("style");
   const preset = presetRaw ? STYLE_ALIASES[presetRaw] || presetRaw : "";
@@ -1453,7 +1731,7 @@
 
   (function supabaseHint() {
     var hint = document.getElementById("booking-supabase-hint");
-    if (hint && !window.nadjaeSupabaseClient) hint.removeAttribute("hidden");
+    if (hint && !window.salonSupabaseClient) hint.removeAttribute("hidden");
   })();
 
   (function syncBannerPhones() {

@@ -185,7 +185,9 @@ function parseUnifiedBooking(record: UnifiedSiteRecord): SiteBookingRecord | nul
     location: asString(data.service_address, 'Studio'),
     price: asNumber(data.estimated_total),
     depositAmount: asNumber(data.deposit_amount),
-    depositPaid: asNumber(data.deposit_amount) > 0 && asString(data.payment_status) !== 'pending',
+    depositPaid:
+      asNumber(data.deposit_amount) > 0 &&
+      !['pending', 'in_person'].includes(asString(data.payment_status)),
     bookingStatus: asString(data.booking_status, 'pending_payment'),
     startsAt,
     durationMinutes: asNumber(data.duration_minutes, 120),
@@ -212,7 +214,9 @@ function parseFlatBooking(record: FlatBookingRecord): SiteBookingRecord | null {
     location: asString(record.service_address, 'Studio'),
     price: asNumber(record.estimated_total),
     depositAmount: asNumber(record.deposit_amount),
-    depositPaid: asNumber(record.deposit_amount) > 0 && asString(record.payment_status) !== 'pending',
+    depositPaid:
+      asNumber(record.deposit_amount) > 0 &&
+      !['pending', 'in_person'].includes(asString(record.payment_status)),
     bookingStatus: asString(record.booking_status, 'pending_payment'),
     startsAt,
     durationMinutes: asNumber(record.duration_minutes, 120),

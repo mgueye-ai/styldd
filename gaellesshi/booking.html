@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta
       name="description"
-      content="Book Hair by Nadjae — choose your style, pick a time, and pay a 10% deposit to secure your appointment."
+      content="Booking template | Your brand name — pick a menu item, choose a time, and pay a deposit if you enable it."
     />
-    <title>Book Your Appointment | Hair by Nadjae</title>
+    <title>Book Your Appointment | Your brand name</title>
     <link rel="icon" href="assets/favicon-32.png?v=4" type="image/png" sizes="32x32" />
     <link rel="apple-touch-icon" href="assets/apple-touch-icon.png?v=4" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -16,17 +16,18 @@
       href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/styles.css" />
+    <link rel="stylesheet" href="css/styles.css?v=35" />
     <!-- Vercel Web Analytics: enable in Vercel Project Settings > Analytics -->
     <script src="js/vercel-analytics-init.js"></script>
     <script defer src="/_vercel/insights/script.js"></script>
   </head>
   <body class="page-site">
+    <div id="tenant-status" hidden>Loading booking…</div>
     <header class="hero-nav hero-nav--site">
       <div class="container hero-nav__inner">
         <a class="hero-brand" href="index.html">
-          <img class="hero-brand__logo" src="logo.png" width="44" height="44" alt="" decoding="async" />
-          <span class="hero-brand__text">Hair by Nadjae</span>
+          <img class="hero-brand__logo" src="assets/placeholders/logo.svg" width="44" height="44" alt="" decoding="async" />
+          <span class="hero-brand__text">Your brand name</span>
         </a>
 
         <button
@@ -47,32 +48,9 @@
         <div id="hero-nav-panel" class="hero-nav__panel">
           <nav class="hero-nav__links" aria-label="Main">
             <a href="index.html">Home</a>
-            <a href="styles-catalog.html">Styles</a>
-            <a href="gallery.html">Gallery</a>
           </nav>
           <div class="hero-nav__actions">
-            <a class="hero-btn hero-btn--nav" href="booking.html">
-              <svg class="hero-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z"
-                  stroke="currentColor"
-                  stroke-width="1.75"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                />
-              </svg>
-              Book Now
-              <svg class="hero-icon hero-icon--chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path d="M9 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-              </svg>
-            </a>
-            <a class="hero-nav__lookup" href="booking-lookup.html">
-              <svg class="hero-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <circle cx="11" cy="11" r="7" stroke="currentColor" stroke-width="1.75" />
-                <path d="M20 20l-3-3" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" />
-              </svg>
-              Lookup Booking
-            </a>
+            <a class="hero-btn hero-btn--nav" href="booking.html" aria-current="page">Book Now</a>
           </div>
         </div>
       </div>
@@ -82,7 +60,7 @@
       <div class="container page-hero page-hero--booking">
         <h1>Book your appointment</h1>
         <ul class="booking-intro booking-intro--bullets">
-          <li>Pick your style, date, and time. Upload photos. Pay a <strong>10% deposit</strong> to book.</li>
+          <li>Pick a menu item, date, and time. Upload references if you use them. Pay a <strong>deposit</strong> if you turned that on.</li>
           <li>Online booking needs <strong>3 full days</strong>’ notice.</li>
           <li>Need sooner or no time open? <strong>Call</strong> — phone number is in the form below.</li>
           <li>Cancel anytime from <a href="booking-lookup.html">Lookup Booking</a>.</li>
@@ -92,8 +70,8 @@
 
       <div class="container booking-layout">
         <p id="booking-form-section-lead" class="booking-form-section-lead">
-          <strong>Book with style, photos &amp; deposit</strong> — choose a style and options first, then select your
-          date and time from our live availability grid.
+          <strong>Booking flow template</strong> — choose options first, then pick a slot from the availability grid
+          (wire this to Supabase when you deploy).
         </p>
         <p id="booking-supabase-hint" class="booking-supabase-hint" role="status" hidden>
           <strong>Cloud save off.</strong> Bookings stay in this browser only until you add your Supabase URL and
@@ -122,9 +100,9 @@
           <section class="form-section">
             <h2>Service details</h2>
             <div class="field">
-              <label for="style-select">Choose style *</label>
+              <label for="style-select">Choose menu item *</label>
               <select id="style-select" name="style" required>
-                <option value="">Choose a style</option>
+                <option value="">Choose an option</option>
               </select>
               <small
                 >Prices match our <a href="styles-catalog.html">styles &amp; pricing</a> menu — tap any service there
@@ -206,7 +184,7 @@
             </div>
 
             <div class="field" id="hair-length-field-wrap" hidden>
-              <label for="hair-length-select">Extra hair length (optional)</label>
+              <label for="hair-length-select">Extra length / add-on (optional)</label>
               <select id="hair-length-select" name="hair-length">
                 <option value="" selected>Standard — menu length (no extra charge)</option>
                 <option value="lower-back">Lower Back Length (+$15 · +30 min)</option>
@@ -214,15 +192,16 @@
                 <option value="knee">Knee Length (+$35 · +90 min)</option>
               </select>
               <small
-                >Available for knotless, boho, Fulani, and cornrow styles only. Add-on pricing matches our catalog; each
-                length tier adds 30 more minutes to the appointment.</small
+                >Shows only when the selected menu item ids match the logic in booking.js (<code
+                  >styleSupportsExtraHairLength</code
+                >). Edit labels, tiers, or minutes to suit your menu.</small
               >
             </div>
 
             <div class="field">
               <label for="photo-hair">Current hair photo *</label>
               <input id="photo-hair" name="photo-hair" type="file" accept="image/*" required />
-              <small>Clear, recent photo of your natural hair — helps us prepare for your service.</small>
+              <small>Template upload — rename this field or make it optional in your fork if you don’t need it.</small>
               <div id="photo-hair-preview" class="file-preview" aria-live="polite"></div>
             </div>
 
@@ -287,12 +266,12 @@
                 <span><span class="dot dot-full" aria-hidden="true"></span> Fully Booked</span>
               </div>
               <p class="booking-style-gate" id="style-gate-alert">
-                Please select a style above to see estimated duration and available time slots.
+                Pick a menu item above to preview duration (from booking logic) and open time slots.
               </p>
               <div id="time-slots-container" class="time-slots" aria-live="polite"></div>
               <p class="booking-slots-footnote">
                 If none of these times work for you, please call
-                <a class="booking-footer-phone" href="tel:+18608227448">(860) 822-7448</a>
+                <a class="booking-footer-phone" href="tel:+15550100199">(555) 010-0199</a>
                 — we may still be able to help.
               </p>
             </div>
@@ -311,37 +290,42 @@
               <strong>Estimated total:</strong> <span id="line-total">$0.00</span>
             </p>
             <p>
-              <strong>Required deposit:</strong> <span id="line-deposit">$0.00</span>
+              <strong id="line-online-label">Due when booking:</strong> <span id="line-deposit">$0.00</span>
             </p>
             <p class="deposit-note" id="line-deposit-detail"></p>
+            <p class="deposit-note" id="deposit-note-in-person" hidden>
+              No payment is required now. Pay your stylist in person when you arrive for your appointment.
+            </p>
             <p class="deposit-note" id="deposit-note-studio" hidden>
-              A deposit is required to secure your appointment. The remaining balance is due at the time of service.
+              A deposit is required to secure your appointment. The remaining balance is due in person at your appointment.
             </p>
             <p class="deposit-note" id="deposit-note-house-call" hidden>
               A deposit is required to secure your appointment. House-call bookings include a <strong>$15</strong> house
-              deposit <strong>in addition to</strong> the usual 10% style deposit. The remaining balance is due at the time of
-              service.
+              deposit <strong>in addition to</strong> the usual percentage booking hold. Balance due per your checkout rules.
             </p>
             <div class="alert" role="alert" id="deposit-policy-alert"></div>
           </section>
 
           <section class="form-section hidden" id="payment-section" aria-hidden="true">
             <h2>Payment</h2>
-            <p class="payment-stripe-trust" id="payment-stripe-trust" hidden>
-              Enter your card details below. When you tap the button at the bottom, your deposit is confirmed securely with Stripe.
+            <p class="payment-bank-trust" id="payment-bank-trust" hidden>
+              Pay securely from your bank account. Link your bank below, then confirm with the button at the bottom.
             </p>
-            <div id="stripe-payment-element" class="payment-element-host" aria-label="Secure card payment"></div>
             <div class="payment-placeholder">
               <p><strong>Name:</strong> <span id="pay-name-preview">—</span></p>
               <p><strong>Email:</strong> <span id="pay-email-preview">—</span></p>
-              <p><strong>Deposit:</strong> <span id="pay-deposit-preview">$0.00</span></p>
+              <p><strong>Due now:</strong> <span id="pay-deposit-preview">$0.00</span></p>
             </div>
-            <p id="stripe-payment-error" class="booking-feedback booking-feedback--error" hidden></p>
+            <button type="button" id="plaid-link-btn" class="btn btn-secondary hidden" style="width: 100%; margin-bottom: 0.75rem">
+              Connect bank to pay
+            </button>
+            <p id="plaid-link-status" class="deposit-note" hidden></p>
+            <p id="plaid-payment-error" class="booking-feedback booking-feedback--error" hidden></p>
           </section>
 
           <section class="form-section">
             <div id="booking-feedback" class="booking-feedback" role="status" aria-live="polite" hidden></div>
-            <button type="submit" class="btn btn-primary" style="width: 100%; padding: 1rem; font-size: 1.05rem">
+            <button type="submit" id="booking-submit-btn" class="btn btn-primary" style="width: 100%; padding: 1rem; font-size: 1.05rem">
               Confirm payment
             </button>
           </section>
@@ -362,7 +346,7 @@
             <span id="side-total">$0.00</span>
           </div>
           <div class="price-line deposit">
-            <span>Deposit due</span>
+            <span id="side-online-label">Due when booking</span>
             <span id="side-deposit">$0.00</span>
           </div>
           <p class="deposit-note" id="side-deposit-note">All deposits non-refundable.</p>
@@ -370,96 +354,65 @@
       </div>
     </main>
 
-    <footer class="site-footer">
-      <div class="container">
-        <div class="footer-main">
-          <div class="footer-brand">
-            <a class="footer-brand__link" href="index.html">
-              <img
-                class="footer-brand__logo"
-                src="assets/logo.png"
-                width="80"
-                height="80"
-                alt="Hair by Nadjae logo"
-                decoding="async"
-              />
-              <span class="footer-brand__text">
-                <span class="footer-brand__name">Hair by Nadjae</span>
-                <span class="footer-brand__tagline">Neat, fast &amp; affordable braids · Flawless styles</span>
-                <span class="footer-brand__meta">HairbyNadjae.com</span>
-              </span>
-            </a>
-            <p class="footer-brand__address">Norwich, CT · By appointment — studio details shared when you book</p>
-            <p class="footer-social">
-              <a href="https://www.instagram.com/hairbynadjae" target="_blank" rel="noopener noreferrer">Instagram</a>
-            </p>
-          </div>
-          <div class="footer-col">
-            <h3 class="footer-heading">Contact</h3>
-            <p><a href="tel:+18608227448">(860) 822-7448</a></p>
-            <p><a href="mailto:queengaelle492@gmail.com">queengaelle492@gmail.com</a></p>
-          </div>
-          <div class="footer-col">
-            <h3 class="footer-heading">Explore</h3>
-            <ul class="footer-links">
-              <li><a href="index.html">Home</a></li>
-              <li><a href="styles-catalog.html">Style catalog</a></li>
-              <li><a href="gallery.html">Gallery</a></li>
-              <li><a href="booking.html">Book appointment</a></li>
-            </ul>
-          </div>
-        </div>
-      </div>
+    <footer class="site-footer site-footer--home-promo">
       <div class="container footer-bottom">
-        <p>
-          &copy; 2026 Hair by Nadjae. All rights reserved.
-          <a
-            class="footer-admin-link"
-            href="#"
-            onclick="var c=window.prompt('Enter admin code'); if(c==='0000'){window.location.href='admin.html?code=0000';} else if(c){window.alert('Incorrect code');} return false;"
-            >Admin</a
-          >
-        </p>
+        <p id="preview-footer-brand">&copy; Your brand name</p>
         <p class="footer-built-by">
           <a
             class="footer-built-by__link"
-            href="https://hillwebworks.com/"
+            id="preview-footer-styld-link"
+            href="https://styldd.com"
             target="_blank"
             rel="noopener noreferrer"
           >
             <img
               class="footer-built-by__logo"
-              src="assets/hillwebworks-logo.png"
+              src="/assets/styld-icon.png"
+              alt=""
               width="22"
               height="22"
-              alt=""
               decoding="async"
             />
-            Built by HillWebWorks.com
+            <span>Built with Styld</span>
           </a>
         </p>
       </div>
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.5.0/build/global/luxon.min.js"></script>
-    <script src="https://js.stripe.com/v3"></script>
+    <script src="https://cdn.plaid.com/link/v2/stable/link-initialize.js"></script>
     <script src="js/booking-config.js"></script>
-    <script src="js/stripe-config.js"></script>
-    <script src="js/stripe-config.local.js"></script>
+    <script src="/js/styld-tenant-config.js?v=37"></script>
+    <script src="/js/styld-tenant-config.local.js?v=37"></script>
+    <script src="/js/styld-tenant-shared.js?v=39"></script>
+    <script src="/js/styld-tenant-booking.js?v=44"></script>
     <script src="js/supabase-config.js"></script>
     <script src="js/supabase-config.local.js"></script>
-    <script src="js/booking-config.js"></script>
-    <script src="js/site-data.js"></script>
-    <script src="js/booking-hours.js"></script>
-    <script src="js/style-pricing.js"></script>
-    <script type="module">
-      import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
-      const c = window.__NADJAE_SUPABASE;
-      if (c && c.url && c.anonKey) {
-        window.nadjaeSupabaseClient = createClient(c.url, c.anonKey);
-      }
+    <script id="booking-fallback-bootstrap">
+      (function () {
+        if (window.StyldTenant && window.StyldTenant.getSubdomain()) return;
+        window.__STYLD_UNIT_PAYMENTS_READY__ = false;
+        var tenantBooking = window.__STYLD_TENANT_BOOKING__ || {};
+        var module = document.createElement('script');
+        module.type = 'module';
+        module.textContent =
+          'import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";' +
+          'const c = window.__SALON_SITE_SUPABASE;' +
+          'if (!c || !c.url || !c.anonKey) return;' +
+          'const sb = createClient(c.url, c.anonKey);' +
+          'window.salonSupabaseClient = sb;' +
+          'const sub = ' + JSON.stringify(tenantBooking.subdomain || '') + ';' +
+          'if (sub) {' +
+          '  const { data } = await sb.functions.invoke("unit-merchant-status", { body: { subdomain: sub } });' +
+          '  window.__STYLD_UNIT_PAYMENTS_READY__ = !!(data && data.ready);' +
+          '}' +
+          'const booking = document.createElement("script");' +
+          'booking.src = "js/booking.js?v=44";' +
+          'booking.defer = true;' +
+          'document.body.appendChild(booking);';
+        document.body.appendChild(module);
+      })();
     </script>
-    <script defer src="js/booking.js"></script>
     <script>
       (function () {
         var form = document.getElementById("booking-form");

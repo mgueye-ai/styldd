@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -23,6 +23,7 @@ import {
   saveLinkedSite,
   unlinkSite,
 } from '../lib/linkedSites';
+import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import { SiteStackParamList } from '../navigation/SiteNavigator';
 import { colors } from '../theme';
 
@@ -36,28 +37,34 @@ export default function LinkSiteScreen({ navigation }: Props) {
   const [tableName, setTableName] = useState('');
   const [hasExistingLink, setHasExistingLink] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const savedTableNameRef = useRef('');
+
+  const normalizedTableName = tableName.trim().toLowerCase().replace(/\s+/g, '_');
+  const isDirty =
+    !loading && normalizedTableName !== savedTableNameRef.current.trim().toLowerCase().replace(/\s+/g, '_');
 
   useEffect(() => {
     if (!user?.id) return;
 
     fetchLinkedSite(user.id)
       .then((linked) => {
-        if (!linked?.table_name) return;
-        setTableName(linked.table_name);
-        setHasExistingLink(true);
+        const name = linked?.table_name ?? '';
+        setTableName(name);
+        savedTableNameRef.current = name;
+        setHasExistingLink(Boolean(name));
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
   }, [user?.id]);
 
-  const handleSave = async () => {
-    if (!user?.id) return;
+  const persistLink = async (): Promise<boolean> => {
+    if (!user?.id) return false;
 
     const input: LinkSiteInput = { tableName };
 
     if (!input.tableName.trim()) {
       setError('Enter the Supabase table name for your site.');
-      return;
+      return false;
     }
 
     setSaving(true);
@@ -66,13 +73,27 @@ export default function LinkSiteScreen({ navigation }: Props) {
     try {
       await saveLinkedSite(user.id, input);
       await refresh();
-      navigation.goBack();
+      savedTableNameRef.current = tableName;
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save linked site.');
+      return false;
     } finally {
       setSaving(false);
     }
   };
+
+  const handleSave = async () => {
+    if (await persistLink()) {
+      navigation.goBack();
+    }
+  };
+
+  const { guardedGoBack, unsavedChangesDialog } = useUnsavedChangesGuard({
+    hasUnsavedChanges: isDirty && !saving,
+    onSave: persistLink,
+    message: 'Save your table connection before leaving?',
+  });
 
   const handleUnlink = () => {
     if (!user?.id) return;
@@ -105,6 +126,7 @@ export default function LinkSiteScreen({ navigation }: Props) {
   };
 
   return (
+    <>
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
       <ScreenGradient />
 
@@ -113,7 +135,7 @@ export default function LinkSiteScreen({ navigation }: Props) {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
         <View style={styles.header}>
-          <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Pressable style={styles.backButton} onPress={guardedGoBack}>
             <Ionicons name="chevron-back" size={22} color={colors.text} />
           </Pressable>
           <Text style={styles.headerTitle}>Link site</Text>
@@ -181,6 +203,8 @@ export default function LinkSiteScreen({ navigation }: Props) {
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>
+    {unsavedChangesDialog}
+    </>
   );
 }
 

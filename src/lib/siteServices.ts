@@ -1,6 +1,11 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { STYLE_COVER_BUCKET } from '../data/serviceCatalog';
 import { BookingHours, DEFAULT_BOOKING_HOURS } from '../data/bookingHours';
+import {
+  BookingPaymentSettings,
+  DEFAULT_BOOKING_PAYMENT,
+  normalizeBookingPayment,
+} from '../data/bookingPayment';
 import { normalizeStyleMeta, StyleCatalogMeta } from '../data/siteStyles';
 import {
   createLinkedSiteClient,
@@ -12,6 +17,8 @@ import {
 
 export type { BookingHours } from '../data/bookingHours';
 export { DEFAULT_BOOKING_HOURS } from '../data/bookingHours';
+export type { BookingPaymentSettings } from '../data/bookingPayment';
+export { DEFAULT_BOOKING_PAYMENT } from '../data/bookingPayment';
 
 type UnifiedSettingRow = {
   id: string;
@@ -382,6 +389,85 @@ export async function saveBookingHours(
     user_id: userId,
     record_type: 'site_setting',
     record_key: 'booking_hours',
+    ...payload,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function loadBookingPayment(linkedSite: LinkedSite | null): Promise<BookingPaymentSettings> {
+  if (!linkedSite) return DEFAULT_BOOKING_PAYMENT;
+
+  const client = createLinkedSiteClient(linkedSite);
+  const tableName = getLinkedTableName(linkedSite);
+
+  if (!client || !tableName) {
+    return DEFAULT_BOOKING_PAYMENT;
+  }
+
+  const { data, error } = await client
+    .from(tableName)
+    .select('data')
+    .eq('user_id', linkedSite.user_id)
+    .eq('record_type', 'site_setting')
+    .eq('record_key', 'booking_payment')
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  const value =
+    data?.data && typeof data.data === 'object' && 'value' in data.data
+      ? (data.data as { value?: unknown }).value
+      : null;
+
+  return normalizeBookingPayment(value);
+}
+
+export async function saveBookingPayment(
+  linkedSite: LinkedSite,
+  payment: BookingPaymentSettings,
+): Promise<void> {
+  const client = createLinkedSiteClient(linkedSite);
+  const tableName = getLinkedTableName(linkedSite);
+
+  if (!client || !tableName) {
+    throw new Error('Missing site data configuration.');
+  }
+
+  const userId = linkedSite.user_id;
+  const normalized = normalizeBookingPayment(payment);
+
+  const { data: existing, error: readError } = await client
+    .from(tableName)
+    .select('id')
+    .eq('user_id', userId)
+    .eq('record_type', 'site_setting')
+    .eq('record_key', 'booking_payment')
+    .maybeSingle();
+
+  if (readError) {
+    throw new Error(readError.message);
+  }
+
+  const payload = {
+    data: { value: normalized },
+    updated_at: new Date().toISOString(),
+  };
+
+  if (existing?.id) {
+    const { error } = await client.from(tableName).update(payload).eq('id', existing.id);
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  const { error } = await client.from(tableName).insert({
+    user_id: userId,
+    record_type: 'site_setting',
+    record_key: 'booking_payment',
     ...payload,
   });
 

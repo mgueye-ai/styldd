@@ -81,6 +81,9 @@
     if (s === "deposit_paid") {
       return "Deposit recorded as paid. We will confirm your appointment shortly.";
     }
+    if (s === "in_person") {
+      return "No online payment — pay in person when you arrive for your appointment.";
+    }
     return "Deposit pending — we will follow up if payment is still needed.";
   }
 
@@ -143,6 +146,7 @@
   function humanPaymentStatus(v) {
     var s = String(v || "pending").toLowerCase();
     if (s === "deposit_paid") return "Deposit paid";
+    if (s === "in_person") return "Pay in person at appointment";
     if (s === "pending") return "Awaiting deposit / confirmation";
     return v || "—";
   }

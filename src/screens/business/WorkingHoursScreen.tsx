@@ -20,6 +20,7 @@ import {
   loadBookingHours,
   saveBookingHours,
 } from '../../lib/siteServices';
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
 import { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { colors } from '../../theme';
 
@@ -114,6 +115,7 @@ export default function WorkingHoursScreen({ navigation }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [isDirty, setIsDirty] = useState(false);
   const [picker, setPicker] = useState<TimeField | null>(null);
 
   const refresh = useCallback(async () => {
@@ -122,6 +124,7 @@ export default function WorkingHoursScreen({ navigation }: Props) {
     setError(null);
     try {
       setHours(await loadBookingHours(linkedSite));
+      setIsDirty(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load working hours.');
     } finally {
@@ -134,6 +137,7 @@ export default function WorkingHoursScreen({ navigation }: Props) {
   const updateHours = (next: BookingHours) => {
     setHours(next);
     setSaved(false);
+    setIsDirty(true);
   };
 
   const toggleWeekday = (weekday: number, open: boolean) => {
@@ -149,34 +153,43 @@ export default function WorkingHoursScreen({ navigation }: Props) {
     });
   };
 
-  const save = async () => {
-    if (!linkedSite) return;
+  const save = async (): Promise<boolean> => {
+    if (!linkedSite) return false;
 
     const startMinutes = hours.slotDayStartHour * 60 + hours.slotDayStartMinute;
     const endMinutes = hours.slotDayEndHour * 60 + hours.slotDayEndMinute;
     if (endMinutes <= startMinutes) {
       Alert.alert('Invalid hours', 'End time must be after start time.');
-      return;
+      return false;
     }
 
     setSaving(true);
     try {
       await saveBookingHours(linkedSite, hours);
       setSaved(true);
+      setIsDirty(false);
       setTimeout(() => setSaved(false), 2000);
+      return true;
     } catch (err) {
       Alert.alert('Save failed', err instanceof Error ? err.message : 'Try again.');
+      return false;
     } finally {
       setSaving(false);
     }
   };
 
+  const { guardedGoBack, unsavedChangesDialog } = useUnsavedChangesGuard({
+    hasUnsavedChanges: isDirty && !saving,
+    onSave: save,
+  });
+
   const pickerTime = picker ? getTimeFromHours(hours, picker) : null;
 
   return (
+    <>
     <BusinessScreenLayout
       title="Working hours"
-      onBack={() => navigation.goBack()}
+      onBack={guardedGoBack}
       hasLinkedSite={hasLinkedSite}
       linkMessage="Link your site to edit booking hours on the public calendar."
       isLoading={hasLinkedSite && isLoading}
@@ -287,6 +300,8 @@ export default function WorkingHoursScreen({ navigation }: Props) {
         />
       ) : null}
     </BusinessScreenLayout>
+    {unsavedChangesDialog}
+    </>
   );
 }
 

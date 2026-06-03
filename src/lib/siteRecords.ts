@@ -1,5 +1,6 @@
 import { DEFAULT_ONBOARDING_STATE } from '../data/onboarding';
 import { DEFAULT_BOOKING_HOURS } from '../data/bookingHours';
+import { DEFAULT_BOOKING_PAYMENT } from '../data/bookingPayment';
 import { DEFAULT_SITE_PUBLISH } from '../data/sitePublish';
 import { DEFAULT_SITE_CONTENT } from '../data/siteContent';
 import { DEFAULT_SITE_THEME } from '../data/siteTheme';
@@ -42,6 +43,12 @@ export async function ensureUserSiteSeeded(userId: string, businessName?: string
       record_type: 'site_setting',
       record_key: 'booking_hours',
       data: { value: DEFAULT_BOOKING_HOURS },
+    },
+    {
+      user_id: userId,
+      record_type: 'site_setting',
+      record_key: 'booking_payment',
+      data: { value: DEFAULT_BOOKING_PAYMENT },
     },
     {
       user_id: userId,
