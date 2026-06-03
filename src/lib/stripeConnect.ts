@@ -7,6 +7,24 @@ export type StripeConnectStatus =
   | 'pending_review'
   | 'ready';
 
+export type StripeBankAccount = {
+  id: string;
+  bankName: string;
+  last4: string;
+  routingNumber: string;
+  accountHolderName: string;
+  currency: string;
+};
+
+export type StripePayout = {
+  id: string;
+  amountCents: number;
+  status: string;
+  arrivalDate: number;
+  createdAt: number;
+  description: string;
+};
+
 export type StripeConnectSummary = {
   hasAccount: boolean;
   accountId?: string | null;
@@ -16,6 +34,8 @@ export type StripeConnectSummary = {
   detailsSubmitted?: boolean;
   balanceAvailableCents: number;
   balancePendingCents: number;
+  bankAccount?: StripeBankAccount | null;
+  recentPayouts?: StripePayout[];
   error?: string;
 };
 

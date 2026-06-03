@@ -12,6 +12,14 @@ function json(body: unknown, status = 200) {
   });
 }
 
+async function stripeGet(path: string, stripeKey: string, accountId?: string) {
+  const headers: Record<string, string> = { Authorization: `Bearer ${stripeKey}` };
+  if (accountId) headers['Stripe-Account'] = accountId;
+  const res = await fetch(`https://api.stripe.com/v1${path}`, { headers });
+  if (!res.ok) return null;
+  return res.json();
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
 
@@ -44,37 +52,67 @@ Deno.serve(async (req) => {
       chargesEnabled: false,
       balanceAvailableCents: 0,
       balancePendingCents: 0,
+      bankAccount: null,
+      recentPayouts: [],
     });
   }
 
-  // Refresh live balance from Stripe
+  const acctId = row.stripe_account_id;
+
+  // Fetch balance, bank accounts, and recent payouts in parallel
+  const [balData, bankData, payoutData] = await Promise.all([
+    row.charges_enabled ? stripeGet('/balance', stripeKey, acctId) : null,
+    stripeGet('/accounts/' + acctId + '/external_accounts?object=bank_account&limit=1', stripeKey) ,
+    row.payouts_enabled ? stripeGet('/payouts?limit=10', stripeKey, acctId) : null,
+  ]);
+
   let availableCents = row.balance_available_cents ?? 0;
   let pendingCents = row.balance_pending_cents ?? 0;
 
-  if (row.charges_enabled) {
-    const balRes = await fetch('https://api.stripe.com/v1/balance', {
-      headers: {
-        Authorization: `Bearer ${stripeKey}`,
-        'Stripe-Account': row.stripe_account_id,
-      },
-    });
-    if (balRes.ok) {
-      const bal = await balRes.json();
-      availableCents = (bal.available || [])
-        .filter((b: { currency: string }) => b.currency === 'usd')
-        .reduce((sum: number, b: { amount: number }) => sum + b.amount, 0);
-      pendingCents = (bal.pending || [])
-        .filter((b: { currency: string }) => b.currency === 'usd')
-        .reduce((sum: number, b: { amount: number }) => sum + b.amount, 0);
+  if (balData) {
+    availableCents = (balData.available || [])
+      .filter((b: { currency: string }) => b.currency === 'usd')
+      .reduce((sum: number, b: { amount: number }) => sum + b.amount, 0);
+    pendingCents = (balData.pending || [])
+      .filter((b: { currency: string }) => b.currency === 'usd')
+      .reduce((sum: number, b: { amount: number }) => sum + b.amount, 0);
 
-      // Update cached balance
-      await supabase.from('styld_stripe_accounts').update({
-        balance_available_cents: availableCents,
-        balance_pending_cents: pendingCents,
-        updated_at: new Date().toISOString(),
-      }).eq('user_id', user.id);
-    }
+    await supabase.from('styld_stripe_accounts').update({
+      balance_available_cents: availableCents,
+      balance_pending_cents: pendingCents,
+      updated_at: new Date().toISOString(),
+    }).eq('user_id', user.id);
   }
+
+  // Extract the first linked bank account
+  const bankAccount = bankData?.data?.[0]
+    ? {
+        id: bankData.data[0].id as string,
+        bankName: (bankData.data[0].bank_name ?? 'Bank') as string,
+        last4: bankData.data[0].last4 as string,
+        routingNumber: bankData.data[0].routing_number as string,
+        accountHolderName: (bankData.data[0].account_holder_name ?? '') as string,
+        currency: (bankData.data[0].currency ?? 'usd') as string,
+      }
+    : null;
+
+  // Format recent payouts
+  type StripePayout = {
+    id: string;
+    amount: number;
+    status: string;
+    arrival_date: number;
+    created: number;
+    description: string | null;
+  };
+  const recentPayouts = (payoutData?.data ?? []).map((p: StripePayout) => ({
+    id: p.id,
+    amountCents: p.amount,
+    status: p.status,
+    arrivalDate: p.arrival_date,
+    createdAt: p.created,
+    description: p.description ?? 'Payout',
+  }));
 
   const status = row.payouts_enabled
     ? 'ready'
@@ -86,12 +124,14 @@ Deno.serve(async (req) => {
 
   return json({
     hasAccount: true,
-    accountId: row.stripe_account_id,
+    accountId: acctId,
     status,
     payoutsEnabled: row.payouts_enabled,
     chargesEnabled: row.charges_enabled,
     detailsSubmitted: row.details_submitted,
     balanceAvailableCents: availableCents,
     balancePendingCents: pendingCents,
+    bankAccount,
+    recentPayouts,
   });
 });
