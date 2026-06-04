@@ -108,10 +108,10 @@ function AppointmentRow({
     >
       {/* Time column */}
       <View style={styles.apptTimeCol}>
-        <Text style={styles.apptTimeText}>
+        <Text style={styles.apptTimeText} numberOfLines={1}>
           {appointment.time.split(' – ')[0]}
         </Text>
-        <Text style={styles.apptDuration}>{appointment.duration}</Text>
+        <Text style={styles.apptDuration} numberOfLines={1}>{appointment.duration}</Text>
       </View>
 
       {/* Service image */}
@@ -621,7 +621,7 @@ const styles = StyleSheet.create({
     borderColor: colors.cardBorder,
     marginBottom: 8,
   },
-  apptTimeCol: { width: 52, alignItems: 'flex-start' },
+  apptTimeCol: { width: 68, alignItems: 'flex-start', flexShrink: 0 },
   apptTimeText: { color: colors.text, fontSize: 13, fontWeight: '700', letterSpacing: -0.2 },
   apptDuration: { color: colors.textMuted, fontSize: 11, fontWeight: '500', marginTop: 2 },
   apptImage: { flexShrink: 0 },
