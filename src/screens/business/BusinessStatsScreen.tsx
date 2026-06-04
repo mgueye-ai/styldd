@@ -156,34 +156,26 @@ export default function BusinessStatsScreen({ navigation }: Props) {
     >
 
       {/* ── Website analytics ── */}
-      <BusinessSection title="Website — last 30 days">
+      <BusinessSection title="Website traffic">
         {analyticsLoading ? (
           <ActivityIndicator color={colors.accentPink} style={{ marginVertical: 16 }} />
         ) : !analytics?.subdomain ? (
-          <Text style={styles.emptyNote}>
-            No data yet. Visitors to your site will appear here automatically.
-          </Text>
+          <View style={styles.zeroState}>
+            <Ionicons name="globe-outline" size={28} color={colors.textMuted} />
+            <Text style={styles.zeroStateTitle}>Publish your site to start tracking</Text>
+            <Text style={styles.zeroStateBody}>
+              Page views and visitor data appear here once your site is live.
+            </Text>
+          </View>
         ) : (
           <>
             <BigStatPair
-              left={{
-                label: 'Page views\n7 days',
-                value: String(analytics.views7d),
-              }}
-              right={{
-                label: 'Page views\n30 days',
-                value: String(analytics.views30d),
-              }}
+              left={{ label: 'Page views\n7 days',       value: String(analytics.views7d) }}
+              right={{ label: 'Page views\n30 days',      value: String(analytics.views30d) }}
             />
             <BigStatPair
-              left={{
-                label: 'Unique visitors\n7 days',
-                value: String(analytics.sessions7d),
-              }}
-              right={{
-                label: 'Unique visitors\n30 days',
-                value: String(analytics.sessions30d),
-              }}
+              left={{ label: 'Unique visitors\n7 days',  value: String(analytics.sessions7d) }}
+              right={{ label: 'Unique visitors\n30 days', value: String(analytics.sessions30d) }}
             />
           </>
         )}
@@ -191,40 +183,50 @@ export default function BusinessStatsScreen({ navigation }: Props) {
 
       {/* ── Device breakdown ── */}
       {analytics?.subdomain && !analyticsLoading && (
-        <BusinessSection title="Visitor devices">
-          <DeviceBar
-            mobile={analytics.devices.mobile}
-            tablet={analytics.devices.tablet}
-            desktop={analytics.devices.desktop}
-          />
+        <BusinessSection title="Visitor devices — 30 days">
+          {analytics.views30d === 0 ? (
+            <Text style={styles.emptyNote}>No visitors yet — check back after your site gets traffic.</Text>
+          ) : (
+            <DeviceBar
+              mobile={analytics.devices.mobile}
+              tablet={analytics.devices.tablet}
+              desktop={analytics.devices.desktop}
+            />
+          )}
         </BusinessSection>
       )}
 
       {/* ── Top pages ── */}
-      {analytics?.subdomain && !analyticsLoading && analytics.topPages.length > 0 && (
+      {analytics?.subdomain && !analyticsLoading && (
         <BusinessSection title="Top pages — 30 days">
-          {analytics.topPages.map((page, i) => (
-            <View key={page.path} style={[styles.barRow, i < analytics.topPages.length - 1 && styles.rowBorder]}>
-              <Text style={styles.barLabel} numberOfLines={1}>
-                {friendlyPath(page.path)}
-              </Text>
-              <SparkBar value={page.views} max={maxPageViews} />
-              <Text style={styles.barCount}>{page.views}</Text>
-            </View>
-          ))}
+          {analytics.topPages.length === 0 ? (
+            <Text style={styles.emptyNote}>0 page views recorded yet.</Text>
+          ) : (
+            analytics.topPages.map((page, i) => (
+              <View key={page.path} style={[styles.barRow, i < analytics.topPages.length - 1 && styles.rowBorder]}>
+                <Text style={styles.barLabel} numberOfLines={1}>{friendlyPath(page.path)}</Text>
+                <SparkBar value={page.views} max={maxPageViews} />
+                <Text style={styles.barCount}>{page.views}</Text>
+              </View>
+            ))
+          )}
         </BusinessSection>
       )}
 
       {/* ── Referrers ── */}
-      {analytics?.subdomain && !analyticsLoading && analytics.referrers.length > 0 && (
+      {analytics?.subdomain && !analyticsLoading && (
         <BusinessSection title="Traffic sources — 30 days">
-          {analytics.referrers.map((ref, i) => (
-            <View key={ref.source} style={[styles.barRow, i < analytics.referrers.length - 1 && styles.rowBorder]}>
-              <Text style={styles.barLabel} numberOfLines={1}>{ref.source}</Text>
-              <SparkBar value={ref.count} max={maxReferrers} />
-              <Text style={styles.barCount}>{ref.count}</Text>
-            </View>
-          ))}
+          {analytics.referrers.length === 0 ? (
+            <Text style={styles.emptyNote}>No external traffic sources tracked yet.</Text>
+          ) : (
+            analytics.referrers.map((ref, i) => (
+              <View key={ref.source} style={[styles.barRow, i < analytics.referrers.length - 1 && styles.rowBorder]}>
+                <Text style={styles.barLabel} numberOfLines={1}>{ref.source}</Text>
+                <SparkBar value={ref.count} max={maxReferrers} />
+                <Text style={styles.barCount}>{ref.count}</Text>
+              </View>
+            ))
+          )}
         </BusinessSection>
       )}
 
@@ -288,7 +290,25 @@ const styles = StyleSheet.create({
   rowLabel: { flex: 1, color: colors.textMuted, fontSize: 15 },
   rowValue: { color: colors.text, fontSize: 15, fontWeight: '600' },
 
-  emptyNote: { color: colors.textMuted, fontSize: 14 },
+  emptyNote: { color: colors.textMuted, fontSize: 14, paddingVertical: 4 },
+
+  zeroState: {
+    alignItems: 'center',
+    paddingVertical: 24,
+    gap: 8,
+  },
+  zeroStateTitle: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  zeroStateBody: {
+    color: colors.textMuted,
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 18,
+  },
 
   /* Big stat pair */
   bigStatRow: {
