@@ -108,9 +108,25 @@ export async function publishSiteSubdomain(
   subdomain: string,
 ): Promise<PublishSiteResult> {
   const slug = normalizeSubdomain(subdomain);
-  const availability = await checkSubdomainAvailability(slug, userId);
-  if (!availability.available) {
-    throw new Error(availability.reason ?? 'Subdomain unavailable.');
+
+  // Check what subdomain this user currently owns (if any) FIRST,
+  // so we never block re-publishing to your own existing subdomain.
+  const { data: existing } = await supabase
+    .from('styld_site_subdomains')
+    .select('subdomain')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  const isRepublishingSameSubdomain = existing?.subdomain === slug;
+  const isChangingSubdomain = existing?.subdomain && existing.subdomain !== slug;
+  const isNewSubdomain = !existing?.subdomain;
+
+  // Only run the availability check when the slug is truly new or being changed.
+  if (isNewSubdomain || isChangingSubdomain) {
+    const availability = await checkSubdomainAvailability(slug, userId);
+    if (!availability.available) {
+      throw new Error(availability.reason ?? 'Subdomain unavailable.');
+    }
   }
 
   const publishedAt = new Date().toISOString();
@@ -122,18 +138,7 @@ export async function publishSiteSubdomain(
     publicUrl,
   };
 
-  const { data: existing } = await supabase
-    .from('styld_site_subdomains')
-    .select('subdomain')
-    .eq('user_id', userId)
-    .maybeSingle();
-
   if (existing?.subdomain) {
-    if (existing.subdomain !== slug) {
-      const taken = await checkSubdomainAvailability(slug, userId);
-      if (!taken.available) throw new Error(taken.reason ?? 'Subdomain unavailable.');
-    }
-
     const { error } = await supabase
       .from('styld_site_subdomains')
       .update({ subdomain: slug, published_at: publishedAt, updated_at: publishedAt })

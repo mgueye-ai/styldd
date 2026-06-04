@@ -35,7 +35,7 @@ export default function SiteDeployScreen({ navigation }: Props) {
   const { content, saveContentNow } = useSiteContent();
   const { saveThemeNow } = useSiteTheme();
   const { user } = useAuth();
-  const { sitePublish, publishSite } = useOnboarding();
+  const { sitePublish, publishSite, isLoading: onboardingLoading } = useOnboarding();
   const [subdomain, setSubdomain] = useState(sitePublish.subdomain || '');
   const [status, setStatus] = useState<string | null>(null);
   const [available, setAvailable] = useState<boolean | null>(null);
@@ -48,17 +48,34 @@ export default function SiteDeployScreen({ navigation }: Props) {
   const previewUrl = useMemo(() => buildPublicSiteUrl(subdomain), [subdomain]);
   const isAlreadyLive = sitePublish.published && sitePublish.publicUrl;
 
+  // Keep subdomain input in sync when context finishes loading
+  useEffect(() => {
+    if (sitePublish.subdomain && !subdomain) {
+      setSubdomain(sitePublish.subdomain);
+    }
+  }, [sitePublish.subdomain]);
+
   useEffect(() => {
     const slug = normalizeSubdomain(subdomain);
-    if (slug.length < 2) {
+
+    // Don't run availability check if user isn't authenticated yet —
+    // it would incorrectly report our own subdomain as "already taken"
+    if (!user?.id || slug.length < 2) {
       setAvailable(null);
       setStatus(null);
       return;
     }
 
+    // If this matches the user's own live subdomain, skip network check
+    if (slug === normalizeSubdomain(sitePublish.subdomain ?? '')) {
+      setAvailable(true);
+      setStatus(sitePublish.published ? '✓ Your domain' : 'Available');
+      return;
+    }
+
     const timer = setTimeout(async () => {
       try {
-        const result = await checkSubdomainAvailability(slug, user?.id ?? '');
+        const result = await checkSubdomainAvailability(slug, user.id);
         setAvailable(result.available);
         setStatus(result.reason ?? (result.available ? 'Available' : 'Unavailable'));
       } catch (err) {
@@ -68,7 +85,7 @@ export default function SiteDeployScreen({ navigation }: Props) {
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [subdomain, sitePublish.subdomain]);
+  }, [subdomain, sitePublish.subdomain, user?.id]);
 
   const handlePublish = async () => {
     setStep('publishing');
@@ -91,6 +108,26 @@ export default function SiteDeployScreen({ navigation }: Props) {
     step !== 'publishing' &&
     available !== false &&
     normalizeSubdomain(subdomain).length >= 2;
+
+  // Show a brief loading state while onboarding context fetches from Supabase.
+  // Without this, users briefly see the "first publish" form even if already live,
+  // and the availability check incorrectly flags their own subdomain as "taken".
+  if (onboardingLoading && !isAlreadyLive) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <View style={styles.header}>
+          <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="chevron-back" size={22} color={colors.text} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Publish site</Text>
+          <View style={{ width: 36 }} />
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <ActivityIndicator color={colors.accentPink} />
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   if (step === 'success' && publishedUrl) {
     return (
