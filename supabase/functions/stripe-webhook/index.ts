@@ -44,7 +44,7 @@ Deno.serve(async (req) => {
     }).eq('stripe_account_id', accountId);
   }
 
-  // Handle successful payments → mark booking paid
+  // Handle successful payments → mark booking paid + sync connected account balance
   if (type === 'payment_intent.succeeded') {
     const metadata = (data?.metadata as Record<string, string>) || {};
     const subdomain = metadata.subdomain;
@@ -57,6 +57,37 @@ Deno.serve(async (req) => {
         p_payment_status: 'deposit_paid',
         p_unit_payment_id: data?.id as string,
       }).catch((err: unknown) => console.warn('mark_booking_paid:', err));
+    }
+
+    // Sync the connected account's balance into styld_stripe_accounts
+    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
+    const transferAccountId = (data?.transfer_data as Record<string, string>)?.destination;
+    if (stripeKey && transferAccountId) {
+      try {
+        const balRes = await fetch(`https://api.stripe.com/v1/balance`, {
+          headers: {
+            Authorization: `Bearer ${stripeKey}`,
+            'Stripe-Account': transferAccountId,
+          },
+        });
+        if (balRes.ok) {
+          const balData = await balRes.json();
+          const available = (balData.available || [])
+            .filter((b: { currency: string }) => b.currency === 'usd')
+            .reduce((sum: number, b: { amount: number }) => sum + b.amount, 0);
+          const pending = (balData.pending || [])
+            .filter((b: { currency: string }) => b.currency === 'usd')
+            .reduce((sum: number, b: { amount: number }) => sum + b.amount, 0);
+          await supabase.from('styld_stripe_accounts').update({
+            balance_available_cents: available,
+            balance_pending_cents: pending,
+            charges_enabled: true,
+            updated_at: new Date().toISOString(),
+          }).eq('stripe_account_id', transferAccountId);
+        }
+      } catch (e) {
+        console.warn('balance sync after payment:', e);
+      }
     }
   }
 

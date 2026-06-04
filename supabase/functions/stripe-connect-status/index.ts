@@ -59,11 +59,13 @@ Deno.serve(async (req) => {
 
   const acctId = row.stripe_account_id;
 
-  // Fetch balance, bank accounts, and recent payouts in parallel
+  // Fetch balance, bank accounts, and recent payouts in parallel.
+  // Always fetch balance if we have an account — don't gate on charges_enabled flag
+  // since the DB may be stale before the webhook fires.
   const [balData, bankData, payoutData] = await Promise.all([
-    row.charges_enabled ? stripeGet('/balance', stripeKey, acctId) : null,
-    stripeGet('/accounts/' + acctId + '/external_accounts?object=bank_account&limit=1', stripeKey) ,
-    row.payouts_enabled ? stripeGet('/payouts?limit=10', stripeKey, acctId) : null,
+    stripeGet('/balance', stripeKey, acctId),
+    stripeGet('/accounts/' + acctId + '/external_accounts?object=bank_account&limit=1', stripeKey),
+    stripeGet('/payouts?limit=10', stripeKey, acctId),
   ]);
 
   let availableCents = row.balance_available_cents ?? 0;
