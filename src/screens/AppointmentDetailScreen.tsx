@@ -24,6 +24,28 @@ import { DashboardStackParamList } from '../navigation/DashboardNavigator';
 import { colors } from '../theme';
 import { maskMoney } from '../utils/money';
 
+async function cancelBookingInDb(bookingId: string): Promise<void> {
+  // Fetch current data so we can merge the status in JS (JSONB merge)
+  const { data: row, error: fetchErr } = await supabase
+    .from('styld_site_records')
+    .select('data')
+    .eq('id', bookingId)
+    .eq('record_type', 'booking')
+    .single();
+
+  if (fetchErr || !row) throw new Error(fetchErr?.message ?? 'Booking not found');
+
+  const merged = { ...(row.data as Record<string, unknown>), booking_status: 'cancelled' };
+
+  const { error: updateErr } = await supabase
+    .from('styld_site_records')
+    .update({ data: merged, updated_at: new Date().toISOString() })
+    .eq('id', bookingId)
+    .eq('record_type', 'booking');
+
+  if (updateErr) throw new Error(updateErr.message);
+}
+
 type Props = NativeStackScreenProps<
   DashboardStackParamList | CalendarStackParamList,
   'AppointmentDetail'
@@ -243,8 +265,9 @@ function PhotoGallery({ bookingId }: { bookingId: string }) {
 export default function AppointmentDetailScreen({ navigation, route }: Props) {
   const { appointmentId } = route.params;
   const { privacyMode } = usePrivacyMode();
-  const { getAppointmentById, bookings } = useSiteData();
+  const { getAppointmentById, bookings, refresh } = useSiteData();
   const appointment = getAppointmentById(appointmentId);
+  const [cancelling, setCancelling] = useState(false);
 
   // Raw booking record gives us email + bookingStatus
   const rawBooking = bookings.find((b) => b.id === appointmentId);
@@ -281,10 +304,30 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
     ]);
   };
   const handleCancel = () => {
-    Alert.alert('Cancel Appointment', 'Are you sure you want to cancel?', [
-      { text: 'Keep It', style: 'cancel' },
-      { text: 'Cancel Appointment', style: 'destructive' },
-    ]);
+    Alert.alert(
+      'Cancel Appointment',
+      `Cancel "${appointment?.service}" for ${appointment?.clientName}? This cannot be undone.`,
+      [
+        { text: 'Keep It', style: 'cancel' },
+        {
+          text: 'Cancel Appointment',
+          style: 'destructive',
+          onPress: async () => {
+            setCancelling(true);
+            try {
+              await cancelBookingInDb(appointmentId);
+              await refresh();
+              navigation.goBack();
+            } catch (err) {
+              const msg = err instanceof Error ? err.message : 'Could not cancel booking';
+              Alert.alert('Error', msg);
+            } finally {
+              setCancelling(false);
+            }
+          },
+        },
+      ],
+    );
   };
 
   const isCompleted = bookingStatus === 'completed';
@@ -439,9 +482,11 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
                 <Ionicons name="checkmark-circle-outline" size={18} color={colors.background} />
                 <Text style={styles.completeBtnText}>Mark as complete</Text>
               </Pressable>
-              <Pressable style={styles.cancelBtn} onPress={handleCancel}>
-                <Ionicons name="close-circle-outline" size={18} color="#f87171" />
-                <Text style={styles.cancelBtnText}>Cancel</Text>
+              <Pressable style={[styles.cancelBtn, cancelling && styles.cancelBtnDisabled]} onPress={handleCancel} disabled={cancelling}>
+                {cancelling
+                  ? <ActivityIndicator size="small" color="#f87171" />
+                  : <Ionicons name="close-circle-outline" size={18} color="#f87171" />}
+                <Text style={styles.cancelBtnText}>{cancelling ? 'Cancelling…' : 'Cancel'}</Text>
               </Pressable>
             </View>
           )}
@@ -588,4 +633,5 @@ const styles = StyleSheet.create({
     borderRadius: 16, borderWidth: 1, borderColor: 'rgba(239,68,68,0.2)', paddingVertical: 14,
   },
   cancelBtnText: { color: '#f87171', fontSize: 13, fontWeight: '600' },
+  cancelBtnDisabled: { opacity: 0.5 },
 });
