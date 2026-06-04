@@ -1518,7 +1518,7 @@
             }
             const detailsQ = new URLSearchParams();
             detailsQ.set("booking_id", bookingId);
-            window.location.assign(buildBookingDetailsUrl(detailsQ));
+            window.location.assign(buildBookingSuccessUrl(detailsQ));
             return;
           }
 
@@ -1560,7 +1560,7 @@
           const successQ = new URLSearchParams();
           successQ.set("booking_id", bookingId);
           successQ.set("paid", "1");
-          window.location.assign(buildBookingDetailsUrl(successQ));
+          window.location.assign(buildBookingSuccessUrl(successQ));
           return;
         } catch (err) {
           console.error(err);
