@@ -283,15 +283,13 @@ function ScheduleTab() {
               style={[styles.choiceBtn, styles.choiceBtnBook]}
               onPress={() => setActionChoice('book')}
             >
-              <Ionicons name="add-circle-outline" size={22} color="#fff" />
-              <Text style={styles.choiceBtnText}>Add appointment</Text>
+              <Text style={styles.choiceBtnText}>New Appointment</Text>
             </Pressable>
             <Pressable
               style={[styles.choiceBtn, styles.choiceBtnBlock]}
               onPress={() => setActionChoice('block')}
             >
-              <Ionicons name="ban-outline" size={22} color={colors.text} />
-              <Text style={[styles.choiceBtnText, { color: colors.text }]}>Block time</Text>
+              <Text style={[styles.choiceBtnText, styles.choiceBtnBlockText]}>Block Time</Text>
             </Pressable>
           </View>
           <Pressable style={styles.choiceCancel} onPress={dismiss}>
@@ -719,76 +717,78 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     backgroundColor: colors.card,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: colors.cardBorder,
-    paddingBottom: 32,
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    borderTopColor: colors.accentPinkBorder,
+    paddingBottom: 36,
+    paddingHorizontal: 24,
+    paddingTop: 14,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
+    shadowOffset: { width: 0, height: -6 },
+    shadowOpacity: 0.2,
+    shadowRadius: 20,
     elevation: 20,
   },
   choiceHandle: {
-    width: 36,
-    height: 4,
+    width: 32,
+    height: 3,
     borderRadius: 2,
-    backgroundColor: colors.cardBorder,
+    backgroundColor: colors.accentPinkBorder,
     alignSelf: 'center',
-    marginBottom: 18,
+    marginBottom: 20,
   },
   choiceTitle: {
     color: colors.text,
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '700',
     textAlign: 'center',
+    letterSpacing: -0.3,
     marginBottom: 4,
   },
   choiceSubtitle: {
     color: colors.textMuted,
-    fontSize: 14,
+    fontSize: 13,
     textAlign: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   choiceBtns: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: 10,
-    marginBottom: 12,
+    marginBottom: 14,
   },
   choiceBtn: {
-    flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    paddingVertical: 15,
+    paddingVertical: 16,
     borderRadius: 14,
-    borderWidth: 1,
+    borderWidth: 1.5,
   },
   choiceBtnBook: {
-    backgroundColor: colors.accentPink,
+    backgroundColor: 'transparent',
     borderColor: colors.accentPink,
   },
   choiceBtnBlock: {
-    backgroundColor: colors.card,
+    backgroundColor: 'transparent',
     borderColor: colors.cardBorder,
   },
   choiceBtnText: {
-    color: '#fff',
+    color: colors.accentPink,
     fontSize: 15,
     fontWeight: '700',
+    letterSpacing: 0.1,
+  },
+  choiceBtnBlockText: {
+    color: colors.textMuted,
   },
   choiceCancel: {
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 8,
   },
   choiceCancelText: {
     color: colors.textMuted,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '500',
   },
 
 });

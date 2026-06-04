@@ -37,7 +37,7 @@ export default function ProfileNavigator() {
       <Stack.Screen name="ProfileHome" component={ProfileScreen} />
       <Stack.Screen name="Styles" component={StylesScreen} />
       <Stack.Screen name="Schedule" component={ScheduleScreen} />
-      <Stack.Screen name="ScheduleManage" component={ScheduleManageScreen} />
+      <Stack.Screen name="ScheduleManage" component={ScheduleManageScreen} options={{ fullScreenGestureEnabled: false }} />
       <Stack.Screen name="Payments" component={PaymentsScreen} />
       <Stack.Screen name="WorkingHours" component={WorkingHoursScreen} />
       <Stack.Screen name="BookingPayment" component={BookingPaymentScreen} />

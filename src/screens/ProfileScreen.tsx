@@ -136,7 +136,6 @@ export default function ProfileScreen({ navigation }: Props) {
           </View>
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>{displayName}</Text>
-            <Text style={styles.profileEmail}>{user?.email}</Text>
           </View>
         </View>
 

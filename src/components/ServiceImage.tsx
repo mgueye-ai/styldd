@@ -1,7 +1,8 @@
-import { Ionicons } from '@expo/vector-icons';
 import { Image, ImageStyle, StyleSheet, View, ViewStyle } from 'react-native';
 import { useServiceCatalog } from '../context/ServiceCatalogContext';
 import { colors } from '../theme';
+
+const APP_ICON = require('../../assets/icon.png');
 
 type ServiceImageProps = {
   styleId?: string | null;
@@ -47,7 +48,11 @@ export default function ServiceImage({
 
   return (
     <View style={[styles.placeholder, frameStyle, style]}>
-      <Ionicons name="cut-outline" size={size * 0.38} color={colors.textMuted} />
+      <Image
+        source={APP_ICON}
+        style={[{ width: size * 0.72, height: size * 0.72 }, imageStyle]}
+        resizeMode="contain"
+      />
     </View>
   );
 }
