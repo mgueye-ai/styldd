@@ -672,7 +672,7 @@ const styles = StyleSheet.create({
   recentName: { flex: 1, color: colors.text, fontSize: 14, fontWeight: '700', letterSpacing: -0.1 },
   recentAmount: { color: colors.chartBlue, fontSize: 15, fontWeight: '800', letterSpacing: -0.3, flexShrink: 0 },
   recentService: { color: colors.textMuted, fontSize: 12, fontWeight: '500' },
-  recentBottomRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  recentBottomRow: { flexDirection: 'row', alignItems: 'center', gap: 6, overflow: 'hidden' },
   recentStatusBadge: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     borderRadius: 999, borderWidth: 1, paddingHorizontal: 7, paddingVertical: 2,
@@ -685,7 +685,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6, paddingVertical: 2,
   },
   recentDepositText: { color: colors.accentPink, fontSize: 10, fontWeight: '700' },
-  recentMeta: { color: colors.textMuted, fontSize: 10, fontWeight: '500', flex: 1 },
+  recentMeta: { color: colors.textMuted, fontSize: 10, fontWeight: '500', flexShrink: 1 },
   recentChevron: { flexShrink: 0 },
 
   /* Empty states */
