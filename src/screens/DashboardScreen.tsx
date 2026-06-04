@@ -156,17 +156,19 @@ function RecentBookingRow({
   booking,
   isLast,
   privacyMode,
+  onPress,
 }: {
   booking: SiteBookingRecord;
   isLast: boolean;
   privacyMode: boolean;
+  onPress: () => void;
 }) {
   const initials = getInitials(booking.fullName);
   const statusLabel = bookingStatusLabel(booking.bookingStatus, booking.depositPaid);
   const statusColor = bookingStatusColor(booking.bookingStatus, booking.depositPaid);
 
   return (
-    <View style={[styles.recentRow, !isLast && styles.recentRowBorder]}>
+    <Pressable style={[styles.recentRow, !isLast && styles.recentRowBorder]} onPress={onPress}>
       {/* Avatar */}
       <View style={styles.recentAvatar}>
         <Text style={styles.recentAvatarText}>{initials}</Text>
@@ -179,12 +181,13 @@ function RecentBookingRow({
         <Text style={styles.recentTime}>{timeAgo(booking.createdAt)}</Text>
       </View>
 
-      {/* Amount + status */}
+      {/* Amount + status + chevron */}
       <View style={styles.recentRight}>
         <Text style={styles.recentAmount}>{maskMoney(`$${booking.price}`, privacyMode)}</Text>
         <Text style={[styles.recentStatus, { color: statusColor }]}>{statusLabel}</Text>
       </View>
-    </View>
+      <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+    </Pressable>
   );
 }
 
@@ -217,29 +220,35 @@ export default function DashboardScreen({ navigation }: Props) {
 
   const revenueValue = getRevenueForPeriod(selectedPeriod);
   const jobStats = getTodayJobStats();
-  const upcomingAppointments = getUpcomingAppointments(20);
+  const upcomingAppointments = getUpcomingAppointments(100);
   const businessInitials = getInitials(businessLabel || 'Styld');
 
-  // Group upcoming appointments by their date label
-  const groupedUpcoming = useMemo(() => {
+  // Group upcoming appointments by date — show only first 3, across day groups
+  const { groupedUpcoming, totalUpcoming } = useMemo(() => {
     const map = new Map<string, AppointmentDetail[]>();
     for (const appt of upcomingAppointments) {
-      const key = appt.date;
-      const group = map.get(key) ?? [];
-      group.push(appt);
-      map.set(key, group);
+      const list = map.get(appt.date) ?? [];
+      list.push(appt);
+      map.set(appt.date, list);
     }
-    return Array.from(map.entries()).map(([date, appointments]) => ({ date, appointments }));
+    const total = upcomingAppointments.length;
+    // Take the first 3 appointments (across groups)
+    let remaining = 3;
+    const trimmed: { date: string; appointments: AppointmentDetail[] }[] = [];
+    for (const [date, appointments] of map.entries()) {
+      if (remaining <= 0) break;
+      const slice = appointments.slice(0, remaining);
+      trimmed.push({ date, appointments: slice });
+      remaining -= slice.length;
+    }
+    return { groupedUpcoming: trimmed, totalUpcoming: total };
   }, [upcomingAppointments]);
 
-  // Recent bookings: sorted by when they were PLACED, newest first
-  const recentBookings = useMemo(
-    () =>
-      [...bookings]
-        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-        .slice(0, 8),
-    [bookings],
-  );
+  // Recent bookings: sorted by when they were PLACED, newest first — show 4 on dashboard
+  const { recentBookings, totalBookings } = useMemo(() => {
+    const sorted = [...bookings].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+    return { recentBookings: sorted.slice(0, 4), totalBookings: sorted.length };
+  }, [bookings]);
 
   const rafRef = useRef<ReturnType<typeof requestAnimationFrame> | null>(null);
 
@@ -365,8 +374,11 @@ export default function DashboardScreen({ navigation }: Props) {
           {/* ── Upcoming section ── */}
           <View style={styles.sectionRow}>
             <Text style={styles.sectionTitle}>Upcoming</Text>
-            {upcomingAppointments.length > 0 && (
-              <Text style={styles.sectionCount}>{upcomingAppointments.length} total</Text>
+            {hasLinkedSite && !isLoading && totalUpcoming > 3 && (
+              <Pressable onPress={() => navigation.navigate('AllUpcoming')} style={styles.seeAllBtn}>
+                <Text style={styles.seeAllText}>See all {totalUpcoming}</Text>
+                <Ionicons name="chevron-forward" size={13} color={colors.accentPink} />
+              </Pressable>
             )}
           </View>
 
@@ -409,8 +421,11 @@ export default function DashboardScreen({ navigation }: Props) {
             <>
               <View style={styles.sectionRow}>
                 <Text style={styles.sectionTitle}>Recent bookings</Text>
-                {recentBookings.length > 0 && (
-                  <Text style={styles.sectionCount}>last placed</Text>
+                {totalBookings > 4 && (
+                  <Pressable onPress={() => navigation.navigate('AllBookings')} style={styles.seeAllBtn}>
+                    <Text style={styles.seeAllText}>See all {totalBookings}</Text>
+                    <Ionicons name="chevron-forward" size={13} color={colors.accentPink} />
+                  </Pressable>
                 )}
               </View>
 
@@ -426,6 +441,7 @@ export default function DashboardScreen({ navigation }: Props) {
                       booking={booking}
                       isLast={idx === recentBookings.length - 1}
                       privacyMode={privacyMode}
+                      onPress={() => navigation.navigate('BookingDetail', { bookingId: booking.id })}
                     />
                   ))}
                 </View>
@@ -540,6 +556,8 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
   },
   sectionCount: { color: colors.textMuted, fontSize: 12, fontWeight: '500' },
+  seeAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  seeAllText: { color: colors.accentPink, fontSize: 13, fontWeight: '600' },
 
   /* Day group */
   dayGroup: { marginBottom: 16 },
