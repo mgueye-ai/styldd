@@ -830,7 +830,7 @@
 
   // Styld service fee grossup: customer pays this on top so the stylist gets their full amount.
   // Matches the backend formula in stripe-booking-pay.
-  const STYLD_PLATFORM_RATE = 0.05; // 5%
+  const STYLD_PLATFORM_RATE = 0.03; // 3%
   function computeServiceFee(depositDollars) {
     if (!depositDollars || depositDollars <= 0) return 0;
     const amountCents = Math.round(depositDollars * 100);
@@ -1630,3 +1630,4 @@
     });
   })();
 })();
+
