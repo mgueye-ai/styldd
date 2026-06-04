@@ -375,13 +375,6 @@ export default function SiteEditorScreen({ navigation }: Props) {
               value={content.brandName}
               onChangeText={(brandName) => updateContent({ brandName })}
             />
-            <Field
-              label="Site description"
-              value={content.metaDescription}
-              onChangeText={(metaDescription) => updateContent({ metaDescription })}
-              multiline
-            />
-
             <Text style={styles.groupTitle}>Page sections</Text>
             <Text style={styles.helper}>
               Toggle sections on or off, and tap to edit their content.
