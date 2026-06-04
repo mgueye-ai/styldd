@@ -1501,6 +1501,10 @@
 
           if (!online) {
             void invokeNotifySalon(sb, { booking_id: bookingId });
+            // Send confirmation email for in-person bookings
+            void sb.functions.invoke("booking-client-email", {
+              body: { bookingId, subdomain: getBookingSubdomain() },
+            }).catch(function(e) { console.warn("booking-client-email:", e); });
             saveLocalBooking({
               ...buildRowPayload(bookingId, paths, apptIso, durationMinutes, null),
               created_at: new Date().toISOString(),

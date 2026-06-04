@@ -71,6 +71,17 @@ Deno.serve(async (req) => {
       return json({ error: 'Could not update booking status' }, 500);
     }
 
+    // Fire confirmation email (non-blocking — failure doesn't fail the confirm)
+    const emailFnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/booking-client-email`;
+    fetch(emailFnUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ bookingId, subdomain }),
+    }).catch((e: unknown) => console.warn('booking-client-email fire:', e));
+
     return json({ ok: true, paymentStatus });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Internal error';
