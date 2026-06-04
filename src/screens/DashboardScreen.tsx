@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,6 +14,7 @@ import { Period } from '../data/periods';
 import { usePrivacyMode } from '../context/PrivacyContext';
 import { useSiteData } from '../context/SiteDataContext';
 import { buildNotificationsFromBookings } from '../lib/notifications';
+import { fetchStripeConnectStatus, formatUsdFromCents, type StripeConnectSummary } from '../lib/stripeConnect';
 import { DashboardStackParamList } from '../navigation/DashboardNavigator';
 import { colors } from '../theme';
 import { maskMoney } from '../utils/money';
@@ -193,6 +195,7 @@ export default function DashboardScreen({ navigation }: Props) {
   const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set());
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('month');
   const [displayValue, setDisplayValue] = useState(MONTH_VALUE);
+  const [stripeSummary, setStripeSummary] = useState<StripeConnectSummary | null>(null);
   const { privacyMode } = usePrivacyMode();
   const {
     businessLabel,
@@ -242,8 +245,10 @@ export default function DashboardScreen({ navigation }: Props) {
 
   const switchPeriod = (key: Period) => {
     if (key === selectedPeriod) return;
-    const oldValue = getRevenueForPeriod(selectedPeriod);
-    const newValue = getRevenueForPeriod(key);
+    // When Stripe is active, period changes only affect the booking list below —
+    // the balance stays fixed. Only animate when falling back to booking revenue.
+    const oldValue = stripeTotal ?? getRevenueForPeriod(selectedPeriod);
+    const newValue = stripeTotal ?? getRevenueForPeriod(key);
     setSelectedPeriod(key);
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
     const DURATION = 480;
@@ -258,7 +263,26 @@ export default function DashboardScreen({ navigation }: Props) {
     rafRef.current = requestAnimationFrame(tick);
   };
 
-  useEffect(() => { setDisplayValue(revenueValue); }, [revenueValue]);
+  // Fetch Stripe balance so the dashboard reflects real money (available + processing)
+  useFocusEffect(
+    useCallback(() => {
+      if (!hasLinkedSite) return;
+      fetchStripeConnectStatus()
+        .then((data) => setStripeSummary(data))
+        .catch(() => {});
+    }, [hasLinkedSite]),
+  );
+
+  // Dashboard main number = Stripe total (available + processing) when account is active,
+  // otherwise fall back to booking-based revenue for the selected period
+  const stripeTotal =
+    stripeSummary?.status === 'ready'
+      ? (stripeSummary.balanceAvailableCents + stripeSummary.balancePendingCents) / 100
+      : null;
+
+  const primaryValue = stripeTotal ?? revenueValue;
+
+  useEffect(() => { setDisplayValue(primaryValue); }, [primaryValue]);
   useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); }, []);
 
   const unreadCount = useMemo(
@@ -311,6 +335,13 @@ export default function DashboardScreen({ navigation }: Props) {
                 {maskMoney(displayValue, privacyMode)}
               </Text>
             </Pressable>
+            {stripeSummary?.status === 'ready' && (
+              <Text style={styles.stripeBalanceLine}>
+                {privacyMode
+                  ? '•••• available · •••• processing'
+                  : `${formatUsdFromCents(stripeSummary.balanceAvailableCents)} available · ${formatUsdFromCents(stripeSummary.balancePendingCents)} processing`}
+              </Text>
+            )}
           </View>
 
           {/* Today's jobs card */}
@@ -460,6 +491,9 @@ const styles = StyleSheet.create({
   revenueAmount: {
     color: colors.text, fontSize: 64, fontWeight: '700',
     letterSpacing: -2, textAlign: 'center', lineHeight: 68,
+  },
+  stripeBalanceLine: {
+    fontSize: 13, color: colors.textMuted, textAlign: 'center', marginTop: 6,
   },
 
   /* Card base */
