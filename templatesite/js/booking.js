@@ -1364,7 +1364,14 @@
         p_subdomain: TENANT_BOOKING.subdomain,
         p_booking: row,
       });
-      if (tenantErr) throw tenantErr;
+      if (tenantErr) {
+        // Surface conflict errors clearly — the server detected a double-booking
+        const msg = tenantErr.message || "";
+        if (msg.includes("no longer available") || msg.includes("blocked")) {
+          throw new Error(msg);
+        }
+        throw tenantErr;
+      }
       const id = tenantId || row.id;
       if (!id) throw new Error("No booking id returned");
       return { id, paths };
@@ -1557,10 +1564,19 @@
             err && typeof err === "object" && "message" in err && err.message
               ? String(err.message)
               : String(err || "Unknown error");
-          const hint = msg.includes("not configured")
-            ? " The business owner must finish payment setup."
-            : "";
-          setBookingFeedback(`Could not complete your booking. ${msg}${hint}`, "error");
+
+          // If the slot was just taken by someone else, refresh the slot picker
+          // so it disappears and the customer can pick another time.
+          if (msg.includes("no longer available") || msg.includes("blocked")) {
+            pendingBookingId = null;
+            void refreshUnavailableForSelection().then(() => renderSlots());
+            setBookingFeedback(msg, "error");
+          } else {
+            const hint = msg.includes("not configured")
+              ? " The business owner must finish payment setup."
+              : "";
+            setBookingFeedback(`Could not complete your booking. ${msg}${hint}`, "error");
+          }
         } finally {
           if (submitBtn) {
             submitBtn.disabled = false;
@@ -1647,6 +1663,7 @@
     });
   })();
 })();
+
 
 
 
