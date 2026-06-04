@@ -463,8 +463,16 @@ export function getRevenueForPeriodFromBookings(
       break;
   }
 
+  // Count any booking where money was collected: deposit paid, confirmed, or completed.
+  // Excludes cancelled bookings and pure in-person (no upfront payment) that are still pending.
   return snapshot.bookings
-    .filter((booking) => mapBookingStatus(booking.bookingStatus, booking.startsAt) === 'completed')
+    .filter((booking) => {
+      const status = booking.bookingStatus;
+      if (status === 'cancelled' || status === 'canceled') return false;
+      if (booking.depositPaid) return true;
+      if (status === 'confirmed' || status === 'completed') return true;
+      return false;
+    })
     .filter((booking) => {
       const date = startOfDay(getBookingStartDate(booking));
       return date >= start && date <= endOfDay(now);

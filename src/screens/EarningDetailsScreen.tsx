@@ -14,6 +14,7 @@ import Svg, { Rect, Text as SvgText } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import { usePrivacyMode } from '../context/PrivacyContext';
+import { useSiteData } from '../context/SiteDataContext';
 import {
   fetchStripeConnectStatus,
   formatUsdFromCents,
@@ -103,6 +104,7 @@ function statusLabel(status: string) {
 
 export default function EarningDetailsScreen({ navigation }: Props) {
   const { privacyMode } = usePrivacyMode();
+  const { getRevenueForPeriod } = useSiteData();
   const [summary, setSummary] = useState<StripeConnectSummary | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -129,6 +131,11 @@ export default function EarningDetailsScreen({ navigation }: Props) {
   const totalPayoutsAmount = payouts
     .filter((p) => p.status === 'paid')
     .reduce((sum, p) => sum + p.amountCents, 0);
+
+  // Booking-based revenue (from DB records, independent of Stripe settlement)
+  const todayRevenue = getRevenueForPeriod('day');
+  const weekRevenue = getRevenueForPeriod('week');
+  const monthRevenue = getRevenueForPeriod('month');
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -189,6 +196,34 @@ export default function EarningDetailsScreen({ navigation }: Props) {
                 </Text>
               </View>
             )}
+          </View>
+
+          {/* Booked revenue — from booking records, always up to date */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>Booked revenue</Text>
+            <Text style={styles.dateRange}>From confirmed & paid bookings</Text>
+            <View style={styles.revenueGrid}>
+              <View style={styles.revenueGridItem}>
+                <Text style={styles.revenueGridValue}>
+                  {maskMoney(todayRevenue, privacyMode)}
+                </Text>
+                <Text style={styles.revenueGridLabel}>Today</Text>
+              </View>
+              <View style={styles.revenueGridDivider} />
+              <View style={styles.revenueGridItem}>
+                <Text style={styles.revenueGridValue}>
+                  {maskMoney(weekRevenue, privacyMode)}
+                </Text>
+                <Text style={styles.revenueGridLabel}>This week</Text>
+              </View>
+              <View style={styles.revenueGridDivider} />
+              <View style={styles.revenueGridItem}>
+                <Text style={styles.revenueGridValue}>
+                  {maskMoney(monthRevenue, privacyMode)}
+                </Text>
+                <Text style={styles.revenueGridLabel}>This month</Text>
+              </View>
+            </View>
           </View>
 
           {/* Payout history */}
@@ -349,6 +384,35 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.textMuted,
     lineHeight: 17,
+  },
+
+  /* Booked revenue grid */
+  revenueGrid: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  revenueGridItem: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  revenueGridDivider: {
+    width: 1,
+    height: 40,
+    backgroundColor: colors.cardBorder,
+  },
+  revenueGridValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text,
+    letterSpacing: -0.4,
+    marginBottom: 4,
+  },
+  revenueGridLabel: {
+    fontSize: 11,
+    fontWeight: '500',
+    color: colors.textMuted,
   },
 
   /* Payout chart section */
