@@ -1,12 +1,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import BrandLogo from '../components/BrandLogo';
 import WalletBalanceSection from '../components/WalletBalanceSection';
 import { useAuth } from '../context/AuthContext';
 import { usePrivacyMode } from '../context/PrivacyContext';
+import { useSiteContent } from '../context/SiteContentContext';
 import { useSiteData } from '../context/SiteDataContext';
+import { useSiteTheme } from '../context/SiteThemeContext';
 import { ProfileStackParamList } from '../navigation/ProfileNavigator';
 import { colors } from '../theme';
 
@@ -76,11 +77,14 @@ export default function ProfileScreen({ navigation }: Props) {
   const { privacyMode, setPrivacyMode } = usePrivacyMode();
   const { profile, user, signOut } = useAuth();
   const { clients, appointments, hasLinkedSite, isLoading } = useSiteData();
+  const { content } = useSiteContent();
+  const { logoImageUrl } = useSiteTheme();
 
   const completedJobs = appointments.filter((a) => a.status === 'completed').length;
   const memberSince = timeSince(profile?.created_at ?? user?.created_at);
 
   const displayName =
+    (content.brandName && content.brandName !== 'Your brand name' ? content.brandName : null) ||
     profile?.full_name?.trim() ||
     profile?.business_name?.trim() ||
     user?.email?.split('@')[0] ||
@@ -101,14 +105,14 @@ export default function ProfileScreen({ navigation }: Props) {
         {/* ── Profile header ── */}
         <View style={styles.profileHeader}>
           <View style={styles.avatarWrap}>
-            {hasLinkedSite ? (
-              <BrandLogo
-                circular
-                size={72}
-                style={{ borderWidth: 1, borderColor: colors.cardBorder }}
+            {logoImageUrl ? (
+              <Image
+                source={{ uri: logoImageUrl }}
+                style={styles.avatar}
+                resizeMode="cover"
               />
             ) : (
-              <View style={styles.avatar}>
+              <View style={[styles.avatar, styles.avatarFallback]}>
                 <Text style={styles.avatarText}>{initials}</Text>
               </View>
             )}
@@ -238,16 +242,19 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderWidth: 2,
+    borderColor: colors.accentPinkBorder,
+    overflow: 'hidden',
+  },
+  avatarFallback: {
+    backgroundColor: colors.accentPinkMuted,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    color: colors.text,
+    color: colors.accentPink,
     fontSize: 26,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   profileInfo: { flex: 1 },
   profileName: {
