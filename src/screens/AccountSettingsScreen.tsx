@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -10,6 +10,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -17,6 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ScreenGradient from '../components/ScreenGradient';
 import { useAuth } from '../context/AuthContext';
+import { usePrivacyMode } from '../context/PrivacyContext';
 import { useSiteContent } from '../context/SiteContentContext';
 import { useSiteTheme } from '../context/SiteThemeContext';
 import { pickSiteImageFromLibrary } from '../lib/pickSiteImage';
@@ -26,59 +28,9 @@ import { colors } from '../theme';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'AccountSettings'>;
 
-// ─── Avatar / logo picker ────────────────────────────────────────────────────
+// ─── Inline field: label + underline input ────────────────────────────────────
 
-function LogoPicker({
-  url,
-  busy,
-  onPick,
-}: {
-  url: string | null;
-  busy: boolean;
-  onPick: (uri: string) => Promise<void>;
-}) {
-  const [picking, setPicking] = useState(false);
-  const loading = busy || picking;
-
-  const handlePick = async () => {
-    const picked = await pickSiteImageFromLibrary(
-      'Allow photo library access to set your business photo.',
-    );
-    if (!picked) return;
-    setPicking(true);
-    try {
-      await onPick(picked.uri);
-    } catch (err) {
-      Alert.alert('Upload failed', err instanceof Error ? err.message : 'Could not upload photo.');
-    } finally {
-      setPicking(false);
-    }
-  };
-
-  return (
-    <Pressable style={styles.avatarWrap} onPress={handlePick} disabled={loading}>
-      {url ? (
-        <Image source={{ uri: url }} style={styles.avatarImg} />
-      ) : (
-        <View style={styles.avatarPlaceholder}>
-          <Ionicons name="storefront-outline" size={34} color={colors.accentPink} />
-        </View>
-      )}
-      <View style={styles.avatarBadge}>
-        {loading ? (
-          <ActivityIndicator size={12} color="#fff" />
-        ) : (
-          <Ionicons name="camera" size={14} color="#fff" />
-        )}
-      </View>
-    </Pressable>
-  );
-}
-
-// ─── Reusable field ──────────────────────────────────────────────────────────
-
-function Field({
-  icon,
+function LineField({
   label,
   value,
   onChangeText,
@@ -87,9 +39,7 @@ function Field({
   secureTextEntry,
   keyboardType,
   editable = true,
-  hint,
 }: {
-  icon: string;
   label: string;
   value: string;
   onChangeText?: (v: string) => void;
@@ -98,168 +48,121 @@ function Field({
   secureTextEntry?: boolean;
   keyboardType?: 'default' | 'email-address';
   editable?: boolean;
-  hint?: string;
 }) {
   return (
-    <View style={styles.fieldWrap}>
-      <View style={styles.fieldIcon}>
-        <Ionicons name={icon as any} size={17} color={colors.accentPink} />
-      </View>
-      <View style={styles.fieldBody}>
-        <Text style={styles.fieldLabel}>{label}</Text>
-        <TextInput
-          style={[styles.fieldInput, !editable && styles.fieldInputDisabled]}
-          value={value}
-          onChangeText={onChangeText}
-          placeholder={placeholder}
-          placeholderTextColor={colors.textMuted}
-          autoCapitalize={autoCapitalize ?? 'sentences'}
-          secureTextEntry={secureTextEntry}
-          keyboardType={keyboardType ?? 'default'}
-          editable={editable}
-          autoCorrect={false}
-        />
-        {hint ? <Text style={styles.fieldHint}>{hint}</Text> : null}
-      </View>
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput
+        style={[styles.fieldInput, !editable && styles.fieldInputDisabled]}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder ?? ''}
+        placeholderTextColor={colors.textMuted}
+        autoCapitalize={autoCapitalize ?? 'sentences'}
+        secureTextEntry={secureTextEntry}
+        keyboardType={keyboardType ?? 'default'}
+        editable={editable}
+        autoCorrect={false}
+      />
+      <View style={styles.fieldLine} />
     </View>
   );
 }
 
-// ─── Card section ────────────────────────────────────────────────────────────
+// ─── Avatar picker ────────────────────────────────────────────────────────────
 
-function CardSection({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-}) {
+function LogoPicker({ url, busy, onPick }: { url: string | null; busy: boolean; onPick: (uri: string) => Promise<void> }) {
+  const [picking, setPicking] = useState(false);
+  const loading = busy || picking;
+  const handle = async () => {
+    const picked = await pickSiteImageFromLibrary('Allow photo library access to set your business photo.');
+    if (!picked) return;
+    setPicking(true);
+    try { await onPick(picked.uri); }
+    catch (err) { Alert.alert('Upload failed', err instanceof Error ? err.message : 'Link your site first to upload a logo.'); }
+    finally { setPicking(false); }
+  };
   return (
-    <View style={styles.cardSection}>
-      <View style={styles.cardSectionHeader}>
-        <Text style={styles.cardTitle}>{title}</Text>
-        {subtitle ? <Text style={styles.cardSubtitle}>{subtitle}</Text> : null}
-      </View>
-      <View style={styles.cardBody}>{children}</View>
+    <View style={styles.avatarSection}>
+      <Pressable style={styles.avatarWrap} onPress={handle} disabled={loading}>
+        {url
+          ? <Image source={{ uri: url }} style={styles.avatarImg} />
+          : <View style={styles.avatarPlaceholder}><Ionicons name="storefront-outline" size={34} color={colors.accentPink} /></View>
+        }
+        <View style={styles.avatarBadge}>
+          {loading ? <ActivityIndicator size={12} color="#fff" /> : <Ionicons name="camera" size={14} color="#fff" />}
+        </View>
+      </Pressable>
+      <Text style={styles.avatarHint}>Tap to set your business photo</Text>
     </View>
   );
 }
 
-// ─── Save button ─────────────────────────────────────────────────────────────
-
-function SaveBtn({
-  label,
-  onPress,
-  loading,
-  disabled,
-}: {
-  label: string;
-  onPress: () => void;
-  loading?: boolean;
-  disabled?: boolean;
-}) {
-  return (
-    <Pressable
-      style={[styles.saveBtn, (disabled || loading) && styles.saveBtnDisabled]}
-      onPress={onPress}
-      disabled={disabled || loading}
-    >
-      {loading ? (
-        <ActivityIndicator size="small" color={colors.background} />
-      ) : (
-        <Text style={styles.saveBtnText}>{label}</Text>
-      )}
-    </Pressable>
-  );
-}
-
-// ─── Screen ──────────────────────────────────────────────────────────────────
+// ─── Screen ───────────────────────────────────────────────────────────────────
 
 export default function AccountSettingsScreen({ navigation }: Props) {
   const { profile, user, updateProfile } = useAuth();
   const { logoImageUrl, uploadLogoImage, isSaving: logoUploading } = useSiteTheme();
   const { content, updateContent } = useSiteContent();
+  const { privacyMode, setPrivacyMode } = usePrivacyMode();
 
-  // Business / personal info
-  const [fullName, setFullName] = useState(profile?.full_name ?? '');
   const [businessName, setBusinessName] = useState(
     content.brandName && content.brandName !== 'Your brand name'
       ? content.brandName
       : (profile?.business_name ?? ''),
   );
-  const [savingProfile, setSavingProfile] = useState(false);
-
-  // Email
+  const [fullName, setFullName] = useState(profile?.full_name ?? '');
   const [newEmail, setNewEmail] = useState('');
-  const [savingEmail, setSavingEmail] = useState(false);
-
-  // Password
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [savedProfile, setSavedProfile] = useState(false);
+  const [savingEmail, setSavingEmail] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
 
-  const profileDirty =
-    (fullName.trim() || null) !== profile?.full_name ||
-    businessName.trim() !== (content.brandName ?? profile?.business_name ?? '');
+  const autoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  async function handleSaveProfile() {
-    setSavingProfile(true);
-    const trimmedBiz = businessName.trim();
-    const trimmedName = fullName.trim();
+  // Auto-save profile fields after 1.2 s of no changes
+  const scheduleProfileSave = useCallback((biz: string, name: string) => {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(async () => {
+      setSavingProfile(true);
+      const { error } = await updateProfile({
+        full_name: name.trim() || null,
+        business_name: biz.trim() || null,
+      });
+      if (biz.trim()) updateContent({ brandName: biz.trim() });
+      setSavingProfile(false);
+      if (!error) { setSavedProfile(true); setTimeout(() => setSavedProfile(false), 2000); }
+    }, 1200);
+  }, [updateProfile, updateContent]);
 
-    // Update Supabase auth profile
-    const { error } = await updateProfile({
-      full_name: trimmedName || null,
-      business_name: trimmedBiz || null,
-    });
+  useEffect(() => () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); }, []);
 
-    // Keep site_content.brandName in sync
-    if (trimmedBiz) {
-      updateContent({ brandName: trimmedBiz });
-    }
-
-    setSavingProfile(false);
-    if (error) {
-      Alert.alert('Could not save', error);
-    } else {
-      Alert.alert('Saved!', 'Your profile has been updated.');
-    }
-  }
+  const handleBusinessName = (v: string) => { setBusinessName(v); scheduleProfileSave(v, fullName); };
+  const handleFullName = (v: string) => { setFullName(v); scheduleProfileSave(businessName, v); };
 
   async function handleChangeEmail() {
     const trimmed = newEmail.trim().toLowerCase();
     if (!trimmed) { Alert.alert('Enter a new email address'); return; }
-    if (trimmed === user?.email) { Alert.alert('That\'s already your email.'); return; }
+    if (trimmed === user?.email) { Alert.alert("That's already your email."); return; }
     setSavingEmail(true);
     const { error } = await supabase.auth.updateUser({ email: trimmed });
     setSavingEmail(false);
-    if (error) {
-      Alert.alert('Could not update email', error.message);
-    } else {
-      setNewEmail('');
-      Alert.alert(
-        'Check your inbox',
-        `A confirmation link was sent to ${trimmed}. Click it to finish the change.`,
-      );
-    }
+    if (error) { Alert.alert('Could not update email', error.message); }
+    else { setNewEmail(''); Alert.alert('Check your inbox', `A confirmation link was sent to ${trimmed}.`); }
   }
 
   async function handleChangePassword() {
     if (!newPassword) { Alert.alert('Enter a new password'); return; }
     if (newPassword.length < 8) { Alert.alert('Too short', 'Password must be at least 8 characters.'); return; }
-    if (newPassword !== confirmPassword) { Alert.alert('Passwords don\'t match'); return; }
+    if (newPassword !== confirmPassword) { Alert.alert("Passwords don't match"); return; }
     setSavingPassword(true);
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     setSavingPassword(false);
-    if (error) {
-      Alert.alert('Could not update password', error.message);
-    } else {
-      setNewPassword('');
-      setConfirmPassword('');
-      Alert.alert('Done!', 'Your password has been changed.');
-    }
+    if (error) { Alert.alert('Could not update password', error.message); }
+    else { setNewPassword(''); setConfirmPassword(''); Alert.alert('Done!', 'Your password has been changed.'); }
   }
 
   return (
@@ -272,127 +175,74 @@ export default function AccountSettingsScreen({ navigation }: Props) {
             <Ionicons name="chevron-back" size={22} color={colors.text} />
           </Pressable>
           <Text style={styles.headerTitle}>Account</Text>
-          <View style={{ width: 36 }} />
+          <View style={styles.headerRight}>
+            {savingProfile
+              ? <ActivityIndicator size="small" color={colors.accentPink} />
+              : savedProfile
+                ? <Text style={styles.savedLabel}>Saved ✓</Text>
+                : null
+            }
+          </View>
         </View>
 
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
           <ScrollView
             contentContainerStyle={styles.content}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
+            {/* Avatar */}
+            <LogoPicker url={logoImageUrl} busy={logoUploading} onPick={uploadLogoImage} />
 
-            {/* ── Profile photo ── */}
-            <View style={styles.avatarSection}>
-              <LogoPicker
-                url={logoImageUrl}
-                busy={logoUploading}
-                onPick={uploadLogoImage}
-              />
-              <Text style={styles.avatarHint}>
-                Tap to set your business photo — it shows on your site and booking page.
-              </Text>
-            </View>
-
-            {/* ── Business info ── */}
-            <CardSection
-              title="Your business"
-              subtitle="This name appears on your site and in client emails."
-            >
-              <Field
-                icon="storefront-outline"
-                label="Business name"
-                value={businessName}
-                onChangeText={setBusinessName}
-                placeholder="e.g. Gaelle's Hair Studio"
-                autoCapitalize="words"
-              />
-              <Field
-                icon="person-outline"
-                label="Your name"
-                value={fullName}
-                onChangeText={setFullName}
-                placeholder="Your full name"
-                autoCapitalize="words"
-              />
-              <SaveBtn
-                label="Save changes"
-                onPress={handleSaveProfile}
-                loading={savingProfile}
-                disabled={!profileDirty}
-              />
-            </CardSection>
+            {/* ── Profile (auto-saves) ── */}
+            <Text style={styles.sectionLabel}>Profile</Text>
+            <LineField label="Business name" value={businessName} onChangeText={handleBusinessName} placeholder="e.g. Gaelle's Hair Studio" autoCapitalize="words" />
+            <LineField label="Your name" value={fullName} onChangeText={handleFullName} placeholder="Your full name" autoCapitalize="words" />
 
             {/* ── Email ── */}
-            <CardSection
-              title="Email address"
-              subtitle="Your login email. A confirmation link will be sent when you change it."
+            <Text style={styles.sectionLabel}>Email</Text>
+            <LineField label="Current email" value={user?.email ?? ''} editable={false} />
+            <LineField label="New email" value={newEmail} onChangeText={setNewEmail} placeholder="Enter new email address" keyboardType="email-address" autoCapitalize="none" />
+            <Pressable
+              style={[styles.actionBtn, (!newEmail.trim() || savingEmail) && { opacity: 0.4 }]}
+              onPress={handleChangeEmail}
+              disabled={!newEmail.trim() || savingEmail}
             >
-              <Field
-                icon="mail-outline"
-                label="Current email"
-                value={user?.email ?? ''}
-                editable={false}
-              />
-              <Field
-                icon="mail-open-outline"
-                label="New email"
-                value={newEmail}
-                onChangeText={setNewEmail}
-                placeholder="Enter new email address"
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-              <SaveBtn
-                label="Update email"
-                onPress={handleChangeEmail}
-                loading={savingEmail}
-                disabled={!newEmail.trim()}
-              />
-            </CardSection>
+              {savingEmail ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.actionBtnText}>Update email</Text>}
+            </Pressable>
 
             {/* ── Password ── */}
-            <CardSection
-              title="Password"
-              subtitle="Use a strong password you don't use anywhere else."
+            <Text style={styles.sectionLabel}>Password</Text>
+            <LineField label="New password" value={newPassword} onChangeText={setNewPassword} placeholder="At least 8 characters" secureTextEntry autoCapitalize="none" />
+            <LineField label="Confirm new password" value={confirmPassword} onChangeText={setConfirmPassword} placeholder="Repeat new password" secureTextEntry autoCapitalize="none" />
+            <Pressable
+              style={[styles.actionBtn, (!newPassword || !confirmPassword || savingPassword) && { opacity: 0.4 }]}
+              onPress={handleChangePassword}
+              disabled={!newPassword || !confirmPassword || savingPassword}
             >
-              <Field
-                icon="lock-closed-outline"
-                label="New password"
-                value={newPassword}
-                onChangeText={setNewPassword}
-                placeholder="At least 8 characters"
-                secureTextEntry
-                autoCapitalize="none"
-              />
-              <Field
-                icon="shield-checkmark-outline"
-                label="Confirm new password"
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                placeholder="Repeat new password"
-                secureTextEntry
-                autoCapitalize="none"
-              />
-              <SaveBtn
-                label="Change password"
-                onPress={handleChangePassword}
-                loading={savingPassword}
-                disabled={!newPassword || !confirmPassword}
-              />
-            </CardSection>
+              {savingPassword ? <ActivityIndicator size="small" color="#fff" /> : <Text style={styles.actionBtnText}>Change password</Text>}
+            </Pressable>
 
+            {/* ── Privacy ── */}
+            <Text style={styles.sectionLabel}>Privacy</Text>
+            <View style={styles.toggleRow}>
+              <Text style={styles.toggleLabel}>Privacy mode</Text>
+              <Switch
+                value={privacyMode}
+                onValueChange={setPrivacyMode}
+                trackColor={{ false: colors.cardBorder, true: colors.accentPink }}
+                thumbColor="#fff"
+              />
+            </View>
+            <Text style={styles.toggleHint}>
+              {privacyMode ? 'Numbers are hidden across the app' : 'All numbers are visible'}
+            </Text>
           </ScrollView>
         </KeyboardAvoidingView>
       </SafeAreaView>
     </View>
   );
 }
-
-// ─── styles ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
@@ -413,153 +263,44 @@ const styles = StyleSheet.create({
     color: colors.text,
     letterSpacing: -0.3,
   },
+  headerRight: { width: 60, alignItems: 'flex-end' },
+  savedLabel: { color: colors.accentPink, fontSize: 13, fontWeight: '600' },
 
-  content: {
-    paddingHorizontal: 18,
-    paddingBottom: 60,
-    gap: 20,
-  },
+  content: { paddingHorizontal: 24, paddingBottom: 80, paddingTop: 4 },
 
-  // Avatar
-  avatarSection: {
-    alignItems: 'center',
-    paddingVertical: 20,
-    gap: 12,
-  },
-  avatarWrap: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 2,
-    borderColor: colors.accentPinkBorder,
-    overflow: 'visible',
-    position: 'relative',
-  },
-  avatarImg: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-  },
-  avatarPlaceholder: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    backgroundColor: colors.accentPinkMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarBadge: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.accentPink,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: colors.background,
-  },
-  avatarHint: {
-    color: colors.textMuted,
-    fontSize: 13,
-    textAlign: 'center',
-    lineHeight: 18,
-    maxWidth: 260,
-  },
+  avatarSection: { alignItems: 'center', paddingVertical: 24, gap: 10 },
+  avatarHint: { color: colors.textMuted, fontSize: 13 },
+  avatarWrap: { width: 88, height: 88, borderRadius: 44, borderWidth: 2, borderColor: colors.accentPinkBorder, overflow: 'visible', position: 'relative' },
+  avatarImg: { width: 88, height: 88, borderRadius: 44 },
+  avatarPlaceholder: { width: 88, height: 88, borderRadius: 44, backgroundColor: colors.accentPinkMuted, alignItems: 'center', justifyContent: 'center' },
+  avatarBadge: { position: 'absolute', bottom: 0, right: 0, width: 26, height: 26, borderRadius: 13, backgroundColor: colors.accentPink, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.background },
 
-  // Card section
-  cardSection: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    borderRadius: 20,
-    overflow: 'hidden',
-  },
-  cardSectionHeader: {
-    paddingHorizontal: 18,
-    paddingTop: 18,
-    paddingBottom: 14,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.cardBorder,
-    gap: 3,
-  },
-  cardTitle: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  cardSubtitle: {
-    color: colors.textMuted,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  cardBody: {
-    padding: 18,
-    gap: 4,
-  },
-
-  // Field
-  fieldWrap: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    marginBottom: 14,
-  },
-  fieldIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
-    backgroundColor: colors.accentPinkMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 18,
-  },
-  fieldBody: {
-    flex: 1,
-  },
-  fieldLabel: {
+  sectionLabel: {
     color: colors.textMuted,
     fontSize: 11,
     fontWeight: '700',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
     textTransform: 'uppercase',
-    marginBottom: 6,
-  },
-  fieldInput: {
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: colors.text,
-    fontSize: 15,
-  },
-  fieldInputDisabled: {
-    opacity: 0.45,
-  },
-  fieldHint: {
-    color: colors.textMuted,
-    fontSize: 12,
-    marginTop: 5,
-    lineHeight: 17,
+    marginTop: 28,
+    marginBottom: 4,
   },
 
-  // Save button
-  saveBtn: {
+  field: { paddingTop: 16, paddingBottom: 2 },
+  fieldLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '500', marginBottom: 6 },
+  fieldInput: { color: colors.text, fontSize: 16, fontWeight: '500', paddingVertical: 4, paddingHorizontal: 0 },
+  fieldInputDisabled: { opacity: 0.4 },
+  fieldLine: { height: StyleSheet.hairlineWidth, backgroundColor: colors.cardBorder, marginTop: 6 },
+
+  actionBtn: {
+    marginTop: 20,
     backgroundColor: colors.accentPink,
-    borderRadius: 14,
-    paddingVertical: 14,
+    borderRadius: 12,
+    paddingVertical: 13,
     alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 6,
   },
-  saveBtnDisabled: { opacity: 0.45 },
-  saveBtnText: {
-    color: colors.background,
-    fontSize: 15,
-    fontWeight: '700',
-  },
+  actionBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+
+  toggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14 },
+  toggleLabel: { color: colors.text, fontSize: 16, fontWeight: '500' },
+  toggleHint: { color: colors.textMuted, fontSize: 13, marginTop: -6 },
 });

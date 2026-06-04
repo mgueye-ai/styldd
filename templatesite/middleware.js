@@ -18,7 +18,7 @@ function isRootHost(host) {
 function resolveTenantHtmlPath(pathname, searchParams) {
   if (!pathname || pathname === '/') {
     const tpl = searchParams && searchParams.get('tpl');
-    return tpl === 'profile' ? '/tenant/profile.html' : '/tenant/index.html';
+    return tpl === 'classic' ? '/tenant/index.html' : '/tenant/profile.html';
   }
 
   const clean = pathname.replace(/\/$/, '').toLowerCase();
@@ -30,7 +30,7 @@ function resolveTenantHtmlPath(pathname, searchParams) {
     return clean;
   }
 
-  return '/tenant/index.html';
+  return '/tenant/profile.html';
 }
 
 export default function middleware(request) {

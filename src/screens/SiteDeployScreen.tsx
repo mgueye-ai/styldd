@@ -142,6 +142,62 @@ export default function SiteDeployScreen({ navigation }: Props) {
     );
   }
 
+  // ── Already live: one-tap republish ──────────────────────────────────────
+  if (isAlreadyLive) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <View style={styles.header}>
+          <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="chevron-back" size={22} color={colors.text} />
+          </Pressable>
+          <Text style={styles.headerTitle}>Publish site</Text>
+          <View style={{ width: 36 }} />
+        </View>
+
+        <View style={styles.republishScreen}>
+          <View style={styles.liveDot} />
+          <Text style={styles.republishUrl}>{sitePublish.publicUrl}</Text>
+          <Text style={styles.republishHint}>Your site is live. Push your latest changes.</Text>
+
+          {step === 'error' && errorMsg ? (
+            <View style={styles.errorCard}>
+              <Ionicons name="warning-outline" size={16} color="#f87171" />
+              <Text style={styles.errorText}>{errorMsg}</Text>
+            </View>
+          ) : null}
+
+          <Pressable
+            style={[styles.publishBtn, step === 'publishing' && styles.publishBtnDisabled]}
+            onPress={handlePublish}
+            disabled={step === 'publishing'}
+          >
+            {step === 'publishing' ? (
+              <View style={styles.publishingRow}>
+                <ActivityIndicator color="#fff" />
+                <Text style={styles.publishBtnText}>Deploying…</Text>
+              </View>
+            ) : (
+              <View style={styles.publishingRow}>
+                <Ionicons name="rocket-outline" size={18} color="#fff" />
+                <Text style={styles.publishBtnText}>Push changes</Text>
+              </View>
+            )}
+          </Pressable>
+
+          <Pressable
+            style={styles.viewCurrentBtn}
+            onPress={() => void openLiveSiteUrl(sitePublish)}
+          >
+            <Ionicons name="globe-outline" size={16} color={colors.accentPink} />
+            <Text style={styles.viewCurrentBtnText}>View live site</Text>
+            <Ionicons name="open-outline" size={14} color={colors.accentPink} />
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── First publish: subdomain setup ───────────────────────────────────────
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <View style={styles.header}>
@@ -149,22 +205,13 @@ export default function SiteDeployScreen({ navigation }: Props) {
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>
         <Text style={styles.headerTitle}>Publish site</Text>
+        <View style={{ width: 36 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.form} showsVerticalScrollIndicator={false}>
-        {isAlreadyLive ? (
-          <View style={styles.liveStatusBanner}>
-            <Ionicons name="checkmark-circle" size={16} color="#4ade80" />
-            <Text style={styles.liveStatusText}>
-              Currently live at{' '}
-              <Text style={styles.liveStatusUrl}>{sitePublish.publicUrl}</Text>
-            </Text>
-          </View>
-        ) : null}
-
-        <Text style={styles.sectionTitle}>Your subdomain</Text>
+        <Text style={styles.sectionTitle}>Choose your URL</Text>
         <Text style={styles.sectionBody}>
-          Choose a short URL for {content.brandName}. Your site will be live on Vercel under{' '}
+          Pick a short address for {content.brandName || 'your site'} under{' '}
           <Text style={styles.domainHighlight}>*.{rootDomain}</Text>.
         </Text>
 
@@ -194,24 +241,6 @@ export default function SiteDeployScreen({ navigation }: Props) {
           </View>
         ) : null}
 
-        {previewUrl ? (
-          <View style={styles.previewCard}>
-            <Text style={styles.previewLabel}>Your live URL will be</Text>
-            <Text style={styles.previewUrl}>{previewUrl}</Text>
-          </View>
-        ) : null}
-
-        {isAlreadyLive && sitePublish.publicUrl ? (
-          <Pressable
-            style={styles.viewCurrentBtn}
-            onPress={() => void openLiveSiteUrl(sitePublish)}
-          >
-            <Ionicons name="globe-outline" size={16} color={colors.accentPink} />
-            <Text style={styles.viewCurrentBtnText}>View current live site</Text>
-            <Ionicons name="open-outline" size={14} color={colors.accentPink} />
-          </Pressable>
-        ) : null}
-
         {step === 'error' && errorMsg ? (
           <View style={styles.errorCard}>
             <Ionicons name="warning-outline" size={16} color="#f87171" />
@@ -232,16 +261,13 @@ export default function SiteDeployScreen({ navigation }: Props) {
           ) : (
             <View style={styles.publishingRow}>
               <Ionicons name="rocket-outline" size={18} color="#fff" />
-              <Text style={styles.publishBtnText}>
-                {isAlreadyLive ? 'Republish site' : 'Publish site'}
-              </Text>
+              <Text style={styles.publishBtnText}>Publish site</Text>
             </View>
           )}
         </Pressable>
 
         <Text style={styles.publishNote}>
-          Publishing saves your content and Styld deploys your site automatically. Allow 1–2 minutes
-          for changes to go live.
+          Allow 1–2 minutes for changes to go live after publishing.
         </Text>
       </ScrollView>
     </SafeAreaView>
@@ -261,21 +287,32 @@ const styles = StyleSheet.create({
   headerTitle: { flex: 1, color: colors.text, fontSize: 17, fontWeight: '600' },
   form: { paddingHorizontal: 20, paddingBottom: 60 },
 
-  liveStatusBanner: {
-    flexDirection: 'row',
+  republishScreen: {
+    flex: 1,
     alignItems: 'center',
-    gap: 8,
-    backgroundColor: 'rgba(74,222,128,0.1)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(74,222,128,0.25)',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 20,
-    marginTop: 4,
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+    gap: 12,
   },
-  liveStatusText: { color: colors.textMuted, fontSize: 13, flex: 1 },
-  liveStatusUrl: { color: '#4ade80', fontWeight: '700' },
+  liveDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#4ade80',
+    marginBottom: 4,
+  },
+  republishUrl: {
+    color: colors.accentPink,
+    fontSize: 16,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  republishHint: {
+    color: colors.textMuted,
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
 
   sectionTitle: { color: colors.text, fontSize: 22, fontWeight: '700', marginBottom: 6 },
   sectionBody: { color: colors.textMuted, fontSize: 14, lineHeight: 20, marginBottom: 20 },

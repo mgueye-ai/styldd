@@ -85,18 +85,39 @@
         return;
       }
 
+      // Group cards by category, preserving first-seen order
+      var categoryOrder = [];
+      var groups = {};
+      cards.forEach(function (card) {
+        var cat = card.category || 'SERVICES';
+        if (!groups[cat]) {
+          groups[cat] = [];
+          categoryOrder.push(cat);
+        }
+        groups[cat].push(card);
+      });
+
+      var sectionsHtml = categoryOrder.map(function (cat) {
+        return (
+          '<div class="catalog-section">' +
+          '<div class="catalog-section__header">' +
+          '<span class="catalog-section__title">' + escapeHtml(cat) + '</span>' +
+          '<div class="catalog-section__rule"></div>' +
+          '</div>' +
+          '<div class="catalog-service-cards catalog-service-cards--popular">' +
+          groups[cat].map(cardHtml).join('') +
+          '</div></div>'
+        );
+      }).join('');
+
       wrap.innerHTML =
         '<div class="container">' +
         '<div class="section-head section-head--popular" style="margin-bottom:1.5rem">' +
-        '<h2>' +
-        escapeHtml(site.content.menuTitle || 'Menu') +
-        '</h2>' +
-        '<p>' +
-        escapeHtml(site.content.menuBlurb || 'Tap a style to book online.') +
-        '</p></div>' +
-        '<div class="catalog-service-cards catalog-service-cards--popular">' +
-        cards.map(cardHtml).join('') +
-        '</div></div>';
+        '<h2>' + escapeHtml(site.content.menuTitle || 'Menu') + '</h2>' +
+        '<p>' + escapeHtml(site.content.menuBlurb || 'Tap a style to book online.') + '</p>' +
+        '</div>' +
+        sectionsHtml +
+        '</div>';
     })
     .catch(function () {
       /* static template catalog remains */

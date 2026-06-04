@@ -13,14 +13,14 @@
     try {
       var cachedTpl = localStorage.getItem('styld_tpl_' + subdomain);
       if (cachedTpl) {
-        var currentTplParam = new URLSearchParams(window.location.search).get('tpl') || 'classic';
+        var currentTplParam = new URLSearchParams(window.location.search).get('tpl') || 'profile';
         var needRedirect =
-          (cachedTpl === 'profile' && currentTplParam !== 'profile') ||
-          (cachedTpl !== 'profile' && currentTplParam === 'profile');
+          (cachedTpl === 'classic' && currentTplParam !== 'classic') ||
+          (cachedTpl !== 'classic' && currentTplParam === 'classic');
         if (needRedirect) {
           var eUrl = new URL(window.location.href);
-          if (cachedTpl === 'profile') {
-            eUrl.searchParams.set('tpl', 'profile');
+          if (cachedTpl === 'classic') {
+            eUrl.searchParams.set('tpl', 'classic');
           } else {
             eUrl.searchParams.delete('tpl');
           }
@@ -155,27 +155,30 @@
       var templateId = theme.templateId || 'profile';
 
       // ── Template routing ──
-      (function routeTemplate() {
+      var redirecting = (function routeTemplate() {
         try {
           if (subdomain) {
             localStorage.setItem('styld_tpl_' + subdomain, templateId);
           }
-          var currentTplParam = new URLSearchParams(window.location.search).get('tpl') || 'classic';
+          var currentTplParam = new URLSearchParams(window.location.search).get('tpl') || 'profile';
           var needRedirect =
-            (templateId === 'profile' && currentTplParam !== 'profile') ||
-            (templateId !== 'profile' && currentTplParam === 'profile');
+            (templateId === 'classic' && currentTplParam !== 'classic') ||
+            (templateId !== 'classic' && currentTplParam === 'classic');
           if (needRedirect) {
             var rUrl = new URL(window.location.href);
-            if (templateId === 'profile') {
-              rUrl.searchParams.set('tpl', 'profile');
+            if (templateId === 'classic') {
+              rUrl.searchParams.set('tpl', 'classic');
             } else {
               rUrl.searchParams.delete('tpl');
             }
             window.location.replace(rUrl.toString());
-            return;
+            return true;
           }
         } catch (e) { /* ignore */ }
+        return false;
       })();
+
+      if (redirecting) return;
 
       window.__STYLD_SITE_CONTENT__ = content;
       window.__STYLD_SITE_THEME__ = {
@@ -263,6 +266,7 @@
           sizeLabel: sizeLabel || undefined,
           durationLabel: formatStyleDuration(item.durationMinutes),
           imageUrl: coverUrl(covers[styleId]),
+          category: item.category || '',
         };
         });
 

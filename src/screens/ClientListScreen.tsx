@@ -1,4 +1,3 @@
-import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,12 +6,26 @@ import { Client } from '../data/clients';
 import { useSiteData } from '../context/SiteDataContext';
 import { usePrivacyMode } from '../context/PrivacyContext';
 import { ClientStackParamList } from '../navigation/ClientNavigator';
-import { colors } from '../theme';
+import { colors, fonts } from '../theme';
 import { maskMoney } from '../utils/money';
 
 type Props = NativeStackScreenProps<ClientStackParamList, 'ClientList'>;
 
-function ClientCard({
+function initials(name: string) {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+const AVATAR_COLORS = ['#f0c4d8', '#f5b8ce', '#e8a8bf', '#f2c8d8', '#ebb5c8', '#f8cfe0'];
+
+function avatarColor(name: string) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
+}
+
+function ClientRow({
   client,
   privacyMode,
   onPress,
@@ -22,38 +35,34 @@ function ClientCard({
   onPress: () => void;
 }) {
   const lastBooking = client.pastBookings[0];
+  const bg = avatarColor(client.name);
 
   return (
-    <Pressable style={styles.card} onPress={onPress}>
-      <View style={styles.cardHeader}>
-        <View style={styles.cardHeaderLeft}>
-          <Text style={styles.bookingCount}>
-            {client.totalBookings} booking{client.totalBookings === 1 ? '' : 's'}
-          </Text>
-          <View style={styles.clientBadge}>
-            <Text style={styles.clientBadgeText}>Client</Text>
-          </View>
-        </View>
-        <Ionicons name="chevron-forward" size={17} color={colors.textMuted} />
+    <Pressable
+      style={({ pressed }) => [styles.row, pressed && { opacity: 0.55 }]}
+      onPress={onPress}
+    >
+      <View style={[styles.avatar, { backgroundColor: bg }]}>
+        <Text style={styles.avatarText}>{initials(client.name)}</Text>
       </View>
 
-      <View style={styles.cardBody}>
-        <View style={styles.cardDetails}>
-          <Text style={styles.clientName}>{client.name}</Text>
-          {lastBooking ? (
-            <View style={styles.detailRow}>
-              <Ionicons name="brush-outline" size={15} color={colors.textMuted} />
-              <Text style={styles.detailText}>Last: {lastBooking.service}</Text>
-            </View>
-          ) : null}
-        </View>
-
-        <Text style={styles.clientSpent}>
-          {maskMoney(client.totalSpent, privacyMode)}
+      <View style={styles.rowBody}>
+        <Text style={styles.clientName} numberOfLines={1}>{client.name}</Text>
+        <Text style={styles.clientMeta} numberOfLines={1}>
+          {client.totalBookings} booking{client.totalBookings === 1 ? '' : 's'}
+          {lastBooking ? ` · ${lastBooking.service}` : ''}
         </Text>
       </View>
+
+      <Text style={styles.clientSpent}>
+        {maskMoney(client.totalSpent, privacyMode)}
+      </Text>
     </Pressable>
   );
+}
+
+function Divider() {
+  return <View style={styles.divider} />;
 }
 
 export default function ClientListScreen({ navigation }: Props) {
@@ -69,7 +78,7 @@ export default function ClientListScreen({ navigation }: Props) {
           <Text style={styles.title}>Clients</Text>
           <Text style={styles.subtitle}>
             {hasLinkedSite
-              ? `${clients.length} client${clients.length === 1 ? '' : 's'} from linked site`
+              ? `${clients.length} client${clients.length === 1 ? '' : 's'}`
               : 'Link a site to load clients'}
           </Text>
         </View>
@@ -77,29 +86,34 @@ export default function ClientListScreen({ navigation }: Props) {
         {!hasLinkedSite ? (
           <View style={styles.emptyWrap}>
             <Text style={styles.emptyTitle}>No linked site yet</Text>
-            <Text style={styles.emptyText}>Connect your site table from the Site tab.</Text>
+            <Text style={styles.emptyText}>Connect your site from the Site tab.</Text>
           </View>
         ) : isLoading ? (
           <View style={styles.emptyWrap}>
-            <Text style={styles.emptyText}>Loading clients...</Text>
+            <Text style={styles.emptyText}>Loading clients…</Text>
           </View>
         ) : clients.length === 0 ? (
           <View style={styles.emptyWrap}>
             <Text style={styles.emptyTitle}>No clients yet</Text>
-            <Text style={styles.emptyText}>Bookings from your linked table will appear here.</Text>
+            <Text style={styles.emptyText}>Bookings from your linked site will appear here.</Text>
           </View>
         ) : (
           <FlatList
             data={clients}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.listPad}
+            ItemSeparatorComponent={Divider}
+            ListHeaderComponent={<View style={styles.cardTop} />}
+            ListFooterComponent={<View style={styles.cardBottom} />}
             renderItem={({ item }) => (
-              <ClientCard
-                client={item}
-                privacyMode={privacyMode}
-                onPress={() => navigation.navigate('ClientDetail', { clientId: item.id })}
-              />
+              <View style={styles.cardRow}>
+                <ClientRow
+                  client={item}
+                  privacyMode={privacyMode}
+                  onPress={() => navigation.navigate('ClientDetail', { clientId: item.id })}
+                />
+              </View>
             )}
           />
         )}
@@ -132,78 +146,82 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
   },
-  listContent: {
-    paddingHorizontal: 20,
+  listPad: {
+    paddingHorizontal: 16,
     paddingBottom: 120,
+  },
+  // The card effect is split across header/footer/rows so the
+  // FlatList can still recycle rows while the card border wraps them all.
+  cardTop: {
+    backgroundColor: colors.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    borderWidth: 1,
+    borderBottomWidth: 0,
+    borderColor: colors.cardBorder,
+    height: 2,
+  },
+  cardBottom: {
+    backgroundColor: colors.card,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderColor: colors.cardBorder,
+    height: 4,
+  },
+  cardRow: {
+    backgroundColor: colors.card,
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: colors.cardBorder,
+    paddingHorizontal: 16,
+  },
+  divider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.cardBorder,
+    marginLeft: 70,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 13,
     gap: 12,
   },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    paddingHorizontal: 18,
-    paddingVertical: 18,
-  },
-  cardHeader: {
-    flexDirection: 'row',
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 14,
+    justifyContent: 'center',
+    flexShrink: 0,
   },
-  cardHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  avatarText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#7a2040',
+    letterSpacing: 0.4,
   },
-  bookingCount: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: '600',
-    letterSpacing: -0.2,
-  },
-  clientBadge: {
-    backgroundColor: colors.accentBlueMuted,
-    borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-  },
-  clientBadgeText: {
-    color: colors.chartBlue,
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  cardBody: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-  },
-  cardDetails: {
+  rowBody: {
     flex: 1,
-    paddingRight: 12,
-    gap: 8,
+    gap: 3,
   },
   clientName: {
     color: colors.text,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
-    marginBottom: -2,
   },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-  },
-  detailText: {
+  clientMeta: {
     color: colors.textMuted,
     fontSize: 13,
-    fontWeight: '500',
   },
   clientSpent: {
-    color: colors.chartBlue,
-    fontSize: 18,
-    fontWeight: '600',
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '700',
+    fontFamily: fonts.number,
     letterSpacing: -0.3,
+    flexShrink: 0,
   },
   emptyWrap: {
     flex: 1,

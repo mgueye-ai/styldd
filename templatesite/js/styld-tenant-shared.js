@@ -118,6 +118,7 @@
         durationLabel: formatStyleDuration(item.durationMinutes),
         priceLabel: formatPrice(prices[styleId]),
         imageUrl: coverUrl(covers[styleId]),
+        category: (item.category && String(item.category).trim()) || 'SERVICES',
       };
     });
   }

@@ -10,6 +10,7 @@ export type Booking = {
 
 export type FavoriteOrder = {
   service: string;
+  styleId?: string;
   count: number;
 };
 

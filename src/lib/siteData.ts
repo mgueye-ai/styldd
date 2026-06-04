@@ -38,6 +38,7 @@ export type SiteBookingRecord = {
   price: number;
   depositAmount: number;
   depositPaid: boolean;
+  paymentStatus: string;
   bookingStatus: string;
   startsAt: Date | null;
   durationMinutes: number;
@@ -182,9 +183,10 @@ function parseUnifiedBooking(record: UnifiedSiteRecord): SiteBookingRecord | nul
     styleId: asString(data.style_id),
     hairType: [asString(data.hair_length), asString(data.hair_option)].filter(Boolean).join(' · ') || '—',
     notes: asString(data.notes),
-    location: asString(data.service_address, 'Studio'),
+    location: asString(data.service_address, ''),
     price: asNumber(data.estimated_total),
     depositAmount: asNumber(data.deposit_amount),
+    paymentStatus: asString(data.payment_status),
     depositPaid: resolveDepositPaid(
       asString(data.payment_status),
       asString(data.booking_status),
@@ -227,9 +229,10 @@ function parseFlatBooking(record: FlatBookingRecord): SiteBookingRecord | null {
     styleId: asString(record.style_id),
     hairType: [asString(record.hair_length), asString(record.hair_option)].filter(Boolean).join(' · ') || '—',
     notes: asString(record.notes),
-    location: asString(record.service_address, 'Studio'),
+    location: asString(record.service_address, ''),
     price: asNumber(record.estimated_total),
     depositAmount: asNumber(record.deposit_amount),
+    paymentStatus: asString(record.payment_status),
     depositPaid: resolveDepositPaid(
       asString(record.payment_status),
       asString(record.booking_status),
@@ -323,13 +326,17 @@ function buildClients(bookings: SiteBookingRecord[]): Client[] {
         (booking) => mapBookingStatus(booking.bookingStatus, booking.startsAt) === 'completed',
       );
 
-      const serviceCounts = new Map<string, number>();
+      const serviceCounts = new Map<string, { count: number; styleId?: string }>();
       for (const booking of sorted) {
-        serviceCounts.set(booking.service, (serviceCounts.get(booking.service) ?? 0) + 1);
+        const existing = serviceCounts.get(booking.service);
+        serviceCounts.set(booking.service, {
+          count: (existing?.count ?? 0) + 1,
+          styleId: existing?.styleId ?? booking.styleId ?? undefined,
+        });
       }
 
       const favoriteOrders: FavoriteOrder[] = Array.from(serviceCounts.entries())
-        .map(([service, count]) => ({ service, count }))
+        .map(([service, { count, styleId }]) => ({ service, styleId, count }))
         .sort((a, b) => b.count - a.count)
         .slice(0, 3);
 
@@ -453,7 +460,87 @@ function getBookingStartDate(booking: SiteBookingRecord): Date {
   return booking.startsAt ?? booking.createdAt;
 }
 
+/**
+ * Returns the Stripe-collected amount for a booking.
+ *
+ * Statuses that mean money is in Stripe (processing, settling, or settled):
+ *   pending_payment  – customer completed checkout, Stripe is processing
+ *   deposit_paid     – deposit captured
+ *   paid             – full amount captured
+ *   confirmed        – booking confirmed after Stripe webhook
+ *   completed        – appointment done, full amount collected
+ *
+ * Statuses that mean NO Stripe money:
+ *   in_person        – cash / not through Stripe
+ *   pending          – customer hasn't paid yet
+ *   '' / unknown     – no payment info
+ */
+function getPaidAmount(booking: SiteBookingRecord): number {
+  const ps = booking.paymentStatus.toLowerCase().trim();
+  const bs = booking.bookingStatus.toLowerCase().trim();
+
+  // Explicitly not Stripe money
+  if (!ps || ps === 'pending' || ps === 'in_person') return 0;
+
+  // Full payment collected
+  if (ps === 'paid' || bs === 'completed') return booking.price;
+
+  // Deposit captured, processing, or confirmed — return deposit if set, otherwise full price
+  // (covers: deposit_paid, pending_payment, confirmed, and any future statuses)
+  return booking.depositAmount > 0 ? booking.depositAmount : booking.price;
+}
+
 export function getRevenueForPeriodFromBookings(
+  snapshot: SiteDataSnapshot,
+  period: Period,
+): number {
+  const now = new Date();
+  let start = startOfDay(now);
+  let end: Date;
+
+  switch (period) {
+    case 'day':
+      end = endOfDay(now);
+      break;
+    case 'week': {
+      const weekStart = new Date(now);
+      weekStart.setHours(0, 0, 0, 0);
+      weekStart.setDate(now.getDate() - now.getDay());
+      start = weekStart;
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      end = endOfDay(weekEnd);
+      break;
+    }
+    case 'month':
+      start = new Date(now.getFullYear(), now.getMonth(), 1);
+      end = endOfDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+      break;
+    case 'year':
+      start = new Date(now.getFullYear(), 0, 1);
+      end = endOfDay(new Date(now.getFullYear(), 11, 31));
+      break;
+    case 'all':
+      start = new Date(0);
+      end = new Date(8640000000000000);
+      break;
+  }
+
+  // Filter by the date the customer PLACED the booking (createdAt), not the appointment date.
+  // Include any booking where payment was accepted (deposit or full), regardless of settlement.
+  return snapshot.bookings
+    .filter((booking) => {
+      const status = booking.bookingStatus;
+      return status !== 'cancelled' && status !== 'canceled';
+    })
+    .filter((booking) => {
+      const date = startOfDay(booking.createdAt);
+      return date >= start && date <= end;
+    })
+    .reduce((sum, booking) => sum + getPaidAmount(booking), 0);
+}
+
+export function getDepositsForPeriodFromBookings(
   snapshot: SiteDataSnapshot,
   period: Period,
 ): number {
@@ -481,8 +568,6 @@ export function getRevenueForPeriodFromBookings(
       break;
   }
 
-  // Count ALL non-cancelled bookings as revenue — show the full earned amount regardless
-  // of whether Stripe has settled. In-person bookings (no upfront payment) are included too.
   return snapshot.bookings
     .filter((booking) => {
       const status = booking.bookingStatus;
@@ -492,7 +577,7 @@ export function getRevenueForPeriodFromBookings(
       const date = startOfDay(getBookingStartDate(booking));
       return date >= start && date <= endOfDay(now);
     })
-    .reduce((sum, booking) => sum + booking.price, 0);
+    .reduce((sum, booking) => sum + (booking.depositPaid ? booking.depositAmount : 0), 0);
 }
 
 export function getTodayJobStats(snapshot: SiteDataSnapshot) {

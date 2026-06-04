@@ -76,6 +76,33 @@ export async function checkSubdomainAvailability(
   return { available: true };
 }
 
+export async function saveSubdomainDraft(userId: string, subdomain: string): Promise<void> {
+  const slug = normalizeSubdomain(subdomain);
+  if (!isValidSubdomain(slug)) return;
+  const { data: existing } = await supabase
+    .from('styld_site_subdomains')
+    .select('subdomain')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  const now = new Date().toISOString();
+  if (existing?.subdomain) {
+    if (existing.subdomain !== slug) {
+      await supabase
+        .from('styld_site_subdomains')
+        .update({ subdomain: slug, updated_at: now })
+        .eq('user_id', userId);
+    }
+  } else {
+    await supabase.from('styld_site_subdomains').insert({
+      user_id: userId,
+      subdomain: slug,
+      updated_at: now,
+    });
+  }
+  await saveSiteSetting(userId, 'site_publish', { subdomain: slug });
+}
+
 export async function publishSiteSubdomain(
   userId: string,
   subdomain: string,

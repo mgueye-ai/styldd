@@ -1,8 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useUnsavedChangesGuard } from '../hooks/useUnsavedChangesGuard';
 import {
+  ActivityIndicator,
+  Animated,
+  Dimensions,
   Modal,
   Pressable,
   ScrollView,
@@ -11,6 +14,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+
+const SCREEN_HEIGHT = Dimensions.get('window').height;
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import SiteDesignEditor from '../components/site/SiteDesignEditor';
 import SitePreviewWebView from '../components/site/SitePreviewWebView';
@@ -22,12 +27,16 @@ import { formatStylePrice } from '../data/siteStyles';
 import { LOCATION_PARTS, LocationPart, SITE_SECTIONS, SiteSection } from '../data/siteContent';
 import { DEFAULT_STYLE_DURATION_MINUTES, formatStyleDuration } from '../data/siteStyles';
 import { SitePreviewTheme } from '../lib/sitePreviewHtml';
+import { getSiteRootDomain, normalizeSubdomain } from '../data/sitePublish';
+import { checkSubdomainAvailability } from '../lib/sitePublish';
+import { openLiveSiteUrl } from '../lib/openLiveSite';
 import { SiteStackParamList } from '../navigation/SiteNavigator';
 import { colors } from '../theme';
 
 type Props = NativeStackScreenProps<SiteStackParamList, 'SiteEditor'>;
 
-type EditorTab = 'design' | 'content' | 'location';
+type EditorTab = 'design' | 'content' | 'location' | 'publish';
+type PublishStep = 'idle' | 'publishing' | 'success' | 'error';
 type PreviewMode = 'split' | 'fullscreen' | 'hidden';
 
 function Field({
@@ -184,12 +193,91 @@ function LocationPartCard({
 
 export default function SiteEditorScreen({ navigation }: Props) {
   const { content, updateContent, isSaving } = useSiteContent();
-  const { sitePublish } = useOnboarding();
+  const { sitePublish, publishSite, saveDraftSubdomain } = useOnboarding();
   const { theme, heroImageUrl, logoImageUrl, isSaving: isSavingTheme } = useSiteTheme();
   const { catalogServices, getCoverUrl, getPrice, getStyleMeta, isSaving: isSavingStyles, refresh } =
     useServiceCatalog();
   const [tab, setTab] = useState<EditorTab>('design');
   const [previewMode, setPreviewMode] = useState<PreviewMode>('split');
+
+  // ── Publish state ──
+  const rootDomain = getSiteRootDomain();
+  const [subdomain, setSubdomain] = useState(sitePublish.subdomain || '');
+  const [publishAvailable, setPublishAvailable] = useState<boolean | null>(null);
+  const [publishStatus, setPublishStatus] = useState<string | null>(null);
+  const [publishStep, setPublishStep] = useState<PublishStep>('idle');
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [subdomainAlts, setSubdomainAlts] = useState<string[]>([]);
+  const [autoSaved, setAutoSaved] = useState(false);
+  const isAlreadyLive = sitePublish.published && sitePublish.publicUrl;
+
+  // ── Animations ──
+  const tabAnim = useRef(new Animated.Value(1)).current;
+  const statusAnim = useRef(new Animated.Value(0)).current;
+  const altsAnim = useRef(new Animated.Value(0)).current;
+
+  const fadeTab = () => {
+    tabAnim.setValue(0);
+    Animated.timing(tabAnim, { toValue: 1, duration: 160, useNativeDriver: true }).start();
+  };
+
+  function generateAlternatives(slug: string): string[] {
+    const suffixes = ['2', '3', '-pro', '-studio', '-salon', '-hair'];
+    const candidates: string[] = [];
+    for (const s of suffixes) {
+      const candidate = `${slug}${s}`.replace(/[^a-z0-9-]/g, '').slice(0, 32);
+      if (candidate.length >= 2) candidates.push(candidate);
+      if (candidates.length >= 3) break;
+    }
+    return candidates;
+  }
+
+  useEffect(() => { fadeTab(); }, [tab]);
+
+  useEffect(() => {
+    const slug = normalizeSubdomain(subdomain);
+    setAutoSaved(false);
+    setSubdomainAlts([]);
+    statusAnim.setValue(0);
+    altsAnim.setValue(0);
+    if (slug.length < 2) { setPublishAvailable(null); setPublishStatus(null); return; }
+    const timer = setTimeout(async () => {
+      try {
+        const result = await checkSubdomainAvailability(slug, '');
+        setPublishAvailable(result.available);
+        if (result.available) {
+          setPublishStatus('Available — saved');
+          setSubdomainAlts([]);
+          Animated.timing(statusAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+          saveDraftSubdomain(slug).then(() => setAutoSaved(true)).catch(() => {});
+        } else {
+          setPublishStatus(result.reason ?? 'Already taken');
+          const alts = generateAlternatives(slug);
+          setSubdomainAlts(alts);
+          Animated.timing(statusAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
+          Animated.timing(altsAnim, { toValue: 1, duration: 250, delay: 80, useNativeDriver: true }).start();
+        }
+      } catch { setPublishAvailable(null); setPublishStatus(null); }
+    }, 500);
+    return () => clearTimeout(timer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subdomain]);
+
+  const handlePublish = async () => {
+    setPublishStep('publishing');
+    setPublishError(null);
+    try {
+      await publishSite(subdomain);
+      setPublishStep('success');
+    } catch (err) {
+      setPublishError(err instanceof Error ? err.message : 'Publish failed.');
+      setPublishStep('error');
+    }
+  };
+
+  const canPublish =
+    publishStep !== 'publishing' &&
+    (isAlreadyLive || (publishAvailable !== false && normalizeSubdomain(subdomain).length >= 2));
 
   useEffect(() => {
   }, [tab, refresh]);
@@ -277,7 +365,7 @@ export default function SiteEditorScreen({ navigation }: Props) {
       <View style={styles.header}>
         <Pressable
           style={styles.backButton}
-          onPress={() => navigation.navigate('SiteHome')}
+          onPress={() => navigation.goBack()}
         >
           <Ionicons name="chevron-back" size={22} color={colors.text} />
         </Pressable>
@@ -294,9 +382,24 @@ export default function SiteEditorScreen({ navigation }: Props) {
               <Text style={styles.savedText}>Saved</Text>
             </View>
           )}
-          <Pressable style={styles.publishButton} onPress={() => navigation.navigate('SiteDeploy')}>
-            <Ionicons name="rocket-outline" size={15} color={colors.accentPink} />
-            <Text style={styles.publishButtonText}>Publish</Text>
+          <Pressable
+            style={[styles.publishButton, publishStep === 'publishing' && styles.publishButtonBusy]}
+            onPress={handlePublish}
+            disabled={publishStep === 'publishing'}
+          >
+            {publishStep === 'publishing' ? (
+              <ActivityIndicator size="small" color={colors.accentPink} />
+            ) : publishStep === 'success' ? (
+              <>
+                <Ionicons name="checkmark-circle" size={15} color="#4ade80" />
+                <Text style={[styles.publishButtonText, { color: '#4ade80' }]}>Live</Text>
+              </>
+            ) : (
+              <>
+                <Ionicons name="rocket-outline" size={15} color={colors.accentPink} />
+                <Text style={styles.publishButtonText}>Publish</Text>
+              </>
+            )}
           </Pressable>
         </View>
       </View>
@@ -350,6 +453,7 @@ export default function SiteEditorScreen({ navigation }: Props) {
           ['design', 'Design'],
           ['content', 'Content'],
           ['location', 'Location'],
+          ['publish', 'Publish'],
         ] as const).map(([key, label]) => (
           <Pressable
             key={key}
@@ -362,6 +466,7 @@ export default function SiteEditorScreen({ navigation }: Props) {
       </View>
 
       <ScrollView contentContainerStyle={styles.form} showsVerticalScrollIndicator={false}>
+        <Animated.View style={{ opacity: tabAnim }}>
         {tab === 'design' ? <SiteDesignEditor onEditHeroContent={() => navigation.navigate('HeroContent')} /> : null}
 
         {tab === 'content' ? (
@@ -505,6 +610,80 @@ export default function SiteEditorScreen({ navigation }: Props) {
           </>
         ) : null}
 
+        {tab === 'publish' ? (
+          <View style={styles.publishTab}>
+            {/* Status row */}
+            {isAlreadyLive ? (
+              <View style={styles.publishStatusRow}>
+                <View style={styles.publishLiveBadge}>
+                  <View style={styles.publishLiveDot} />
+                  <Text style={styles.publishLiveText}>Live</Text>
+                </View>
+                <Text style={styles.publishUrl} numberOfLines={1}>{sitePublish.publicUrl}</Text>
+                <Pressable onPress={() => openLiveSiteUrl(sitePublish)} hitSlop={8}>
+                  <Ionicons name="open-outline" size={16} color={colors.accentPink} />
+                </Pressable>
+              </View>
+            ) : (
+              <View style={styles.publishStatusRow}>
+                <View style={styles.publishDraftBadge}>
+                  <Text style={styles.publishDraftText}>Not published</Text>
+                </View>
+                <Text style={styles.publishHint}>Use Publish top-right to go live.</Text>
+              </View>
+            )}
+
+            {publishStep === 'error' && publishError ? (
+              <Text style={styles.publishErrorText}>{publishError}</Text>
+            ) : null}
+
+            <View style={styles.publishDivider} />
+
+            {/* Domain */}
+            <Text style={styles.publishSectionLabel}>Domain</Text>
+            <View style={styles.publishDomainRow}>
+              <TextInput
+                style={styles.publishSubdomainInput}
+                value={subdomain}
+                onChangeText={(v) => { setSubdomain(v); setPublishStep('idle'); setPublishError(null); }}
+                placeholder="your-name"
+                placeholderTextColor={colors.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <Text style={styles.publishDomainSuffix}>.{rootDomain}</Text>
+            </View>
+            {publishStatus ? (
+              <Animated.Text style={[styles.publishAvailabilityText, publishAvailable ? styles.publishAvailableGreen : styles.publishAvailableRed, { opacity: statusAnim }]}>
+                {publishStatus}
+              </Animated.Text>
+            ) : null}
+            {subdomainAlts.length > 0 && (
+              <Animated.View style={[styles.publishAltsRow, { opacity: altsAnim }]}>
+                <Text style={styles.publishAltsLabel}>Try:</Text>
+                {subdomainAlts.map((alt) => (
+                  <Pressable
+                    key={alt}
+                    style={styles.publishAltChip}
+                    onPress={() => { setSubdomain(alt); setPublishStep('idle'); setPublishError(null); }}
+                  >
+                    <Text style={styles.publishAltChipText}>{alt}</Text>
+                  </Pressable>
+                ))}
+              </Animated.View>
+            )}
+            <Text style={styles.publishHint}>
+              {isAlreadyLive
+                ? autoSaved
+                  ? 'Domain saved — takes effect on next publish.'
+                  : 'Changing domain takes effect on next publish.'
+                : autoSaved
+                  ? 'Domain saved — tap Publish to go live.'
+                  : 'Your public booking link.'}
+            </Text>
+          </View>
+        ) : null}
+        </Animated.View>
       </ScrollView>
 
       {/* Fullscreen preview modal */}
@@ -607,6 +786,11 @@ const styles = StyleSheet.create({
     backgroundColor: colors.accentPinkMuted,
     borderWidth: 1,
     borderColor: colors.accentPinkBorder,
+    minWidth: 72,
+    justifyContent: 'center',
+  },
+  publishButtonBusy: {
+    opacity: 0.6,
   },
   publishButtonText: {
     color: colors.accentPink,
@@ -647,7 +831,7 @@ const styles = StyleSheet.create({
     color: colors.accentPink,
   },
   previewWrap: {
-    height: 200,
+    height: Math.round(SCREEN_HEIGHT * 0.52),
     marginHorizontal: 16,
     marginBottom: 10,
     borderRadius: 20,
@@ -819,5 +1003,135 @@ const styles = StyleSheet.create({
   },
   fullscreenWebView: {
     flex: 1,
+  },
+
+  // ── Publish tab ──
+  publishTab: {
+    padding: 20,
+    gap: 12,
+  },
+  publishStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  publishDraftBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: colors.card,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  publishDraftText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  publishLiveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: 'rgba(74,222,128,0.12)',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  publishLiveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#4ade80',
+  },
+  publishLiveText: {
+    color: '#4ade80',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  publishUrl: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  publishDivider: {
+    height: 1,
+    backgroundColor: colors.cardBorder,
+    marginVertical: 4,
+  },
+  publishSectionLabel: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  publishDomainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 4,
+  },
+  publishSubdomainInput: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '500',
+  },
+  publishDomainSuffix: {
+    color: colors.textMuted,
+    fontSize: 14,
+  },
+  publishAvailabilityText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: -4,
+  },
+  publishAvailableGreen: {
+    color: '#4ade80',
+  },
+  publishAvailableRed: {
+    color: '#f87171',
+  },
+  publishAltsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: -4,
+  },
+  publishAltsLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  publishAltChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  publishAltChipText: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: '500',
+  },
+  publishHint: {
+    color: colors.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: -4,
+  },
+  publishErrorText: {
+    color: '#f87171',
+    fontSize: 13,
+    fontWeight: '500',
   },
 });

@@ -30,6 +30,11 @@ type DraggableDayTimelineProps = {
   onSelectionComplete: (range: TimeRange) => void;
 };
 
+/** Returns true if [aStart, aEnd) overlaps [bStart, bEnd) */
+function overlapsMinutes(aStart: number, aEnd: number, bStart: number, bEnd: number) {
+  return aStart < bEnd && aEnd > bStart;
+}
+
 export default function DraggableDayTimeline({
   selectedDate,
   overlays,
@@ -41,8 +46,12 @@ export default function DraggableDayTimeline({
   const [dragging, setDragging] = useState(false);
   const [draftStart, setDraftStart] = useState<number | null>(null);
   const [draftEnd, setDraftEnd] = useState<number | null>(null);
+  const [hasConflict, setHasConflict] = useState(false);
   const dragStartRef = useRef<number | null>(null);
   const draftEndRef = useRef<number | null>(null);
+  // keep a stable ref so the panResponder closure can read current overlays
+  const overlaysRef = useRef(overlays);
+  overlaysRef.current = overlays;
 
   const timelineHeight = (TIMELINE_END - TIMELINE_START + 1) * HOUR_HEIGHT;
   const currentHour = new Date().getHours();
@@ -60,6 +69,9 @@ export default function DraggableDayTimeline({
       startMinute: start % 60,
       endHour: Math.floor(safeEnd / 60),
       endMinute: safeEnd % 60,
+      /** raw minute values for conflict math */
+      _startMin: start,
+      _endMin: safeEnd,
     };
   }, [draftStart, draftEnd]);
 
@@ -72,6 +84,17 @@ export default function DraggableDayTimeline({
     });
   }, [selectedDate, currentHour, isToday]);
 
+  const checkConflict = (startMin: number, endMin: number): boolean => {
+    const lo = Math.min(startMin, endMin);
+    const hi = Math.max(startMin, endMin);
+    const safeHi = hi - lo < 30 ? lo + 30 : hi;
+    return overlaysRef.current.some((o) => {
+      const oStart = o.startHour * 60 + o.startMinute;
+      const oEnd = o.endHour * 60 + o.endMinute;
+      return overlapsMinutes(lo, safeHi, oStart, oEnd);
+    });
+  };
+
   const panResponder = useMemo(
     () =>
       PanResponder.create({
@@ -83,12 +106,17 @@ export default function DraggableDayTimeline({
           draftEndRef.current = minutes;
           setDraftStart(minutes);
           setDraftEnd(minutes);
+          setHasConflict(false);
           setDragging(true);
         },
         onPanResponderMove: (event) => {
           const minutes = yToMinutes(event.nativeEvent.locationY);
           draftEndRef.current = minutes;
           setDraftEnd(minutes);
+          const conflict = dragStartRef.current !== null
+            ? checkConflict(dragStartRef.current, minutes)
+            : false;
+          setHasConflict(conflict);
         },
         onPanResponderRelease: () => {
           const start = dragStartRef.current;
@@ -98,8 +126,10 @@ export default function DraggableDayTimeline({
           setDragging(false);
           setDraftStart(null);
           setDraftEnd(null);
+          setHasConflict(false);
 
           if (start === null || end === null) return;
+          if (checkConflict(start, end)) return; // blocked — do not fire
 
           onSelectionComplete(normalizeDragRange(selectedDate, start, end));
         },
@@ -109,8 +139,10 @@ export default function DraggableDayTimeline({
           setDragging(false);
           setDraftStart(null);
           setDraftEnd(null);
+          setHasConflict(false);
         },
       }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [onSelectionComplete, selectedDate],
   );
 
@@ -180,7 +212,9 @@ export default function DraggableDayTimeline({
               <View
                 style={[
                   styles.draftCard,
-                  draftVariant === 'appointment' ? styles.draftAppointment : styles.draftBlock,
+                  hasConflict
+                    ? styles.draftConflict
+                    : draftVariant === 'appointment' ? styles.draftAppointment : styles.draftBlock,
                   {
                     top: getOverlayTop(draftOverlay),
                     height: getOverlayHeight(draftOverlay),
@@ -188,10 +222,10 @@ export default function DraggableDayTimeline({
                 ]}
                 pointerEvents="none"
               >
-                <Text style={styles.draftTitle}>
-                  {draftVariant === 'appointment' ? 'New appointment' : 'Block time'}
+                <Text style={[styles.draftTitle, hasConflict && styles.draftConflictText]}>
+                  {hasConflict ? '⚠ Conflict' : draftVariant === 'appointment' ? 'New appointment' : 'Block time'}
                 </Text>
-                <Text style={styles.draftTime}>
+                <Text style={[styles.draftTime, hasConflict && styles.draftConflictText]}>
                   {formatEventTime(draftOverlay.startHour, draftOverlay.startMinute)} –{' '}
                   {formatEventTime(draftOverlay.endHour, draftOverlay.endMinute)}
                 </Text>
@@ -315,6 +349,14 @@ const styles = StyleSheet.create({
   draftAppointment: {
     backgroundColor: colors.accentPinkMuted,
     borderColor: colors.accentPink,
+  },
+  draftConflict: {
+    backgroundColor: 'rgba(239, 68, 68, 0.18)',
+    borderColor: '#ef4444',
+    borderStyle: 'dashed',
+  },
+  draftConflictText: {
+    color: '#ef4444',
   },
   draftTitle: {
     color: colors.text,

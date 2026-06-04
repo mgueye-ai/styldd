@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { Image, ImageSourcePropType, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BrandLogo from '../components/BrandLogo';
 import WalletBalanceSection from '../components/WalletBalanceSection';
@@ -8,51 +8,58 @@ import { useAuth } from '../context/AuthContext';
 import { usePrivacyMode } from '../context/PrivacyContext';
 import { useSiteData } from '../context/SiteDataContext';
 import { ProfileStackParamList } from '../navigation/ProfileNavigator';
-import { colors } from '../theme';
+import { colors, fonts } from '../theme';
+import { maskMoney } from '../utils/money';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'ProfileHome'>;
 
-type MenuItem = {
+import { ScheduleTab } from './business/ScheduleManageScreen';
+import { PaymentsTab } from './business/PaymentsScreen';
+
+const MANAGE_STYLES_IMG = require('../../assets/manage-styles.png') as ImageSourcePropType;
+const MANAGE_PAY_IMG    = require('../../assets/manage-pay.png')    as ImageSourcePropType;
+const MANAGE_CAL_IMG    = require('../../assets/manage-calendar.png') as ImageSourcePropType;
+
+type ManageItem = {
   label: string;
-  icon: keyof typeof Ionicons.glyphMap;
+  image: ImageSourcePropType;
   route?: keyof ProfileStackParamList;
+  scheduleTab?: ScheduleTab;
+  paymentsTab?: PaymentsTab;
 };
 
-const MANAGE_MENU: MenuItem[] = [
-  { label: 'Styles & Services', icon: 'cut-outline', route: 'Styles' },
-  { label: 'Booking payments', icon: 'card-outline', route: 'BookingPayment' },
-  { label: 'Payments & payouts', icon: 'wallet-outline', route: 'ConnectedAccounts' },
-  { label: 'Working hours', icon: 'time-outline', route: 'WorkingHours' },
-  { label: 'Schedule', icon: 'calendar-outline', route: 'Schedule' },
-  { label: 'Add appointment', icon: 'add-circle-outline', route: 'AddAppointment' },
-];
-
-const ANALYTICS_MENU: MenuItem[] = [
-  { label: 'Stats', icon: 'stats-chart-outline', route: 'BusinessStats' },
-  { label: 'Calendar', icon: 'calendar-clear-outline', route: 'BusinessCalendar' },
+const MANAGE_MENU: ManageItem[] = [
+  { label: 'Payments', image: MANAGE_PAY_IMG, route: 'Payments', paymentsTab: 'booking' },
+  { label: 'Styles & Services', image: MANAGE_STYLES_IMG, route: 'Styles' },
+  { label: 'Schedule', image: MANAGE_CAL_IMG, route: 'ScheduleManage', scheduleTab: 'schedule' },
 ];
 
 function SectionLabel({ title }: { title: string }) {
   return <Text style={styles.sectionLabel}>{title.toUpperCase()}</Text>;
 }
 
-function MenuRow({
-  item,
-  isLast,
+function ManageGrid({
+  items,
   onPress,
 }: {
-  item: MenuItem;
-  isLast: boolean;
-  onPress?: () => void;
+  items: ManageItem[];
+  onPress: (item: ManageItem) => void;
 }) {
   return (
-    <Pressable style={[styles.menuRow, !isLast && styles.menuRowBorder]} onPress={onPress}>
-      <View style={styles.menuIconWrap}>
-        <Ionicons name={item.icon} size={18} color={colors.textMuted} />
-      </View>
-      <Text style={styles.menuLabel}>{item.label}</Text>
-      <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
-    </Pressable>
+    <View style={styles.manageGrid}>
+      {items.map((item) => (
+        <Pressable
+          key={item.label}
+          style={({ pressed }) => [styles.manageCell, pressed && styles.manageCellPressed]}
+          onPress={item.route ? () => onPress(item) : undefined}
+        >
+          <View style={styles.manageCellImgWrap}>
+            <Image source={item.image} style={styles.manageCellImg} resizeMode="cover" accessibilityIgnoresInvertColors />
+          </View>
+          <Text style={styles.manageCellLabel} numberOfLines={2}>{item.label}</Text>
+        </Pressable>
+      ))}
+    </View>
   );
 }
 
@@ -73,12 +80,26 @@ function timeSince(isoDate: string | null | undefined): string {
 }
 
 export default function ProfileScreen({ navigation }: Props) {
-  const { privacyMode, setPrivacyMode } = usePrivacyMode();
   const { profile, user, signOut } = useAuth();
-  const { clients, appointments, hasLinkedSite, isLoading } = useSiteData();
+  const { privacyMode } = usePrivacyMode();
+  const {
+    clients, appointments, bookings,
+    hasLinkedSite, isLoading,
+    getRevenueForPeriod, getUpcomingAppointments,
+  } = useSiteData();
 
   const completedJobs = appointments.filter((a) => a.status === 'completed').length;
   const memberSince = timeSince(profile?.created_at ?? user?.created_at);
+
+  // Overview stats
+  const monthRevenue = getRevenueForPeriod('month');
+  const upcomingCount = getUpcomingAppointments(100).length;
+  const pendingCount = bookings.filter((b) => b.status === 'pending' || b.status === 'pending_payment').length;
+  const avgJobValue = completedJobs > 0
+    ? bookings.filter((b) => b.status === 'completed' && (b.estimatedTotal ?? 0) > 0)
+        .reduce((sum, b) => sum + (b.estimatedTotal ?? 0), 0) /
+      Math.max(1, bookings.filter((b) => b.status === 'completed' && (b.estimatedTotal ?? 0) > 0).length)
+    : 0;
 
   const displayName =
     profile?.full_name?.trim() ||
@@ -119,75 +140,77 @@ export default function ProfileScreen({ navigation }: Props) {
           </View>
         </View>
 
-        {/* ── Overview ── always visible ── */}
-        <SectionLabel title="Overview" />
-        <View style={styles.statsRow}>
-          <View style={[styles.statCard, styles.statCardDark]}>
-            <Text style={styles.statValue}>
-              {isLoading ? '…' : hasLinkedSite ? clients.length : '—'}
-            </Text>
-            <Text style={styles.statLabel}>Clients</Text>
-          </View>
-          <View style={[styles.statCard, styles.statCardAccent]}>
-            <Text style={[styles.statValue, styles.statValueAccent]}>
-              {isLoading ? '…' : hasLinkedSite ? completedJobs : '—'}
-            </Text>
-            <Text style={[styles.statLabel, styles.statLabelAccent]}>Jobs done</Text>
-          </View>
-          <View style={[styles.statCard, styles.statCardDark]}>
-            <Text style={styles.statValue}>{memberSince}</Text>
-            <Text style={styles.statLabel}>In business</Text>
-          </View>
-        </View>
-
         {/* ── Earnings — only shown once Stripe account is active ── */}
         <WalletBalanceSection showOnlyWhenActive />
 
-        {/* ── Manage business ── */}
-        <SectionLabel title="Manage" />
-        <View style={styles.menuCard}>
-          {MANAGE_MENU.map((item, i) => (
-            <MenuRow
-              key={item.label}
-              item={item}
-              isLast={i === MANAGE_MENU.length - 1}
-              onPress={item.route ? () => navigation.navigate(item.route!) : undefined}
-            />
-          ))}
-        </View>
+        {/* ── Overview ── */}
+        <SectionLabel title="Overview" />
+        <View style={styles.overviewGrid}>
+          {/* Row 1: full-width accent */}
+          <View style={[styles.overviewCard, styles.overviewCardAccent]}>
+            <Text style={styles.overviewAccentLabel}>This month</Text>
+            <Text style={styles.overviewAccentValue}>
+              {isLoading ? '…' : hasLinkedSite ? maskMoney(monthRevenue, privacyMode) : '—'}
+            </Text>
+            <Text style={styles.overviewAccentSub}>Revenue</Text>
+          </View>
 
-        {/* ── Analytics ── */}
-        <SectionLabel title="Analytics" />
-        <View style={styles.menuCard}>
-          {ANALYTICS_MENU.map((item, i) => (
-            <MenuRow
-              key={item.label}
-              item={item}
-              isLast={i === ANALYTICS_MENU.length - 1}
-              onPress={item.route ? () => navigation.navigate(item.route!) : undefined}
-            />
-          ))}
-        </View>
+          {/* Row 2 */}
+          <View style={styles.overviewRow}>
+            <View style={styles.overviewCell}>
+              <Text style={styles.overviewValue}>{isLoading ? '…' : hasLinkedSite ? upcomingCount : '—'}</Text>
+              <Text style={styles.overviewLabel}>Upcoming</Text>
+            </View>
+            <View style={styles.overviewCell}>
+              <Text style={[styles.overviewValue, pendingCount > 0 && styles.overviewValueWarn]}>
+                {isLoading ? '…' : hasLinkedSite ? pendingCount : '—'}
+              </Text>
+              <Text style={styles.overviewLabel}>Pending</Text>
+            </View>
+          </View>
 
-        {/* ── Preferences ── */}
-        <SectionLabel title="Preferences" />
-        <View style={styles.menuCard}>
-          <View style={styles.preferenceRow}>
-            <View style={styles.menuIconWrap}>
-              <Ionicons name="eye-off-outline" size={18} color={colors.textMuted} />
+          {/* Row 3 */}
+          <View style={styles.overviewRow}>
+            <View style={styles.overviewCell}>
+              <Text style={styles.overviewValue}>{isLoading ? '…' : hasLinkedSite ? clients.length : '—'}</Text>
+              <Text style={styles.overviewLabel}>Clients</Text>
             </View>
-            <View style={styles.preferenceContent}>
-              <Text style={styles.menuLabel}>Privacy mode</Text>
-              <Text style={styles.preferenceHint}>Hide money amounts across the app</Text>
+            <View style={styles.overviewCell}>
+              <Text style={styles.overviewValue}>{isLoading ? '…' : hasLinkedSite ? completedJobs : '—'}</Text>
+              <Text style={styles.overviewLabel}>Jobs done</Text>
             </View>
-            <Switch
-              value={privacyMode}
-              onValueChange={setPrivacyMode}
-              trackColor={{ false: colors.progressTrack, true: colors.accentPink }}
-              thumbColor="#fff"
-            />
+          </View>
+
+          {/* Row 4 */}
+          <View style={styles.overviewRow}>
+            <View style={styles.overviewCell}>
+              <Text style={styles.overviewValue}>
+                {isLoading ? '…' : hasLinkedSite && avgJobValue > 0 ? maskMoney(avgJobValue, privacyMode) : '—'}
+              </Text>
+              <Text style={styles.overviewLabel}>Avg job value</Text>
+            </View>
+            <View style={styles.overviewCell}>
+              <Text style={styles.overviewValue}>{memberSince}</Text>
+              <Text style={styles.overviewLabel}>In business</Text>
+            </View>
           </View>
         </View>
+
+        {/* ── Manage business ── */}
+        <SectionLabel title="Manage" />
+        <ManageGrid
+          items={MANAGE_MENU}
+          onPress={(item) => {
+            if (!item.route) return;
+            if (item.route === 'ScheduleManage') {
+              navigation.navigate('ScheduleManage', { tab: item.scheduleTab });
+            } else if (item.route === 'Payments') {
+              navigation.navigate('Payments', { tab: item.paymentsTab });
+            } else {
+              navigation.navigate(item.route as any);
+            }
+          }}
+        />
 
         {/* ── Account ── */}
         <SectionLabel title="Account" />
@@ -272,43 +295,102 @@ const styles = StyleSheet.create({
     marginLeft: 2,
   },
 
-  /* Stats row */
-  statsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 28,
+  /* Overview grid */
+  overviewGrid: {
+    flexDirection: 'column',
+    gap: 6,
+    marginBottom: 20,
   },
-  statCard: {
-    flex: 1,
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 10,
-    alignItems: 'center',
-    gap: 4,
+  overviewCard: {
+    backgroundColor: colors.accentPink,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 1,
   },
-  statCardDark: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-  },
-  statCardAccent: {
+  overviewCardAccent: {
     backgroundColor: colors.accentPink,
   },
-  statValue: {
+  overviewRow: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  overviewCell: {
+    flex: 1,
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 1,
+  },
+  overviewValue: {
     color: colors.text,
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
+    fontFamily: fonts.number,
+    letterSpacing: -0.3,
   },
-  statValueAccent: {
-    color: '#fff',
+  overviewValueWarn: {
+    color: '#f59e0b',
   },
-  statLabel: {
+  overviewLabel: {
     color: colors.textMuted,
     fontSize: 11,
     fontWeight: '500',
   },
-  statLabelAccent: {
+  overviewAccentValue: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+  },
+  overviewAccentLabel: {
+    color: 'rgba(255,255,255,0.75)',
+    fontSize: 10,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  overviewAccentSub: {
     color: 'rgba(255,255,255,0.7)',
+    fontSize: 11,
+    fontWeight: '500',
+  },
+
+  /* Manage 1×3 image grid */
+  manageGrid: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 24,
+  },
+  manageCell: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 8,
+  },
+  manageCellPressed: {
+    opacity: 0.72,
+  },
+  manageCellImgWrap: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 18,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  manageCellImg: {
+    width: '100%',
+    height: '100%',
+  },
+  manageCellLabel: {
+    color: colors.text,
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+    lineHeight: 16,
   },
 
   /* Menu card */
@@ -340,23 +422,6 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 15,
     fontWeight: '500',
-  },
-
-  /* Preference row */
-  preferenceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 15,
-  },
-  preferenceContent: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  preferenceHint: {
-    color: colors.textMuted,
-    fontSize: 12,
-    marginTop: 2,
   },
 
   signOutLabel: {

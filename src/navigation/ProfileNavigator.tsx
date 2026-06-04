@@ -4,6 +4,8 @@ import BusinessCalendarScreen from '../screens/business/BusinessCalendarScreen';
 import BusinessStatsScreen from '../screens/business/BusinessStatsScreen';
 import StylesScreen from '../screens/business/StylesScreen';
 import ScheduleScreen from '../screens/business/ScheduleScreen';
+import ScheduleManageScreen, { ScheduleTab } from '../screens/business/ScheduleManageScreen';
+import PaymentsScreen, { PaymentsTab } from '../screens/business/PaymentsScreen';
 import BookingPaymentScreen from '../screens/business/BookingPaymentScreen';
 import WalletScreen from '../screens/business/WalletScreen';
 import WorkingHoursScreen from '../screens/business/WorkingHoursScreen';
@@ -19,6 +21,8 @@ export type ProfileStackParamList = {
   BookingPayment: undefined;
   Wallet: undefined;
   AddAppointment: undefined;
+  ScheduleManage: { tab?: ScheduleTab };
+  Payments: { tab?: PaymentsTab };
   BusinessStats: undefined;
   BusinessCalendar: undefined;
   ConnectedAccounts: undefined;
@@ -29,10 +33,12 @@ const Stack = createNativeStackNavigator<ProfileStackParamList>();
 
 export default function ProfileNavigator() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false, gestureEnabled: true, fullScreenGestureEnabled: true, animation: 'slide_from_right' }}>
       <Stack.Screen name="ProfileHome" component={ProfileScreen} />
       <Stack.Screen name="Styles" component={StylesScreen} />
       <Stack.Screen name="Schedule" component={ScheduleScreen} />
+      <Stack.Screen name="ScheduleManage" component={ScheduleManageScreen} />
+      <Stack.Screen name="Payments" component={PaymentsScreen} />
       <Stack.Screen name="WorkingHours" component={WorkingHoursScreen} />
       <Stack.Screen name="BookingPayment" component={BookingPaymentScreen} />
       <Stack.Screen name="Wallet" component={WalletScreen} />

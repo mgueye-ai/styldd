@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Alert, Modal, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Modal, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { resolveBankDomain } from '../lib/institutionDomains';
 import { WebView } from 'react-native-webview';
 import { useFocusEffect } from '@react-navigation/native';
 import { usePrivacyMode } from '../context/PrivacyContext';
@@ -13,7 +14,16 @@ import {
   syncStripeConnect,
   type StripeConnectSummary,
 } from '../lib/stripeConnect';
-import { colors } from '../theme';
+import { colors, fonts } from '../theme';
+
+const LOGOKIT_TOKEN = process.env.EXPO_PUBLIC_LOGOKIT_TOKEN ?? '';
+function bankLogoUrl(bankName?: string): string | null {
+  if (!bankName) return null;
+  const lower = bankName.toLowerCase();
+  const domain = lower.includes('stripe') ? 'stripe.com' : (resolveBankDomain(bankName) ?? null);
+  if (!domain || !LOGOKIT_TOKEN) return null;
+  return `https://img.logokit.com/${domain}?token=${LOGOKIT_TOKEN}`;
+}
 
 type Props = {
   onSummaryChange?: (summary: StripeConnectSummary | null) => void;
@@ -25,9 +35,8 @@ const RETURN_URL = 'styldd.com/connect/return';
 const REFRESH_URL = 'styldd.com/connect/refresh';
 
 export default function WalletBalanceSection({ onSummaryChange, showOnlyWhenActive }: Props) {
-  const { hasLinkedSite, getRevenueForPeriod } = useSiteData();
+  const { hasLinkedSite } = useSiteData();
   const { privacyMode } = usePrivacyMode();
-  const monthRevenue = getRevenueForPeriod('month');
   const [summary, setSummary] = useState<StripeConnectSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -146,22 +155,22 @@ export default function WalletBalanceSection({ onSummaryChange, showOnlyWhenActi
   // In passive mode, hide the whole section until the account is active
   if (showOnlyWhenActive && !loading && needsOnboarding) return null;
 
+  const bank = summary?.bankAccount;
+  const totalUnpaid = (summary?.balanceAvailableCents ?? 0) + (summary?.balancePendingCents ?? 0);
+
   return (
     <>
-      <View style={styles.card}>
-        {/* Balance header — show booked revenue as primary, Stripe balance as secondary */}
-        <View style={styles.balanceRow}>
-          <Text style={styles.balanceValue}>
-            {privacyMode ? '••••' : `$${monthRevenue.toFixed(2)}`}
+      <View style={styles.wrap}>
+        {/* Big centred amount */}
+        <Pressable onPress={() => void refresh()} hitSlop={16} disabled={loading} style={styles.amountWrap}>
+          <Text style={styles.amount}>
+            {loading ? '—' : (privacyMode ? '••••' : formatUsdFromCents(totalUnpaid))}
           </Text>
-          <Pressable onPress={() => void refresh()} hitSlop={12} disabled={loading}>
-            <Text style={styles.refreshLink}>↻</Text>
-          </Pressable>
-        </View>
-        <Text style={styles.balanceLabel}>Revenue this month</Text>
+        </Pressable>
 
+        {/* Small muted sub-line */}
         {isReady && !loading && (
-          <Text style={styles.pendingLine}>
+          <Text style={styles.subLine}>
             {masked(summary?.balanceAvailableCents ?? 0)} available
             {(summary?.balancePendingCents ?? 0) > 0
               ? ` · ${masked(summary?.balancePendingCents ?? 0)} processing`
@@ -169,76 +178,39 @@ export default function WalletBalanceSection({ onSummaryChange, showOnlyWhenActi
           </Text>
         )}
 
-        {/* Status badge */}
-        {!loading && (
-          <View style={styles.badgeRow}>
-            {isReady ? (
-              <View style={[styles.badge, styles.badgeGreen]}>
-                <Ionicons name="checkmark-circle" size={13} color="#15803d" />
-                <Text style={[styles.badgeText, { color: '#15803d' }]}>Payments active</Text>
-              </View>
-            ) : isPending ? (
-              <View style={[styles.badge, styles.badgeAmber]}>
-                <Ionicons name="time-outline" size={13} color="#92400e" />
-                <Text style={[styles.badgeText, { color: '#92400e' }]}>
-                  {summary?.status === 'pending_review' ? 'Under review' : 'Setup incomplete'}
-                </Text>
-              </View>
-            ) : (
-              <View style={[styles.badge, styles.badgeGray]}>
-                <Ionicons name="card-outline" size={13} color={colors.textMuted} />
-                <Text style={[styles.badgeText, { color: colors.textMuted }]}>Not set up</Text>
+        {/* Bank tag + payout inline row */}
+        {isReady ? (
+          <View style={styles.inlineRow}>
+            {bank && (
+              <View style={styles.bankTag}>
+                {bankLogoUrl(bank.bankName) ? (
+                  <Image source={{ uri: bankLogoUrl(bank.bankName)! }} style={styles.bankTagLogo} resizeMode="contain" />
+                ) : (
+                  <Ionicons name="business-outline" size={11} color={colors.textMuted} />
+                )}
+                <Text style={styles.bankTagText}>{bank.bankName ?? 'Bank'} ••{bank.last4}</Text>
               </View>
             )}
+            <Pressable
+              style={[styles.payoutBtn, (!canPayout || busy) && styles.payoutBtnDim]}
+              disabled={busy}
+              onPress={() => void handlePayout()}
+            >
+              {busy
+                ? <ActivityIndicator color={colors.accentPink} size="small" />
+                : <Text style={styles.payoutBtnText}>Pay out</Text>
+              }
+            </Pressable>
           </View>
-        )}
-
-        {/* Action buttons */}
-        {needsOnboarding ? (
-          <Pressable
-            style={[styles.actionBtn, busy && styles.btnDisabled]}
-            disabled={busy}
-            onPress={() => void handleSetupPayments()}
-          >
-            {busy ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <>
-                <Ionicons name="card-outline" size={18} color="#fff" />
-                <Text style={styles.actionBtnText}>Set up Styld Pay</Text>
-              </>
-            )}
+        ) : needsOnboarding ? (
+          <Pressable style={[styles.actionBtn, busy && styles.btnDisabled]} disabled={busy} onPress={() => void handleSetupPayments()}>
+            {busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.actionBtnText}>Set up Styld Pay</Text>}
           </Pressable>
         ) : isPending ? (
-          <Pressable
-            style={[styles.actionBtn, styles.actionBtnMuted, busy && styles.btnDisabled]}
-            disabled={busy}
-            onPress={() => void handleSyncAfterOnboarding()}
-          >
-            {busy ? (
-              <ActivityIndicator color="#fff" size="small" />
-            ) : (
-              <Text style={styles.actionBtnText}>Check status</Text>
-            )}
+          <Pressable style={[styles.actionBtn, styles.actionBtnMuted, busy && styles.btnDisabled]} disabled={busy} onPress={() => void handleSyncAfterOnboarding()}>
+            {busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={[styles.actionBtnText, { color: colors.textMuted }]}>Check status</Text>}
           </Pressable>
-        ) : (
-          <Pressable
-            style={[styles.payoutBtn, (!canPayout || busy) && styles.btnDisabled]}
-            disabled={!canPayout || busy}
-            onPress={() => void handlePayout()}
-          >
-            {busy ? (
-              <ActivityIndicator color={colors.accentPink} size="small" />
-            ) : (
-              <Text style={[styles.payoutBtnText, !canPayout && styles.payoutBtnTextMuted]}>
-                {canPayout
-                  ? `Withdraw ${masked(summary?.balanceAvailableCents ?? 0)}`
-                  : 'Balance under $1.00'}
-              </Text>
-            )}
-          </Pressable>
-        )}
-
+        ) : null}
       </View>
 
       {/* Styld Pay onboarding / dashboard modal */}
@@ -283,104 +255,73 @@ export default function WalletBalanceSection({ onSummaryChange, showOnlyWhenActi
 }
 
 const styles = StyleSheet.create({
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    padding: 20,
-    marginBottom: 24,
+  wrap: {
+    alignItems: 'center',
+    paddingVertical: 20,
+    marginBottom: 8,
+    gap: 6,
   },
-  balanceRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    marginBottom: 2,
-  },
-  balanceValue: {
-    fontSize: 40,
+  amountWrap: { alignItems: 'center' },
+  amount: {
+    fontSize: 48,
     fontWeight: '700',
+    fontFamily: fonts.number,
     color: colors.text,
-    letterSpacing: -1,
+    letterSpacing: -2,
   },
-  balanceLabel: {
-    fontSize: 12,
-    color: colors.textMuted,
-    fontWeight: '500',
-    marginBottom: 4,
-  },
-  pendingLine: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginBottom: 4,
-  },
-  refreshLink: {
-    fontSize: 20,
-    color: colors.textMuted,
-    marginBottom: 4,
-  },
-  emptyText: {
+  subLine: {
     fontSize: 13,
     color: colors.textMuted,
-    lineHeight: 19,
+    fontWeight: '400',
   },
-
-  /* Status badge */
-  badgeRow: {
+  inlineRow: {
     flexDirection: 'row',
-    marginBottom: 16,
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
   },
-  badge: {
+  bankTag: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 20,
-  },
-  badgeGreen: { backgroundColor: '#dcfce7' },
-  badgeAmber: { backgroundColor: '#fef3c7' },
-  badgeGray: { backgroundColor: colors.progressTrack },
-  badgeText: { fontSize: 12, fontWeight: '600' },
-
-  /* Setup button */
-  actionBtn: {
-    backgroundColor: colors.accentPink,
-    borderRadius: 12,
-    paddingVertical: 13,
-    paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  actionBtnMuted: { backgroundColor: colors.progressTrack },
-  actionBtnText: { color: '#fff', fontSize: 15, fontWeight: '600' },
-
-  /* Withdraw button */
-  payoutBtn: {
+    backgroundColor: colors.card,
+    borderRadius: 999,
     borderWidth: 1,
-    borderColor: colors.accentPinkBorder,
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    alignSelf: 'flex-start',
+    borderColor: colors.cardBorder,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
   },
-  payoutBtnText: { color: colors.accentPink, fontSize: 14, fontWeight: '600' },
-  payoutBtnTextMuted: { color: colors.textMuted },
-  btnDisabled: { opacity: 0.5 },
+  bankTagLogo: { width: 14, height: 14, borderRadius: 3 },
+  bankTagText: { fontSize: 12, color: colors.textMuted, fontWeight: '500' },
 
-  /* Modal */
-  modalContainer: { flex: 1, backgroundColor: colors.background },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.cardBorder,
+  payoutBtn: {
+    borderRadius: 999,
+    borderWidth: 1.5,
+    borderColor: colors.accentPink,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
   },
+  payoutBtnDim: {
+    borderColor: colors.accentPinkBorder,
+  },
+  payoutBtnText: { color: colors.accentPink, fontSize: 13, fontWeight: '700' },
+
+  actionBtn: {
+    marginTop: 10,
+    backgroundColor: colors.accentPink,
+    borderRadius: 14,
+    paddingVertical: 13,
+    paddingHorizontal: 36,
+    alignItems: 'center',
+  },
+  actionBtnMuted: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.cardBorder },
+  actionBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  btnDisabled: { opacity: 0.45 },
+
+  emptyText: { fontSize: 13, color: colors.textMuted, lineHeight: 19 },
+
+  modalContainer: { flex: 1, backgroundColor: colors.background },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: colors.cardBorder },
   modalTitle: { fontSize: 17, fontWeight: '600', color: colors.text },
   modalDone: { color: colors.accentPink, fontSize: 16, fontWeight: '600' },
 });

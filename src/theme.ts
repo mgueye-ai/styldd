@@ -1,3 +1,10 @@
+/** Use these for any number/stat/monetary display to make them visually distinct. */
+export const fonts = {
+  number: 'SpaceGrotesk_700Bold',
+  numberMedium: 'SpaceGrotesk_500Medium',
+  numberLight: 'SpaceGrotesk_300Light',
+};
+
 export const colors = {
   background: '#0a0a0a',
   text: '#f5f5f5',

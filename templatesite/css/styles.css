@@ -976,12 +976,27 @@ a:hover {
   .hero-layout--profile {
     grid-template-columns: 1fr;
     gap: 1.5rem;
+    overflow-x: hidden;
   }
 
+  /* Override the base .hero-scale-visual width cap for profile layout */
+  .hero-layout--profile .hero-scale-visual.hero-profile-img,
   .hero-layout--profile .hero-profile-img {
-    width: min(280px, 80vw);
-    margin: 0 auto;
+    /* bleed out of .container's 1rem side padding to reach full viewport */
+    width: calc(100% + 2rem);
+    max-width: calc(100% + 2rem);
+    margin-left: -1rem;
+    margin-right: -1rem;
     justify-self: center;
+    border-radius: 0;
+    aspect-ratio: 3 / 4;
+  }
+
+  .hero-layout--profile .hero-profile-img img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center top;
   }
 
   .hero-profile-panel {
@@ -3584,6 +3599,33 @@ button.hero-btn {
   padding-bottom: 1rem;
 }
 
+.catalog-section {
+  margin-bottom: 2.5rem;
+}
+
+.catalog-section__header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.catalog-section__title {
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.catalog-section__rule {
+  flex: 1;
+  height: 1px;
+  background: var(--border, rgba(0,0,0,0.1));
+}
+
 .page-catalog .price-menu {
   margin-bottom: 3.5rem;
 }
@@ -6043,8 +6085,8 @@ ul.price-menu__policy-list {
 
 /* Nav */
 .profile-nav {
-  background: #fff;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+  background: var(--pink);
+  border-bottom: none;
   padding: 0.875rem 0;
   position: sticky;
   top: 0;
@@ -6060,7 +6102,7 @@ ul.price-menu__policy-list {
   font-family: var(--font-display);
   font-size: 1.15rem;
   font-weight: 700;
-  color: var(--ink);
+  color: #fff;
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -6070,7 +6112,7 @@ ul.price-menu__policy-list {
   width: 38px;
   height: 38px;
   border-radius: 10px;
-  background: linear-gradient(135deg, #fce7f3, #fbcfe8);
+  background: rgba(255, 255, 255, 0.25);
   flex-shrink: 0;
 }
 .profile-brand__logo-img {
@@ -6084,13 +6126,12 @@ ul.price-menu__policy-list {
   display: inline-flex;
   align-items: center;
   padding: 0.6rem 1.35rem;
-  background: var(--pink);
-  color: #fff;
+  background: #fff;
+  color: var(--pink);
   border-radius: 999px;
   font-weight: 700;
   font-size: 0.9rem;
   text-decoration: none;
-  box-shadow: 0 4px 14px rgba(219, 39, 119, 0.28);
   white-space: nowrap;
   transition: opacity 0.15s;
 }

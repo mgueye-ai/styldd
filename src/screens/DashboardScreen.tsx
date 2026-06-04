@@ -2,10 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import NotificationsPanel, { AppNotification } from '../components/NotificationsPanel';
 import PeriodSelector from '../components/PeriodSelector';
 import BrandLogo from '../components/BrandLogo';
 import ScreenGradient from '../components/ScreenGradient';
@@ -13,10 +12,11 @@ import ServiceImage from '../components/ServiceImage';
 import { Period } from '../data/periods';
 import { usePrivacyMode } from '../context/PrivacyContext';
 import { useSiteData } from '../context/SiteDataContext';
-import { buildNotificationsFromBookings } from '../lib/notifications';
+import { useSiteContent } from '../context/SiteContentContext';
+import { formatSiteAddress } from '../data/siteContent';
 import { fetchStripeConnectStatus, formatUsdFromCents, type StripeConnectSummary } from '../lib/stripeConnect';
 import { DashboardStackParamList } from '../navigation/DashboardNavigator';
-import { colors } from '../theme';
+import { colors, fonts } from '../theme';
 import { maskMoney } from '../utils/money';
 import { getInitials } from '../data/clients';
 import type { AppointmentDetail } from '../data/appointments';
@@ -57,6 +57,65 @@ function bookingStatusColor(status: string, depositPaid: boolean): string {
   return colors.textMuted;
 }
 
+// ─── Skeleton shimmer ────────────────────────────────────────────────────────
+
+function usePulse() {
+  const anim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(anim, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(anim, { toValue: 0, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    ).start();
+  }, [anim]);
+  return anim;
+}
+
+function SkeletonBox({ width, height, radius = 8, style }: { width: number | string; height: number; radius?: number; style?: object }) {
+  const pulse = usePulse();
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.35, 0.7] });
+  return (
+    <Animated.View
+      style={[{ width, height, borderRadius: radius, backgroundColor: colors.cardBorder, opacity }, style]}
+    />
+  );
+}
+
+function SkeletonAppointmentRow() {
+  return (
+    <View style={skStyles.row}>
+      <SkeletonBox width={36} height={36} radius={18} />
+      <View style={skStyles.body}>
+        <SkeletonBox width="60%" height={13} radius={6} />
+        <SkeletonBox width="40%" height={11} radius={5} style={{ marginTop: 6 }} />
+      </View>
+      <SkeletonBox width={48} height={13} radius={6} />
+    </View>
+  );
+}
+
+function SkeletonBookingRow() {
+  return (
+    <View style={skStyles.bookingRow}>
+      <SkeletonBox width={40} height={40} radius={12} />
+      <View style={skStyles.body}>
+        <SkeletonBox width="55%" height={13} radius={6} />
+        <SkeletonBox width="35%" height={11} radius={5} style={{ marginTop: 6 }} />
+      </View>
+      <SkeletonBox width={52} height={13} radius={6} />
+    </View>
+  );
+}
+
+const skStyles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
+  bookingRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12,
+    backgroundColor: colors.card, borderRadius: 16, borderWidth: 1, borderColor: colors.cardBorder,
+    paddingHorizontal: 14, marginBottom: 8 },
+  body: { flex: 1, gap: 0 },
+});
+
 // ─── sub-components ──────────────────────────────────────────────────────────
 
 function JobsProgressBar({ progress }: { progress: number }) {
@@ -77,6 +136,109 @@ function JobsProgressBar({ progress }: { progress: number }) {
   );
 }
 
+// Seed pick changes every day but stays consistent within the same day
+function dailyPick<T>(arr: T[], seed?: number): T {
+  const d = new Date();
+  const dayOfYear = Math.floor((d.getTime() - new Date(d.getFullYear(), 0, 0).getTime()) / 86_400_000);
+  return arr[(dayOfYear + (seed ?? 0)) % arr.length];
+}
+
+const DAY_OFF_MESSAGES = [
+  { quote: 'Enjoy your day off 🌿', sub: 'Nothing booked — rest up.' },
+  { quote: 'Clear calendar today ✨', sub: 'Take some time for yourself.' },
+  { quote: 'A well-earned rest 🛁', sub: 'Recharge and come back stronger.' },
+  { quote: 'No clients today 🤍', sub: 'Do something you love.' },
+  { quote: 'Free day — make it yours 🌸', sub: "You've been putting in the work." },
+  { quote: 'Nothing on the books 🎵', sub: 'Breathe. You deserve this.' },
+  { quote: 'Self-care day? Sounds right 💆‍♀️', sub: "Your schedule says so." },
+  { quote: 'Clear skies today ☀️', sub: 'Enjoy every minute of it.' },
+  { quote: 'Time belongs to you today 🕊️', sub: 'No rush, no clients.' },
+  { quote: 'Rest is part of the work 💤', sub: 'Off the clock and loving it.' },
+];
+
+const NOT_STARTED_MESSAGES = [
+  (n: number) => ({ quote: `${n} ${n === 1 ? 'appointment' : 'appointments'} lined up today.`, sub: 'Time to make it happen.' }),
+  (n: number) => ({ quote: `Big day ahead — ${n} booked 💼`, sub: "Let's get it." }),
+  (n: number) => ({ quote: `${n} ${n === 1 ? 'client is' : 'clients are'} counting on you today ✨`, sub: "You've got this." }),
+  (n: number) => ({ quote: 'Rise and shine — your clients await 🌅', sub: `${n} ${n === 1 ? 'appointment' : 'appointments'} on the books.` }),
+  (n: number) => ({ quote: `Ready to crush ${n} today? 🔥`, sub: "Doors open, let's go." }),
+  (n: number) => ({ quote: 'Your chair is ready. Are you? 💅', sub: `${n} ${n === 1 ? 'appointment' : 'appointments'} scheduled.` }),
+  (n: number) => ({ quote: `Day ${n > 1 ? `packed with ${n}` : 'starting with 1'} — let's do this 🎯`, sub: 'Nothing but momentum today.' }),
+  (n: number) => ({ quote: `${n} chances to make someone feel amazing today 🌟`, sub: "That's the job. That's the gift." }),
+  (n: number) => ({ quote: 'Good morning — big things ahead ☀️', sub: `${n} ${n === 1 ? 'appointment' : 'appointments'} waiting.` }),
+  (n: number) => ({ quote: `Every great day starts here 💪`, sub: `${n} ${n === 1 ? 'appointment' : 'appointments'} to go.` }),
+];
+
+const IN_PROGRESS_MESSAGES = [
+  (done: number, left: number) => ({ quote: `${left} more to go — keep it up 💪`, sub: `${done} done so far.` }),
+  (done: number, left: number) => ({ quote: `On a roll — ${left} left 🔥`, sub: `${done} already behind you.` }),
+  (done: number, left: number) => ({ quote: `${done} down, ${left} to finish strong ✨`, sub: 'Keep the momentum.' }),
+  (done: number, left: number) => ({ quote: `Almost there — ${left} ${left === 1 ? 'one' : 'more'} left 🎯`, sub: "You're doing amazing." }),
+  (done: number, left: number) => ({ quote: `${left} to go and you're flying 🚀`, sub: `${done} wrapped up so far.` }),
+  (done: number, left: number) => ({ quote: 'Mid-day grind 💅', sub: `${done} done · ${left} left to go.` }),
+  (done: number, left: number) => ({ quote: `Killing it — just ${left} left 💅`, sub: `${done} already handled.` }),
+  (done: number, left: number) => ({ quote: `Halfway isn't stopping you 🌊`, sub: `${done} done, ${left} to go.` }),
+  (done: number, left: number) => ({ quote: `${done} clients left happy so far 🤍`, sub: `${left} more to go.` }),
+  (done: number, left: number) => ({ quote: `Push through — ${left} ${left === 1 ? 'appointment' : 'appointments'} away from a full day ✅`, sub: `${done} checked off.` }),
+];
+
+const ALL_DONE_MESSAGES = [
+  (n: number) => ({ quote: 'Wrapped up for the day 🙌', sub: `All ${n} done — incredible.` }),
+  (n: number) => ({ quote: 'You crushed it today 🔥', sub: `Every single ${n === 1 ? 'one' : `${n}`} — done.` }),
+  (n: number) => ({ quote: 'Clean sweep 💅', sub: `All ${n} ${n === 1 ? 'appointment' : 'appointments'} completed.` }),
+  (n: number) => ({ quote: "That's a wrap ✨", sub: `${n} ${n === 1 ? 'client' : 'clients'} taken care of today.` }),
+  (n: number) => ({ quote: 'Legend behavior 👑', sub: `${n} for ${n}. Perfect day.` }),
+  (n: number) => ({ quote: 'Done and dusted 🌟', sub: 'Time to rest up — you earned it.' }),
+  (n: number) => ({ quote: 'Every client seen. Every box ticked ✅', sub: "That's a full day's work." }),
+  (n: number) => ({ quote: 'Another great day in the books 📖', sub: `${n} ${n === 1 ? 'appointment' : 'appointments'} completed.` }),
+  (n: number) => ({ quote: 'Full send today 🚀', sub: `All ${n} handled — go celebrate.` }),
+  (n: number) => ({ quote: 'The chair is empty. The work is done 🤍', sub: `${n} ${n === 1 ? 'appointment' : 'appointments'} — all wrapped up.` }),
+];
+
+function DayVibeCard({ jobStats }: { jobStats: { completed: number; total: number; progress: number } }) {
+  const { total, completed } = jobStats;
+  const remaining = total - completed;
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(6)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
+    ]).start();
+  }, []);
+
+  let quote: string;
+  let sub: string | null = null;
+
+  if (total === 0) {
+    const m = dailyPick(DAY_OFF_MESSAGES);
+    quote = m.quote; sub = m.sub;
+  } else if (completed === 0) {
+    const fn = dailyPick(NOT_STARTED_MESSAGES);
+    const m = fn(total);
+    quote = m.quote; sub = m.sub;
+  } else if (completed < total) {
+    const fn = dailyPick(IN_PROGRESS_MESSAGES, completed);
+    const m = fn(completed, remaining);
+    quote = m.quote; sub = m.sub;
+  } else {
+    const fn = dailyPick(ALL_DONE_MESSAGES);
+    const m = fn(total);
+    quote = m.quote; sub = m.sub;
+  }
+
+  return (
+    <Animated.View style={[styles.vibeRow, { opacity: fadeAnim, transform: [{ translateY: slideAnim }] }]}>
+      <Image source={require('../../assets/icon.png')} style={styles.vibeIcon} />
+      <View style={styles.vibeContent}>
+        <Text style={styles.vibeQuote}>{quote}</Text>
+        {sub ? <Text style={styles.vibeSub}>{sub}</Text> : null}
+      </View>
+    </Animated.View>
+  );
+}
+
 /** Grouped day header */
 function DayHeader({ label, count }: { label: string; count: number }) {
   const isToday = label.startsWith('Today');
@@ -94,10 +256,12 @@ function DayHeader({ label, count }: { label: string; count: number }) {
 /** Compact appointment pill card */
 function AppointmentRow({
   appointment,
+  siteAddress,
   privacyMode,
   onPress,
 }: {
   appointment: AppointmentDetail;
+  siteAddress: string;
   privacyMode: boolean;
   onPress: () => void;
 }) {
@@ -129,7 +293,7 @@ function AppointmentRow({
         <Text style={styles.apptService} numberOfLines={1}>{appointment.service}</Text>
         <View style={styles.apptLocationRow}>
           <Ionicons name="location-outline" size={12} color={colors.textMuted} />
-          <Text style={styles.apptLocationText} numberOfLines={1}>{appointment.location}</Text>
+          <Text style={styles.apptLocationText} numberOfLines={1}>{appointment.location || siteAddress || '—'}</Text>
         </View>
       </View>
 
@@ -223,12 +387,12 @@ function RecentBookingRow({
 // ─── main screen ─────────────────────────────────────────────────────────────
 
 export default function DashboardScreen({ navigation }: Props) {
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set());
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('month');
   const [displayValue, setDisplayValue] = useState(MONTH_VALUE);
   const [stripeSummary, setStripeSummary] = useState<StripeConnectSummary | null>(null);
   const { privacyMode } = usePrivacyMode();
+  const { content: siteContent } = useSiteContent();
+  const siteAddress = formatSiteAddress(siteContent);
   const {
     businessLabel,
     hasLinkedSite,
@@ -238,14 +402,6 @@ export default function DashboardScreen({ navigation }: Props) {
     getTodayJobStats,
     getUpcomingAppointments,
   } = useSiteData();
-
-  const notifications = useMemo<AppNotification[]>(() => {
-    if (!hasLinkedSite) return [];
-    return buildNotificationsFromBookings(bookings).map((item) => ({
-      ...item,
-      unread: !readNotificationIds.has(item.id),
-    }));
-  }, [bookings, hasLinkedSite, readNotificationIds]);
 
   const revenueValue = getRevenueForPeriod(selectedPeriod);
   const jobStats = getTodayJobStats();
@@ -280,25 +436,28 @@ export default function DashboardScreen({ navigation }: Props) {
   }, [bookings]);
 
   const rafRef = useRef<ReturnType<typeof requestAnimationFrame> | null>(null);
+  const displayRef = useRef(0);
 
-  const switchPeriod = (key: Period) => {
-    if (key === selectedPeriod) return;
-    // When Stripe is active, period changes only affect the booking list below —
-    // the balance stays fixed. Only animate when falling back to booking revenue.
-    const oldValue = stripeTotal ?? getRevenueForPeriod(selectedPeriod);
-    const newValue = stripeTotal ?? getRevenueForPeriod(key);
-    setSelectedPeriod(key);
+  const animateTo = useCallback((target: number) => {
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    const DURATION = 480;
+    const from = displayRef.current;
+    const DURATION = 500;
     const startTime = performance.now();
     const tick = (now: number) => {
       const elapsed = now - startTime;
       const t = Math.min(elapsed / DURATION, 1);
       const eased = 1 - Math.pow(1 - t, 3);
-      setDisplayValue(Math.round(oldValue + (newValue - oldValue) * eased));
+      const v = Math.round(from + (target - from) * eased);
+      displayRef.current = v;
+      setDisplayValue(v);
       if (t < 1) rafRef.current = requestAnimationFrame(tick);
     };
     rafRef.current = requestAnimationFrame(tick);
+  }, []);
+
+  const switchPeriod = (key: Period) => {
+    if (key === selectedPeriod) return;
+    setSelectedPeriod(key);
   };
 
   // Fetch Stripe balance so the dashboard reflects real money (available + processing)
@@ -311,22 +470,13 @@ export default function DashboardScreen({ navigation }: Props) {
     }, [hasLinkedSite]),
   );
 
-  // Dashboard main number = Stripe total (available + processing) when account is active,
-  // otherwise fall back to booking-based revenue for the selected period
-  const stripeTotal =
-    stripeSummary?.status === 'ready'
-      ? (stripeSummary.balanceAvailableCents + stripeSummary.balancePendingCents) / 100
-      : null;
+  // Any time the revenue target changes (period switch or fresh data load), animate to it.
+  useEffect(() => {
+    animateTo(revenueValue);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [revenueValue]);
 
-  const primaryValue = stripeTotal ?? revenueValue;
-
-  useEffect(() => { setDisplayValue(primaryValue); }, [primaryValue]);
   useEffect(() => () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); }, []);
-
-  const unreadCount = useMemo(
-    () => notifications.filter((n) => n.unread).length,
-    [notifications],
-  );
 
   return (
     <View style={styles.container}>
@@ -349,34 +499,17 @@ export default function DashboardScreen({ navigation }: Props) {
                 {hasLinkedSite ? businessLabel : 'Styld'}
               </Text>
             </View>
-            <Pressable
-              style={styles.notificationButton}
-              onPress={() => setNotificationsOpen(true)}
-            >
-              <Ionicons name="notifications-outline" size={21} color={colors.text} />
-              {unreadCount > 0 ? (
-                <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationBadgeText}>{unreadCount}</Text>
-                </View>
-              ) : null}
-            </Pressable>
+            <View style={{ width: 38 }} />
           </View>
 
           {/* Revenue */}
           <View style={styles.revenueSection}>
-            {/* Only show period selector when falling back to booking revenue */}
-            {!stripeSummary || stripeSummary.status !== 'ready'
-              ? <PeriodSelector selectedPeriod={selectedPeriod} onPeriodChange={switchPeriod} />
-              : <Text style={styles.revenueContextLabel}>Stripe wallet balance</Text>
-            }
-            <Pressable
-              style={styles.revenueAmountWrap}
-              onPress={() => navigation.navigate('EarningDetails')}
-            >
+            <PeriodSelector selectedPeriod={selectedPeriod} onPeriodChange={switchPeriod} />
+            <View style={styles.revenueAmountWrap}>
               <Text style={styles.revenueAmount}>
                 {maskMoney(displayValue, privacyMode)}
               </Text>
-            </Pressable>
+            </View>
             {stripeSummary?.status === 'ready' ? (
               <Text style={styles.stripeBalanceLine}>
                 {privacyMode
@@ -390,23 +523,8 @@ export default function DashboardScreen({ navigation }: Props) {
             )}
           </View>
 
-          {/* Today's jobs card */}
-          <View style={[styles.card, styles.jobsCard]}>
-            <View style={styles.jobsRow}>
-              <View style={styles.jobsIconWrap}>
-                <Ionicons name="checkmark" size={16} color={colors.accentPink} />
-              </View>
-              <View style={styles.jobsContent}>
-                <View style={styles.jobsHeader}>
-                  <Text style={styles.jobsLabel}>Today's jobs completed</Text>
-                  <Text style={styles.jobsCount}>
-                    {jobStats.completed} / {jobStats.total}
-                  </Text>
-                </View>
-                <JobsProgressBar progress={jobStats.progress} />
-              </View>
-            </View>
-          </View>
+          {/* Today's vibe card */}
+          <DayVibeCard jobStats={jobStats} />
 
           {/* ── Upcoming section ── */}
           <View style={styles.sectionRow}>
@@ -424,8 +542,8 @@ export default function DashboardScreen({ navigation }: Props) {
               <Text style={styles.emptyCardText}>Link a site to see live bookings.</Text>
             </View>
           ) : isLoading ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyCardText}>Loading…</Text>
+            <View style={[styles.card, { paddingVertical: 6 }]}>
+              {[0, 1, 2].map((i) => <SkeletonAppointmentRow key={i} />)}
             </View>
           ) : groupedUpcoming.length === 0 ? (
             <View style={styles.emptyCard}>
@@ -440,6 +558,7 @@ export default function DashboardScreen({ navigation }: Props) {
                   <AppointmentRow
                     key={appt.id}
                     appointment={appt}
+                    siteAddress={siteAddress}
                     privacyMode={privacyMode}
                     onPress={() =>
                       navigation.navigate('AppointmentDetail', { appointmentId: appt.id })
@@ -451,11 +570,11 @@ export default function DashboardScreen({ navigation }: Props) {
           )}
 
           {/* ── Recent bookings section ── */}
-          {hasLinkedSite && !isLoading && (
+          {hasLinkedSite && (
             <>
               <View style={styles.sectionRow}>
                 <Text style={styles.sectionTitle}>Recent bookings</Text>
-                {totalBookings > 4 && (
+                {!isLoading && totalBookings > 4 && (
                   <Pressable onPress={() => navigation.navigate('AllBookings')} style={styles.seeAllBtn}>
                     <Text style={styles.seeAllText}>See all {totalBookings}</Text>
                     <Ionicons name="chevron-forward" size={13} color={colors.accentPink} />
@@ -463,41 +582,27 @@ export default function DashboardScreen({ navigation }: Props) {
                 )}
               </View>
 
-              {recentBookings.length === 0 ? (
+              {isLoading ? (
+                [0, 1, 2].map((i) => <SkeletonBookingRow key={i} />)
+              ) : recentBookings.length === 0 ? (
                 <View style={styles.emptyCard}>
                   <Text style={styles.emptyCardText}>No bookings yet.</Text>
                 </View>
               ) : (
-                <>
-                  {recentBookings.map((booking) => (
-                    <RecentBookingRow
-                      key={booking.id}
-                      booking={booking}
-                      privacyMode={privacyMode}
-                      onPress={() => navigation.navigate('BookingDetail', { bookingId: booking.id })}
-                    />
-                  ))}
-                </>
+                recentBookings.map((booking) => (
+                  <RecentBookingRow
+                    key={booking.id}
+                    booking={booking}
+                    privacyMode={privacyMode}
+                    onPress={() => navigation.navigate('BookingDetail', { bookingId: booking.id })}
+                  />
+                ))
               )}
             </>
           )}
         </ScrollView>
       </SafeAreaView>
 
-      <NotificationsPanel
-        visible={notificationsOpen}
-        notifications={notifications}
-        privacyMode={privacyMode}
-        onClose={() => setNotificationsOpen(false)}
-        onMarkRead={(id) => setReadNotificationIds((s) => new Set(s).add(id))}
-        onMarkAllRead={() =>
-          setReadNotificationIds((s) => {
-            const next = new Set(s);
-            notifications.forEach((n) => next.add(n.id));
-            return next;
-          })
-        }
-      />
     </View>
   );
 }
@@ -538,19 +643,11 @@ const styles = StyleSheet.create({
   revenueSection: { alignItems: 'center', marginBottom: 28, paddingBottom: 4 },
   revenueAmountWrap: { width: '100%', alignItems: 'center', justifyContent: 'center' },
   revenueAmount: {
-    color: colors.text, fontSize: 64, fontWeight: '700',
+    color: colors.text, fontSize: 64, fontWeight: '700', fontFamily: fonts.number,
     letterSpacing: -2, textAlign: 'center', lineHeight: 68,
   },
   stripeBalanceLine: {
     fontSize: 13, color: colors.textMuted, textAlign: 'center', marginTop: 6,
-  },
-  revenueContextLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: 4,
   },
 
   /* Card base */
@@ -564,20 +661,30 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
 
-  /* Jobs */
-  jobsCard: { paddingHorizontal: 14, paddingVertical: 12 },
-  jobsRow: { flexDirection: 'row', alignItems: 'center' },
-  jobsIconWrap: {
-    width: 34, height: 34, borderRadius: 17,
-    backgroundColor: 'rgba(252, 97, 163, 0.14)',
-    alignItems: 'center', justifyContent: 'center', marginRight: 12,
-    shadowColor: colors.accentPink, shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35, shadowRadius: 8,
+  /* Day vibe */
+  vibeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    paddingVertical: 10,
+    marginBottom: 8,
+    gap: 12,
   },
-  jobsContent: { flex: 1 },
-  jobsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
-  jobsLabel: { color: colors.text, fontSize: 14, fontWeight: '600', letterSpacing: -0.2, flex: 1, paddingRight: 8 },
-  jobsCount: { color: colors.textMuted, fontSize: 13, fontWeight: '500' },
+  vibeIcon: { width: 36, height: 36, borderRadius: 9 },
+  vibeContent: { flex: 1 },
+  vibeQuote: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: -0.3,
+    lineHeight: 21,
+  },
+  vibeSub: {
+    color: colors.textMuted,
+    fontSize: 12,
+    marginTop: 4,
+    fontWeight: '400',
+  },
   progressTrack: { height: 6, borderRadius: 3, backgroundColor: colors.progressTrack, overflow: 'hidden' },
   progressFillWrap: { height: '100%', borderRadius: 3, overflow: 'hidden', shadowColor: colors.accentPink, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.5, shadowRadius: 6 },
 
@@ -647,7 +754,7 @@ const styles = StyleSheet.create({
   apptLocationRow: { flexDirection: 'row', alignItems: 'center', gap: 3 },
   apptLocationText: { color: colors.textMuted, fontSize: 11, fontWeight: '500', flex: 1 },
   apptRight: { alignItems: 'flex-end', gap: 4 },
-  apptPrice: { color: colors.chartBlue, fontSize: 15, fontWeight: '700', letterSpacing: -0.3 },
+  apptPrice: { color: colors.chartBlue, fontSize: 15, fontWeight: '700', fontFamily: fonts.number, letterSpacing: -0.3 },
   depositBadge: {
     backgroundColor: colors.accentPinkMuted,
     borderRadius: 999,
@@ -673,7 +780,7 @@ const styles = StyleSheet.create({
   recentInfo: { flex: 1, minWidth: 0, gap: 3 },
   recentTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   recentName: { flex: 1, color: colors.text, fontSize: 14, fontWeight: '700', letterSpacing: -0.1 },
-  recentAmount: { color: colors.chartBlue, fontSize: 15, fontWeight: '800', letterSpacing: -0.3, flexShrink: 0 },
+  recentAmount: { color: colors.chartBlue, fontSize: 15, fontWeight: '700', fontFamily: fonts.number, letterSpacing: -0.3, flexShrink: 0 },
   recentService: { color: colors.textMuted, fontSize: 12, fontWeight: '500' },
   recentBottomRow: { flexDirection: 'row', alignItems: 'center', gap: 6, overflow: 'hidden' },
   recentStatusBadge: {

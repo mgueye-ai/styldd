@@ -3,6 +3,7 @@ import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   Pressable,
   SafeAreaView,
@@ -11,6 +12,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { resolveBankDomain } from '../lib/institutionDomains';
 import { WebView } from 'react-native-webview';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
@@ -25,6 +27,17 @@ import { ProfileStackParamList } from '../navigation/ProfileNavigator';
 import { colors } from '../theme';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'ConnectedAccounts'>;
+
+const LOGOKIT_TOKEN = process.env.EXPO_PUBLIC_LOGOKIT_TOKEN ?? '';
+
+function bankLogoUrl(bankName?: string): string | null {
+  if (!bankName) return null;
+  const lower = bankName.toLowerCase();
+  // Stripe test accounts contain "stripe" in the name
+  const domain = lower.includes('stripe') ? 'stripe.com' : (resolveBankDomain(bankName) ?? null);
+  if (!domain || !LOGOKIT_TOKEN) return null;
+  return `https://img.logokit.com/${domain}?token=${LOGOKIT_TOKEN}`;
+}
 
 const RETURN_URL = 'styldd.com/connect/return';
 const REFRESH_URL = 'styldd.com/connect/refresh';
@@ -191,7 +204,15 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
                   <Text style={styles.sectionLabel}>Linked bank account</Text>
                   <View style={styles.bankCard}>
                     <View style={styles.bankIconWrap}>
-                      <Ionicons name="business-outline" size={22} color={colors.accentPink} />
+                      {bankLogoUrl(bank?.bankName) ? (
+                        <Image
+                          source={{ uri: bankLogoUrl(bank?.bankName)! }}
+                          style={styles.bankLogo}
+                          resizeMode="contain"
+                        />
+                      ) : (
+                        <Ionicons name="business-outline" size={22} color={colors.accentPink} />
+                      )}
                     </View>
                     <View style={{ flex: 1 }}>
                       {bank ? (
@@ -398,6 +419,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  bankLogo: { width: 26, height: 26, borderRadius: 6 },
   bankName: { fontSize: 15, fontWeight: '600', color: colors.text, marginBottom: 2 },
   bankSub: { fontSize: 13, color: colors.textMuted },
   bankHolder: { fontSize: 12, color: colors.textMuted, marginTop: 2 },

@@ -1,11 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
 import {
-  BottomTabBar,
-  BottomTabBarButtonProps,
   BottomTabBarProps,
   createBottomTabNavigator,
 } from '@react-navigation/bottom-tabs';
-import { Dimensions, Pressable, StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CalendarNavigator from './CalendarNavigator';
 import ClientNavigator from './ClientNavigator';
@@ -24,8 +23,6 @@ export type TabParamList = {
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
-const TAB_BAR_WIDTH = Math.min(Dimensions.get('window').width - 40, 360);
-
 const HIDDEN_TAB_BAR_SCREENS: Record<string, string[] | 'all-but-home'> = {
   Dashboard: ['EarningDetails', 'AppointmentDetail', 'AllUpcoming', 'AllBookings', 'BookingDetail'],
   Profile: 'all-but-home',
@@ -36,88 +33,140 @@ const HIDDEN_TAB_BAR_SCREENS: Record<string, string[] | 'all-but-home'> = {
 function shouldHideTabBar(state: BottomTabBarProps['state']): boolean {
   const currentRoute = state.routes[state.index ?? 0];
   const hiddenScreens = HIDDEN_TAB_BAR_SCREENS[currentRoute.name];
-
   if (!hiddenScreens) return false;
-
   const nestedState = currentRoute.state;
   if (!nestedState?.routes.length) return false;
-
   const nestedRoute = nestedState.routes[nestedState.index ?? nestedState.routes.length - 1];
-
-  if (hiddenScreens === 'all-but-home') {
-    return nestedRoute?.name !== 'ProfileHome';
-  }
-
+  if (hiddenScreens === 'all-but-home') return nestedRoute?.name !== 'ProfileHome';
   return hiddenScreens.includes(nestedRoute.name);
 }
 
-const tabIcons: Record<
-  Exclude<keyof TabParamList, 'Site'>,
-  keyof typeof Ionicons.glyphMap
+const TAB_CONFIG: Record<
+  keyof TabParamList,
+  { icon: keyof typeof Ionicons.glyphMap; iconFocused: keyof typeof Ionicons.glyphMap; label: string }
 > = {
-  Dashboard: 'apps-outline',
-  Calendar: 'calendar-outline',
-  Client: 'people-outline',
-  Profile: 'person-circle-outline',
+  Dashboard: { icon: 'apps-outline',          iconFocused: 'apps',              label: 'Dashboard' },
+  Calendar:  { icon: 'calendar-outline',       iconFocused: 'calendar',          label: 'Calendar' },
+  Site:      { icon: 'globe-outline',          iconFocused: 'globe',             label: 'Website' },
+  Client:    { icon: 'people-outline',         iconFocused: 'people',            label: 'Clients' },
+  Profile:   { icon: 'person-circle-outline',  iconFocused: 'person-circle',     label: 'Profile' },
 };
 
-function TabIcon({
-  name,
+// Max expanded width for each label (pre-measured so animation target is accurate)
+// Widths sized for uppercase text (fontSize 11, letterSpacing 0.8) — measure generously
+const LABEL_WIDTHS: Record<keyof TabParamList, number> = {
+  Dashboard: 96,
+  Calendar:  80,
+  Site:      76,
+  Client:    68,
+  Profile:   68,
+};
+
+// Inactive tab = icon (22) + horizontal padding (20) ≈ 42px base
+// Active tab   = text width + icon slot (22) + expanded padding (28)
+// Flex ratio   = active_needed / inactive_base
+const ICON_SLOT = 22;
+const INACTIVE_PAD = 20;
+const ACTIVE_PAD = 28;
+const INACTIVE_BASE = ICON_SLOT + INACTIVE_PAD;
+const FLEX_EXPANDED: Record<keyof TabParamList, number> = Object.fromEntries(
+  Object.entries(LABEL_WIDTHS).map(([k, w]) => [k, (w + ICON_SLOT + ACTIVE_PAD) / INACTIVE_BASE]),
+) as Record<keyof TabParamList, number>;
+
+function TabButton({
+  routeName,
   focused,
-  color,
+  onPress,
 }: {
-  name: keyof typeof Ionicons.glyphMap;
+  routeName: keyof TabParamList;
   focused: boolean;
-  color: string;
+  onPress: () => void;
 }) {
+  const cfg = TAB_CONFIG[routeName];
+
+  const expand = useRef(new Animated.Value(focused ? 1 : 0)).current;
+  const [typeText, setTypeText] = useState(focused ? cfg.label : '');
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    // Pill spring (background + padding + flex)
+    Animated.spring(expand, {
+      toValue: focused ? 1 : 0,
+      speed: 20,
+      bounciness: 5,
+      useNativeDriver: false,
+    }).start();
+
+    // Typewriter
+    if (timerRef.current) clearInterval(timerRef.current);
+    if (focused) {
+      setTypeText('');
+      let i = 0;
+      // Small delay so the pill starts opening first
+      const startDelay = setTimeout(() => {
+        timerRef.current = setInterval(() => {
+          i += 1;
+          setTypeText(cfg.label.slice(0, i));
+          if (i >= cfg.label.length) clearInterval(timerRef.current!);
+        }, 28);
+      }, 40);
+      return () => {
+        clearTimeout(startDelay);
+        if (timerRef.current) clearInterval(timerRef.current);
+      };
+    } else {
+      setTypeText('');
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focused]);
+
+  const pillBg = expand.interpolate({ inputRange: [0, 1], outputRange: ['rgba(255,255,255,0)', 'rgba(255,255,255,0.18)'] });
+  const iconOpacity = expand.interpolate({ inputRange: [0, 0.3, 1], outputRange: [1, 0, 0] });
+  const pillPaddingH = expand.interpolate({ inputRange: [0, 1], outputRange: [10, 14] });
+  const flexValue = expand.interpolate({ inputRange: [0, 1], outputRange: [1, FLEX_EXPANDED[routeName]] });
+
   return (
-    <View style={styles.iconWrap}>
-      <Ionicons
-        name={name}
-        size={22}
-        color={focused ? colors.navbarActive : color}
-        style={focused ? styles.iconGlow : undefined}
-      />
-    </View>
+    <Animated.View style={[styles.tabButton, { flex: flexValue }]}>
+      <Pressable onPress={onPress} style={styles.tabButtonInner}>
+        <Animated.View style={[styles.pill, { backgroundColor: pillBg, paddingHorizontal: pillPaddingH }]}>
+          {/* Icon — fades out when active */}
+          <Animated.View style={[styles.iconAbsolute, { opacity: iconOpacity }]}>
+            <Ionicons name={cfg.icon} size={22} color={colors.navbarInactive} />
+          </Animated.View>
+
+          {/* Typewriter text */}
+          {typeText ? <Text style={styles.pillLabel}>{typeText}</Text> : null}
+        </Animated.View>
+      </Pressable>
+    </Animated.View>
   );
 }
 
-function CenterSiteButton(props: BottomTabBarButtonProps) {
-  const focused = props.accessibilityState?.selected;
-
-  return (
-    <Pressable
-      {...props}
-      style={styles.centerButtonWrap}
-      onPress={props.onPress}
-      onLongPress={props.onLongPress}
-    >
-      <View style={[styles.centerButton, focused && styles.centerButtonFocused]}>
-        <Ionicons
-          name={focused ? 'globe' : 'globe-outline'}
-          size={20}
-          color={focused ? colors.chartBlue : colors.navbarInactive}
-          style={focused ? styles.centerIconGlow : undefined}
-        />
-      </View>
-    </Pressable>
-  );
-}
-
-function FloatingTabBar(props: BottomTabBarProps) {
+function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
 
-  if (shouldHideTabBar(props.state)) {
-    return null;
-  }
+  if (shouldHideTabBar(state)) return null;
 
   return (
-    <View
-      style={[styles.tabBarWrapper, { bottom: Math.max(insets.bottom, 20) }]}
-      pointerEvents="box-none"
-    >
-      <View style={styles.tabBar}>
-        <BottomTabBar {...props} />
+    <View style={[styles.wrapper, { bottom: Math.max(insets.bottom, 16) }]} pointerEvents="box-none">
+      <View style={styles.bar}>
+        {state.routes.map((route, index) => {
+          const focused = state.index === index;
+          const onPress = () => {
+            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+            if (!focused && !event.defaultPrevented) {
+              navigation.navigate(route.name);
+            }
+          };
+          return (
+            <TabButton
+              key={route.key}
+              routeName={route.name as keyof TabParamList}
+              focused={focused}
+              onPress={onPress}
+            />
+          );
+        })}
       </View>
     </View>
   );
@@ -127,37 +176,7 @@ export default function TabNavigator() {
   return (
     <Tab.Navigator
       tabBar={(props) => <FloatingTabBar {...props} />}
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarActiveTintColor: colors.navbarActive,
-        tabBarInactiveTintColor: colors.navbarInactive,
-        tabBarShowLabel: false,
-        tabBarItemStyle: {
-          paddingHorizontal: 0,
-        },
-        tabBarStyle: {
-          width: TAB_BAR_WIDTH,
-          height: 72,
-          borderTopWidth: 0,
-          backgroundColor: 'transparent',
-          paddingTop: 14,
-          paddingBottom: 10,
-        },
-        tabBarIcon:
-          route.name === 'Site'
-            ? () => null
-            : ({ color, focused }) => (
-                <TabIcon
-                  name={tabIcons[route.name as Exclude<keyof TabParamList, 'Site'>]}
-                  focused={focused}
-                  color={color}
-                />
-              ),
-        tabBarButton:
-          route.name === 'Site'
-            ? (props) => <CenterSiteButton {...props} />
-            : undefined,
-      })}
+      screenOptions={{ headerShown: false }}
     >
       <Tab.Screen name="Dashboard" component={DashboardNavigator} />
       <Tab.Screen name="Calendar" component={CalendarNavigator} />
@@ -169,58 +188,52 @@ export default function TabNavigator() {
 }
 
 const styles = StyleSheet.create({
-  tabBarWrapper: {
+  wrapper: {
     position: 'absolute',
-    left: 0,
-    right: 0,
+    left: 20,
+    right: 20,
     alignItems: 'center',
   },
-  tabBar: {
-    width: TAB_BAR_WIDTH,
-    borderRadius: 32,
-    overflow: 'visible',
-    borderWidth: 1,
-    borderColor: colors.navbarBorder,
-    backgroundColor: colors.navbar,
+  bar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1c1c1e',
+    borderRadius: 999,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.1)',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowOpacity: 0.32,
+    shadowRadius: 20,
+    elevation: 10,
   },
-  iconWrap: {
-    width: 42,
-    height: 42,
+  tabButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  tabButtonInner: {
+    width: '100%',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  iconGlow: {
-    textShadowColor: colors.activeGlow,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 12,
-  },
-  centerIconGlow: {
-    textShadowColor: colors.activeGlow,
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 8,
-  },
-  centerButtonWrap: {
-    flex: 1,
+  pill: {
+    height: 38,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
   },
-  centerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.04)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.navbarBorder,
+  iconAbsolute: {
+    position: 'absolute',
   },
-  centerButtonFocused: {
-    backgroundColor: colors.accentPinkSoft,
-    borderColor: colors.accentPinkBorder,
+  pillLabel: {
+    color: colors.navbarActive,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
   },
 });

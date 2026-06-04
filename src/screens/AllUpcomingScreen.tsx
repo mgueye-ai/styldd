@@ -7,6 +7,8 @@ import ScreenGradient from '../components/ScreenGradient';
 import ServiceImage from '../components/ServiceImage';
 import { useSiteData } from '../context/SiteDataContext';
 import { usePrivacyMode } from '../context/PrivacyContext';
+import { useSiteContent } from '../context/SiteContentContext';
+import { formatSiteAddress } from '../data/siteContent';
 import { DashboardStackParamList } from '../navigation/DashboardNavigator';
 import { colors } from '../theme';
 import { maskMoney } from '../utils/money';
@@ -30,11 +32,13 @@ function DayHeader({ label, count }: { label: string; count: number }) {
 function AppointmentRow({
   appointment,
   isLast,
+  siteAddress,
   privacyMode,
   onPress,
 }: {
   appointment: AppointmentDetail;
   isLast: boolean;
+  siteAddress: string;
   privacyMode: boolean;
   onPress: () => void;
 }) {
@@ -58,7 +62,7 @@ function AppointmentRow({
         <Text style={styles.apptService} numberOfLines={1}>{appointment.service}</Text>
         <View style={styles.locationRow}>
           <Ionicons name="location-outline" size={12} color={colors.textMuted} />
-          <Text style={styles.locationText} numberOfLines={1}>{appointment.location}</Text>
+          <Text style={styles.locationText} numberOfLines={1}>{appointment.location || siteAddress || '—'}</Text>
         </View>
       </View>
       <View style={styles.apptRight}>
@@ -77,6 +81,8 @@ function AppointmentRow({
 export default function AllUpcomingScreen({ navigation }: Props) {
   const { getUpcomingAppointments } = useSiteData();
   const { privacyMode } = usePrivacyMode();
+  const { content: siteContent } = useSiteContent();
+  const siteAddress = formatSiteAddress(siteContent);
 
   const upcoming = getUpcomingAppointments(100);
 
@@ -118,6 +124,7 @@ export default function AllUpcomingScreen({ navigation }: Props) {
                       key={appt.id}
                       appointment={appt}
                       isLast={idx === appointments.length - 1}
+                      siteAddress={siteAddress}
                       privacyMode={privacyMode}
                       onPress={() => navigation.navigate('AppointmentDetail', { appointmentId: appt.id })}
                     />

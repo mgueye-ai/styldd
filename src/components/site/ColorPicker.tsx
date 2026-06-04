@@ -10,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { ColorPicker as WheelPicker, useColor } from 'react-native-color-picker-palette';
 import { colors } from '../../theme';
 
 // ─── Color palettes ───────────────────────────────────────────────────────────
@@ -206,16 +207,70 @@ type ColorPickerProps = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
+function WheelSection({ value, onApply }: { value: string; onApply: (hex: string) => void }) {
+  const [wheelColor, setWheelColor] = useColor(value);
+  return (
+    <View style={wheelStyles.wrap}>
+      <WheelPicker
+        color={wheelColor}
+        onColorChange={setWheelColor}
+        hideControls={false}
+        style={wheelStyles.picker}
+      />
+      <Pressable
+        style={wheelStyles.applyBtn}
+        onPress={() => onApply(wheelColor.hex)}
+      >
+        <View style={[wheelStyles.applyPreview, { backgroundColor: wheelColor.hex }]} />
+        <Text style={wheelStyles.applyText}>Use this color</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const wheelStyles = StyleSheet.create({
+  wrap: {
+    marginBottom: 8,
+  },
+  picker: {
+    height: 280,
+  },
+  applyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    marginTop: 8,
+  },
+  applyPreview: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  applyText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+    flex: 1,
+  },
+});
+
 export default function ColorPicker({ label, value, presets, onChange }: ColorPickerProps) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
+  const [showWheel, setShowWheel] = useState(false);
 
   const groups =
     presets === 'primary' ? PRIMARY_GROUPS :
     presets === 'background' ? BACKGROUND_GROUPS :
     SECONDARY_GROUPS;
 
-  const allSwatches = groups.flatMap((g) => g.swatches);
   const colorName = findColorName(value, groups);
   const contrastColor = getContrastColor(value);
 
@@ -223,6 +278,7 @@ export default function ColorPicker({ label, value, presets, onChange }: ColorPi
     setDraft(hex);
     onChange(hex);
     setOpen(false);
+    setShowWheel(false);
   };
 
   const handleHexSubmit = () => {
@@ -231,6 +287,7 @@ export default function ColorPicker({ label, value, presets, onChange }: ColorPi
     if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
       onChange(hex);
       setOpen(false);
+      setShowWheel(false);
     }
   };
 
@@ -252,7 +309,7 @@ export default function ColorPicker({ label, value, presets, onChange }: ColorPi
       </Pressable>
 
       {/* Sheet modal */}
-      <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
+      <Modal visible={open} animationType="slide" transparent onRequestClose={() => { setOpen(false); setShowWheel(false); }}>
         <SafeAreaView style={styles.modalBg} edges={['bottom']}>
           <View style={styles.sheet}>
 
@@ -262,7 +319,7 @@ export default function ColorPicker({ label, value, presets, onChange }: ColorPi
             {/* Header */}
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>{label}</Text>
-              <Pressable onPress={() => setOpen(false)} hitSlop={10} style={styles.closeBtn}>
+              <Pressable onPress={() => { setOpen(false); setShowWheel(false); }} hitSlop={10} style={styles.closeBtn}>
                 <Ionicons name="close" size={20} color={colors.text} />
               </Pressable>
             </View>
@@ -320,26 +377,46 @@ export default function ColorPicker({ label, value, presets, onChange }: ColorPi
                 </View>
               ))}
 
-              {/* Custom hex */}
-              <Text style={styles.groupLabel}>Custom</Text>
-              <View style={styles.hexRow}>
-                <View style={[styles.hexPreview, { backgroundColor: draft }]} />
-                <TextInput
-                  style={styles.hexInput}
-                  value={draft}
-                  onChangeText={setDraft}
-                  placeholder="#a855f7"
-                  placeholderTextColor={colors.textMuted}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  maxLength={7}
-                  returnKeyType="done"
-                  onSubmitEditing={handleHexSubmit}
-                />
-                <Pressable style={styles.hexApply} onPress={handleHexSubmit}>
-                  <Text style={styles.hexApplyText}>Apply</Text>
+              {/* Custom color */}
+              <View style={styles.customHeader}>
+                <Text style={styles.groupLabel}>Custom</Text>
+                <Pressable
+                  style={[styles.toggleBtn, showWheel && styles.toggleBtnActive]}
+                  onPress={() => setShowWheel((v) => !v)}
+                >
+                  <Ionicons
+                    name="color-filter-outline"
+                    size={14}
+                    color={showWheel ? colors.accentPink : colors.textMuted}
+                  />
+                  <Text style={[styles.toggleBtnText, showWheel && styles.toggleBtnTextActive]}>
+                    Color wheel
+                  </Text>
                 </Pressable>
               </View>
+
+              {showWheel ? (
+                <WheelSection value={value} onApply={handleSelect} />
+              ) : (
+                <View style={styles.hexRow}>
+                  <View style={[styles.hexPreview, { backgroundColor: draft }]} />
+                  <TextInput
+                    style={styles.hexInput}
+                    value={draft}
+                    onChangeText={setDraft}
+                    placeholder="#a855f7"
+                    placeholderTextColor={colors.textMuted}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    maxLength={7}
+                    returnKeyType="done"
+                    onSubmitEditing={handleHexSubmit}
+                  />
+                  <Pressable style={styles.hexApply} onPress={handleHexSubmit}>
+                    <Text style={styles.hexApplyText}>Apply</Text>
+                  </Pressable>
+                </View>
+              )}
 
             </ScrollView>
           </View>
@@ -508,6 +585,37 @@ const styles = StyleSheet.create({
   swatchNameActive: {
     color: colors.text,
     fontWeight: '700',
+  },
+
+  // Custom section header
+  customHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  toggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: colors.card,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  toggleBtnActive: {
+    borderColor: colors.accentPinkBorder,
+    backgroundColor: colors.accentPinkMuted,
+  },
+  toggleBtnText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  toggleBtnTextActive: {
+    color: colors.accentPink,
   },
 
   // Custom hex

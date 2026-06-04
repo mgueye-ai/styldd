@@ -295,10 +295,6 @@ export function normalizeBookingHours(value: unknown): BookingHours {
       source.slotDayStartMinute,
       DEFAULT_BOOKING_HOURS.slotDayStartMinute,
     ),
-    publicHoursText:
-      typeof source.publicHoursText === 'string' && source.publicHoursText.trim()
-        ? source.publicHoursText.trim()
-        : DEFAULT_BOOKING_HOURS.publicHoursText,
     slotStepMinutes: normalizeNumber(source.slotStepMinutes, DEFAULT_BOOKING_HOURS.slotStepMinutes),
     sameDayLeadMinutes: normalizeNumber(
       source.sameDayLeadMinutes,

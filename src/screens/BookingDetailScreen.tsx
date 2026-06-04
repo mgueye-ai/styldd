@@ -5,8 +5,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import ScreenGradient from '../components/ScreenGradient';
 import ServiceImage from '../components/ServiceImage';
 import { useSiteData } from '../context/SiteDataContext';
+import { useSiteContent } from '../context/SiteContentContext';
+import { formatSiteAddress } from '../data/siteContent';
 import { DashboardStackParamList } from '../navigation/DashboardNavigator';
-import { colors } from '../theme';
+import { colors, fonts } from '../theme';
 import { maskMoney } from '../utils/money';
 import { usePrivacyMode } from '../context/PrivacyContext';
 
@@ -45,6 +47,8 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
   const { bookingId } = route.params;
   const { bookings } = useSiteData();
   const { privacyMode } = usePrivacyMode();
+  const { content: siteContent } = useSiteContent();
+  const siteAddress = formatSiteAddress(siteContent);
 
   const booking = bookings.find((b) => b.id === bookingId);
 
@@ -147,7 +151,7 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
             {booking.durationMinutes > 0 && (
               <Row icon="hourglass-outline" label="Duration" value={`${booking.durationMinutes} min`} />
             )}
-            <Row icon="location-outline" label="Location" value={booking.location} />
+            <Row icon="location-outline" label="Location" value={booking.location || siteAddress} />
             {booking.hairType && (
               <Row icon="cut-outline" label="Hair type" value={booking.hairType} />
             )}
@@ -243,7 +247,7 @@ const styles = StyleSheet.create({
     borderTopColor: colors.cardBorder,
   },
   priceLabel: { color: colors.textMuted, fontSize: 14, fontWeight: '500' },
-  priceValue: { color: colors.text, fontSize: 16, fontWeight: '700' },
+  priceValue: { color: colors.text, fontSize: 16, fontWeight: '700', fontFamily: fonts.number },
   depositRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   paidBadge: {
     backgroundColor: 'rgba(21,128,61,0.15)',

@@ -219,10 +219,21 @@ export function SiteThemeProvider({ children }: { children: React.ReactNode }) {
   return <SiteThemeContext.Provider value={value}>{children}</SiteThemeContext.Provider>;
 }
 
+const SITE_THEME_FALLBACK: SiteThemeContextValue = {
+  theme: DEFAULT_SITE_THEME,
+  isLoading: false,
+  isSaving: false,
+  error: null,
+  heroImageUrl: null,
+  logoImageUrl: null,
+  updateTheme: () => {},
+  setHeroLayout: () => {},
+  uploadHeroImage: async () => {},
+  uploadLogoImage: async () => {},
+  removeHeroImage: async () => {},
+  refresh: async () => {},
+};
+
 export function useSiteTheme() {
-  const context = useContext(SiteThemeContext);
-  if (!context) {
-    throw new Error('useSiteTheme must be used within SiteThemeProvider');
-  }
-  return context;
+  return useContext(SiteThemeContext) ?? SITE_THEME_FALLBACK;
 }

@@ -19,7 +19,7 @@ const Stack = createNativeStackNavigator<DashboardStackParamList>();
 
 export default function DashboardNavigator() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false, gestureEnabled: true, fullScreenGestureEnabled: true, animation: 'slide_from_right' }}>
       <Stack.Screen name="DashboardHome" component={DashboardScreen} />
       <Stack.Screen name="EarningDetails" component={EarningDetailsScreen} />
       <Stack.Screen name="AppointmentDetail" component={AppointmentDetailScreen} />

@@ -5,6 +5,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Dimensions,
   Linking,
   Pressable,
   ScrollView,
@@ -15,7 +16,6 @@ import {
 import { WebView } from 'react-native-webview';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SitePreviewWebView from '../components/site/SitePreviewWebView';
-import ViewLiveSiteButton from '../components/site/ViewLiveSiteButton';
 import { useServiceCatalog } from '../context/ServiceCatalogContext';
 import { useSiteContent } from '../context/SiteContentContext';
 import { useSiteTheme } from '../context/SiteThemeContext';
@@ -103,7 +103,7 @@ function StatTile({ icon, label, value, sub }: {
   );
 }
 
-const WEBVIEW_HEIGHT = 420;
+const WEBVIEW_HEIGHT = Math.round(Dimensions.get('window').height * 0.70);
 
 function SitePreviewPanel({ loading }: { loading: boolean }) {
   const { content } = useSiteContent();
@@ -313,12 +313,6 @@ export default function SiteScreen({ navigation }: Props) {
             </Pressable>
           ) : null}
           <SitePreviewPanel loading={isLoading} />
-          {!needsSetup && !onboardingLoading ? (
-            <ViewLiveSiteButton
-              sitePublish={sitePublish}
-              onPublish={() => navigation.navigate('SiteDeploy')}
-            />
-          ) : null}
         </ScrollView>
       ) : (
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>

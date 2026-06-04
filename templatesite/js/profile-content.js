@@ -40,6 +40,40 @@
     return content.hiddenLocationParts.indexOf(part) !== -1;
   }
 
+  function buildServiceCard(style) {
+    var imgStyle = style.imageUrl
+      ? ' style="background-image:url(\'' +
+        String(style.imageUrl).replace(/'/g, '%27') +
+        '\');background-size:cover;background-position:center;"'
+      : '';
+    var bookHref = style.id
+      ? '/booking?style=' + encodeURIComponent(style.id)
+      : '/booking';
+    return (
+      '<a class="profile-service-card" href="' +
+      escapeHtml(bookHref) +
+      '">' +
+      '<div class="profile-service-card__img" aria-hidden="true"' +
+      imgStyle +
+      '></div>' +
+      '<div class="profile-service-card__body">' +
+      '<div class="profile-service-card__name">' +
+      escapeHtml(style.title || '') +
+      '</div>' +
+      (style.priceLabel
+        ? '<div class="profile-service-card__price">' +
+          escapeHtml(style.priceLabel) +
+          '</div>'
+        : '') +
+      (style.durationLabel
+        ? '<div class="profile-service-card__duration">' +
+          escapeHtml(style.durationLabel) +
+          '</div>'
+        : '') +
+      '</div></a>'
+    );
+  }
+
   function buildProfileServiceCards(styles, theme) {
     if (!styles || !styles.length) {
       return (
@@ -59,42 +93,35 @@
       return buildProfileStylePills(styles);
     }
 
-    return styles
-      .slice(0, 12)
-      .map(function (style) {
-        var imgStyle = style.imageUrl
-          ? ' style="background-image:url(\'' +
-            String(style.imageUrl).replace(/'/g, '%27') +
-            '\');background-size:cover;background-position:center;"'
-          : '';
-        var bookHref = style.id
-          ? '/booking?style=' + encodeURIComponent(style.id)
-          : '/booking';
-        return (
-          '<a class="profile-service-card" href="' +
-          escapeHtml(bookHref) +
-          '">' +
-          '<div class="profile-service-card__img" aria-hidden="true"' +
-          imgStyle +
-          '></div>' +
-          '<div class="profile-service-card__body">' +
-          '<div class="profile-service-card__name">' +
-          escapeHtml(style.title || '') +
-          '</div>' +
-          (style.priceLabel
-            ? '<div class="profile-service-card__price">' +
-              escapeHtml(style.priceLabel) +
-              '</div>'
-            : '') +
-          (style.durationLabel
-            ? '<div class="profile-service-card__duration">' +
-              escapeHtml(style.durationLabel) +
-              '</div>'
-            : '') +
-          '</div></a>'
-        );
-      })
-      .join('');
+    // Group by category — styles without a category go into an unnamed group
+    var categoryOrder = [];
+    var grouped = {};
+    styles.slice(0, 24).forEach(function (style) {
+      var cat = (style.category || '').trim();
+      if (!grouped[cat]) {
+        grouped[cat] = [];
+        categoryOrder.push(cat);
+      }
+      grouped[cat].push(style);
+    });
+
+    var hasCategories = categoryOrder.some(function (c) { return c !== ''; });
+
+    if (!hasCategories) {
+      return styles.slice(0, 24).map(buildServiceCard).join('');
+    }
+
+    return categoryOrder.map(function (cat) {
+      var cards = grouped[cat].map(buildServiceCard).join('');
+      var header = cat
+        ? '<div class="catalog-section" style="grid-column:1/-1">' +
+          '<div class="catalog-section__header">' +
+          '<span class="catalog-section__title">' + escapeHtml(cat) + '</span>' +
+          '<span class="catalog-section__rule"></span>' +
+          '</div></div>'
+        : '';
+      return header + cards;
+    }).join('');
   }
 
   function buildProfileStylePills(styles) {

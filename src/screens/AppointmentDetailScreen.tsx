@@ -18,6 +18,8 @@ import ScreenGradient from '../components/ScreenGradient';
 import ServiceImage from '../components/ServiceImage';
 import { useSiteData } from '../context/SiteDataContext';
 import { usePrivacyMode } from '../context/PrivacyContext';
+import { useSiteContent } from '../context/SiteContentContext';
+import { formatSiteAddress } from '../data/siteContent';
 import { supabase } from '../lib/supabase';
 import { CalendarStackParamList } from '../navigation/CalendarNavigator';
 import { DashboardStackParamList } from '../navigation/DashboardNavigator';
@@ -266,6 +268,8 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
   const { appointmentId } = route.params;
   const { privacyMode } = usePrivacyMode();
   const { getAppointmentById, bookings, refresh } = useSiteData();
+  const { content: siteContent } = useSiteContent();
+  const siteAddress = formatSiteAddress(siteContent);
   const appointment = getAppointmentById(appointmentId);
   const [cancelling, setCancelling] = useState(false);
 
@@ -293,8 +297,9 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
 
   const handleCall = () => Linking.openURL(`tel:${appointment.clientPhone}`);
   const handleEmail = () => email && Linking.openURL(`mailto:${email}`);
+  const displayLocation = appointment.location || siteAddress;
   const handleDirections = () => {
-    const q = encodeURIComponent(appointment.location);
+    const q = encodeURIComponent(displayLocation);
     Linking.openURL(`https://maps.apple.com/?q=${q}`);
   };
   const handleMarkComplete = () => {
@@ -428,11 +433,11 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
                 onPress={handleEmail}
               />
             ) : null}
-            {appointment.location ? (
+            {displayLocation ? (
               <InfoRow
                 icon="location-outline"
                 label="Location"
-                value={appointment.location}
+                value={displayLocation}
                 tappable
                 onPress={handleDirections}
               />
@@ -468,7 +473,7 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
                 <Text style={styles.actionBtnText}>Email</Text>
               </Pressable>
             ) : null}
-            {appointment.location ? (
+            {displayLocation ? (
               <Pressable style={styles.actionBtn} onPress={handleDirections}>
                 <Ionicons name="navigate-outline" size={18} color={colors.text} />
                 <Text style={styles.actionBtnText}>Directions</Text>

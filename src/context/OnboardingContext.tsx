@@ -13,7 +13,7 @@ import {
   OnboardingState,
 } from '../data/onboarding';
 import { DEFAULT_SITE_PUBLISH, SitePublishConfig } from '../data/sitePublish';
-import { loadSitePublish, publishSiteSubdomain, PublishSiteResult } from '../lib/sitePublish';
+import { loadSitePublish, publishSiteSubdomain, saveSubdomainDraft, PublishSiteResult } from '../lib/sitePublish';
 import { supabase } from '../lib/supabase';
 import { HOSTED_SITE_TABLE } from '../lib/siteRecords';
 import { useAuth } from './AuthContext';
@@ -25,6 +25,7 @@ type OnboardingContextValue = {
   needsSetup: boolean;
   completeSetup: () => Promise<void>;
   publishSite: (subdomain: string) => Promise<PublishSiteResult>;
+  saveDraftSubdomain: (subdomain: string) => Promise<void>;
   refresh: () => Promise<void>;
 };
 
@@ -139,6 +140,15 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
     [user?.id],
   );
 
+  const saveDraftSubdomain = useCallback(
+    async (subdomain: string) => {
+      if (!user?.id) return;
+      await saveSubdomainDraft(user.id, subdomain);
+      setSitePublish((prev) => ({ ...prev, subdomain }));
+    },
+    [user?.id],
+  );
+
   const needsSetupValue = useMemo(
     () => !isLoading && needsSiteSetup(state, hasStoredState),
     [isLoading, state, hasStoredState],
@@ -152,9 +162,10 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       needsSetup: needsSetupValue,
       completeSetup,
       publishSite,
+      saveDraftSubdomain,
       refresh,
     }),
-    [state, sitePublish, isLoading, needsSetupValue, completeSetup, publishSite, refresh],
+    [state, sitePublish, isLoading, needsSetupValue, completeSetup, publishSite, saveDraftSubdomain, refresh],
   );
 
   return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>;

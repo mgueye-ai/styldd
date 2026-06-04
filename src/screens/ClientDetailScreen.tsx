@@ -7,8 +7,10 @@ import ScreenGradient from '../components/ScreenGradient';
 import ServiceImage from '../components/ServiceImage';
 import { useSiteData } from '../context/SiteDataContext';
 import { usePrivacyMode } from '../context/PrivacyContext';
+import { useSiteContent } from '../context/SiteContentContext';
+import { formatSiteAddress } from '../data/siteContent';
 import { ClientStackParamList } from '../navigation/ClientNavigator';
-import { colors } from '../theme';
+import { colors, fonts } from '../theme';
 import { maskMoney } from '../utils/money';
 
 type Props = NativeStackScreenProps<ClientStackParamList, 'ClientDetail'>;
@@ -141,6 +143,8 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
   const { getClientById } = useSiteData();
   const client = getClientById(route.params.clientId);
   const { privacyMode } = usePrivacyMode();
+  const { content: siteContent } = useSiteContent();
+  const siteAddress = formatSiteAddress(siteContent);
   const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all');
 
   if (!client) {
@@ -248,13 +252,13 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
               onPress={handleCall}
               disabled={!hasPhone}
             />
-            {client.location ? (
+            {(client.location || siteAddress) ? (
               <>
                 <View style={styles.divider} />
                 <ContactButton
                   icon="location-outline"
                   label="Location"
-                  value={client.location}
+                  value={client.location || siteAddress}
                   disabled
                 />
               </>
@@ -269,9 +273,13 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
                 {client.favoriteOrders.map((order, i) => (
                   <View key={order.service}>
                     <View style={styles.favRow}>
-                      <View style={styles.favIcon}>
-                        <Ionicons name="sparkles-outline" size={15} color={colors.accentPink} />
-                      </View>
+                      <ServiceImage
+                        styleId={order.styleId}
+                        serviceName={order.service}
+                        size={36}
+                        circular
+                        style={styles.favServiceImage}
+                      />
                       <Text style={styles.favService} numberOfLines={1}>{order.service}</Text>
                       <View style={styles.favCountPill}>
                         <Text style={styles.favCount}>×{order.count}</Text>
@@ -482,7 +490,8 @@ const styles = StyleSheet.create({
   },
   statValue: {
     fontSize: 18,
-    fontWeight: '800',
+    fontWeight: '700',
+    fontFamily: fonts.number,
     color: colors.text,
     letterSpacing: -0.3,
     marginBottom: 2,
@@ -562,16 +571,12 @@ const styles = StyleSheet.create({
   favRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    padding: 14,
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
   },
-  favIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 8,
-    backgroundColor: colors.accentPinkMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
+  favServiceImage: {
+    borderRadius: 10,
   },
   favService: {
     flex: 1,

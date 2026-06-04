@@ -17,7 +17,7 @@ const Stack = createNativeStackNavigator<SiteStackParamList>();
 
 export default function SiteNavigator() {
   return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
+    <Stack.Navigator screenOptions={{ headerShown: false, gestureEnabled: true, fullScreenGestureEnabled: true, animation: 'slide_from_right' }}>
       <Stack.Screen name="SiteHome" component={SiteScreen} />
       <Stack.Screen name="SiteSetup" component={SiteSetupScreen} />
       <Stack.Screen name="SiteEditor" component={SiteEditorScreen} />

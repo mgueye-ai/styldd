@@ -1,4 +1,5 @@
 import { Image, StyleSheet, View, ViewStyle } from 'react-native';
+import { useSiteTheme } from '../context/SiteThemeContext';
 import { HAIRBY_NADJAE_LOGO_URL } from '../data/serviceCatalog';
 
 type BrandLogoProps = {
@@ -16,25 +17,24 @@ export default function BrandLogo({
   circular = false,
   style,
 }: BrandLogoProps) {
+  const { logoImageUrl } = useSiteTheme();
+  const uri = logoImageUrl ?? HAIRBY_NADJAE_LOGO_URL;
+
   if (circular) {
     const diameter = size ?? width;
     return (
       <View
         style={[
           styles.circular,
-          {
-            width: diameter,
-            height: diameter,
-            borderRadius: diameter / 2,
-          },
+          { width: diameter, height: diameter, borderRadius: diameter / 2 },
           style,
         ]}
       >
         <Image
-          source={{ uri: HAIRBY_NADJAE_LOGO_URL }}
+          source={{ uri }}
           style={{ width: diameter, height: diameter }}
           resizeMode="cover"
-          accessibilityLabel="Hair by Nadjae logo"
+          accessibilityLabel="Business logo"
         />
       </View>
     );
@@ -43,22 +43,16 @@ export default function BrandLogo({
   return (
     <View style={[styles.wrap, style]}>
       <Image
-        source={{ uri: HAIRBY_NADJAE_LOGO_URL }}
+        source={{ uri }}
         style={{ width, height }}
         resizeMode="contain"
-        accessibilityLabel="Hair by Nadjae logo"
+        accessibilityLabel="Business logo"
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  wrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  circular: {
-    overflow: 'hidden',
-    backgroundColor: '#141414',
-  },
+  wrap: { alignItems: 'center', justifyContent: 'center' },
+  circular: { overflow: 'hidden', backgroundColor: '#141414' },
 });
