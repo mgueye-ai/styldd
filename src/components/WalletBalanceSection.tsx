@@ -25,8 +25,9 @@ const RETURN_URL = 'styldd.com/connect/return';
 const REFRESH_URL = 'styldd.com/connect/refresh';
 
 export default function WalletBalanceSection({ onSummaryChange, showOnlyWhenActive }: Props) {
-  const { hasLinkedSite } = useSiteData();
+  const { hasLinkedSite, getRevenueForPeriod } = useSiteData();
   const { privacyMode } = usePrivacyMode();
+  const monthRevenue = getRevenueForPeriod('month');
   const [summary, setSummary] = useState<StripeConnectSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -148,24 +149,23 @@ export default function WalletBalanceSection({ onSummaryChange, showOnlyWhenActi
   return (
     <>
       <View style={styles.card}>
-        {/* Balance header */}
+        {/* Balance header — show booked revenue as primary, Stripe balance as secondary */}
         <View style={styles.balanceRow}>
-          {loading ? (
-            <ActivityIndicator color={colors.accentPink} style={{ marginBottom: 4 }} />
-          ) : (
-            <Text style={styles.balanceValue}>
-              {isReady ? masked(summary?.balanceAvailableCents ?? 0) : '—'}
-            </Text>
-          )}
+          <Text style={styles.balanceValue}>
+            {privacyMode ? '••••' : `$${monthRevenue.toFixed(2)}`}
+          </Text>
           <Pressable onPress={() => void refresh()} hitSlop={12} disabled={loading}>
             <Text style={styles.refreshLink}>↻</Text>
           </Pressable>
         </View>
-        <Text style={styles.balanceLabel}>Available balance</Text>
+        <Text style={styles.balanceLabel}>Revenue this month</Text>
 
-        {isReady && (summary?.balancePendingCents ?? 0) > 0 && (
+        {isReady && !loading && (
           <Text style={styles.pendingLine}>
-            {masked(summary?.balancePendingCents ?? 0)} processing
+            {masked(summary?.balanceAvailableCents ?? 0)} available
+            {(summary?.balancePendingCents ?? 0) > 0
+              ? ` · ${masked(summary?.balancePendingCents ?? 0)} processing`
+              : ''}
           </Text>
         )}
 

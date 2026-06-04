@@ -463,15 +463,12 @@ export function getRevenueForPeriodFromBookings(
       break;
   }
 
-  // Count any booking where money was collected: deposit paid, confirmed, or completed.
-  // Excludes cancelled bookings and pure in-person (no upfront payment) that are still pending.
+  // Count ALL non-cancelled bookings as revenue — show the full earned amount regardless
+  // of whether Stripe has settled. In-person bookings (no upfront payment) are included too.
   return snapshot.bookings
     .filter((booking) => {
       const status = booking.bookingStatus;
-      if (status === 'cancelled' || status === 'canceled') return false;
-      if (booking.depositPaid) return true;
-      if (status === 'confirmed' || status === 'completed') return true;
-      return false;
+      return status !== 'cancelled' && status !== 'canceled';
     })
     .filter((booking) => {
       const date = startOfDay(getBookingStartDate(booking));
