@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useState } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ScreenGradient from '../components/ScreenGradient';
@@ -101,12 +102,46 @@ function SectionHeader({ title }: { title: string }) {
   return <Text style={styles.sectionTitle}>{title}</Text>;
 }
 
+type HistoryFilter = 'all' | 'upcoming' | 'completed' | 'cancelled';
+
+const HISTORY_FILTERS: { id: HistoryFilter; label: string }[] = [
+  { id: 'all', label: 'All' },
+  { id: 'upcoming', label: 'Upcoming' },
+  { id: 'completed', label: 'Completed' },
+  { id: 'cancelled', label: 'Cancelled' },
+];
+
+function HistoryFilterBar({
+  active,
+  onChange,
+}: {
+  active: HistoryFilter;
+  onChange: (f: HistoryFilter) => void;
+}) {
+  return (
+    <View style={styles.filterBar}>
+      {HISTORY_FILTERS.map((f) => (
+        <Pressable
+          key={f.id}
+          style={[styles.filterPill, active === f.id && styles.filterPillActive]}
+          onPress={() => onChange(f.id)}
+        >
+          <Text style={[styles.filterPillText, active === f.id && styles.filterPillTextActive]}>
+            {f.label}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
 // ─── main screen ─────────────────────────────────────────────────────────────
 
 export default function ClientDetailScreen({ navigation, route }: Props) {
   const { getClientById } = useSiteData();
   const client = getClientById(route.params.clientId);
   const { privacyMode } = usePrivacyMode();
+  const [historyFilter, setHistoryFilter] = useState<HistoryFilter>('all');
 
   if (!client) {
     return (
@@ -264,44 +299,62 @@ export default function ClientDetailScreen({ navigation, route }: Props) {
           ) : null}
 
           {/* ── Booking history ────────────────────────────────────────── */}
-          {client.pastBookings.length > 0 ? (
-            <>
-              <SectionHeader title="Booking history" />
-              <View style={styles.historyList}>
-                {client.pastBookings.map((booking) => {
-                  const sColor = statusColor(booking.status);
-                  return (
-                    <View key={booking.id} style={styles.historyRow}>
-                      <ServiceImage
-                        styleId={booking.styleId}
-                        serviceName={booking.service}
-                        size={46}
-                        circular
-                      />
-                      <View style={styles.historyInfo}>
-                        <Text style={styles.historyService} numberOfLines={1}>
-                          {booking.service}
-                        </Text>
-                        <Text style={styles.historyMeta} numberOfLines={1}>
-                          {formatDate(booking.date)}
-                          {booking.hairType ? ` · ${booking.hairType}` : ''}
-                        </Text>
-                        <View style={[styles.statusDot, { backgroundColor: sColor + '22', borderColor: sColor + '55' }]}>
-                          <View style={[styles.statusDotInner, { backgroundColor: sColor }]} />
-                          <Text style={[styles.statusText, { color: sColor }]}>
-                            {statusLabel(booking.status)}
+          {client.pastBookings.length > 0 ? (() => {
+            const filtered = historyFilter === 'all'
+              ? client.pastBookings
+              : client.pastBookings.filter((b) => {
+                  if (historyFilter === 'cancelled') {
+                    return b.status === 'cancelled' || b.status === 'canceled';
+                  }
+                  return b.status === historyFilter;
+                });
+
+            return (
+              <>
+                <SectionHeader title="Booking history" />
+                <HistoryFilterBar active={historyFilter} onChange={setHistoryFilter} />
+                {filtered.length === 0 ? (
+                  <View style={styles.emptyFilter}>
+                    <Text style={styles.emptyFilterText}>No {historyFilter} bookings</Text>
+                  </View>
+                ) : (
+                  <View style={styles.historyList}>
+                    {filtered.map((booking) => {
+                      const sColor = statusColor(booking.status);
+                      return (
+                        <View key={booking.id} style={styles.historyRow}>
+                          <ServiceImage
+                            styleId={booking.styleId}
+                            serviceName={booking.service}
+                            size={46}
+                            circular
+                          />
+                          <View style={styles.historyInfo}>
+                            <Text style={styles.historyService} numberOfLines={1}>
+                              {booking.service}
+                            </Text>
+                            <Text style={styles.historyMeta} numberOfLines={1}>
+                              {formatDate(booking.date)}
+                              {booking.hairType ? ` · ${booking.hairType}` : ''}
+                            </Text>
+                            <View style={[styles.statusDot, { backgroundColor: sColor + '22', borderColor: sColor + '55' }]}>
+                              <View style={[styles.statusDotInner, { backgroundColor: sColor }]} />
+                              <Text style={[styles.statusText, { color: sColor }]}>
+                                {statusLabel(booking.status)}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={styles.historyAmount}>
+                            {maskMoney(booking.amount, privacyMode)}
                           </Text>
                         </View>
-                      </View>
-                      <Text style={styles.historyAmount}>
-                        {maskMoney(booking.amount, privacyMode)}
-                      </Text>
-                    </View>
-                  );
-                })}
-              </View>
-            </>
-          ) : null}
+                      );
+                    })}
+                  </View>
+                )}
+              </>
+            );
+          })() : null}
 
           {/* ── Notes ─────────────────────────────────────────────────── */}
           {client.notes ? (
@@ -557,6 +610,43 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: colors.text,
     fontWeight: '500',
+  },
+
+  // Filter bar
+  filterBar: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+    flexWrap: 'wrap',
+  },
+  filterPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  filterPillActive: {
+    backgroundColor: colors.accentPinkMuted,
+    borderColor: colors.accentPinkBorder,
+  },
+  filterPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  filterPillTextActive: {
+    color: colors.accentPink,
+  },
+  emptyFilter: {
+    alignItems: 'center',
+    paddingVertical: 28,
+    marginBottom: 20,
+  },
+  emptyFilterText: {
+    color: colors.textMuted,
+    fontSize: 14,
   },
 
   // Booking history
