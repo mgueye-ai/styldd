@@ -49,6 +49,18 @@ Deno.serve(async (req) => {
       }, 400);
     }
 
+    // ── Fee calculation ──────────────────────────────────────────────────────
+    // Stripe US card fee: 2.9% + $0.30.
+    // Platform fee: configurable via STYLD_PLATFORM_FEE_PERCENT env (default 1%).
+    // application_fee_amount = stripe_fee + platform_fee
+    //   → platform keeps platform_fee (net of Stripe cost), stylist gets the rest.
+    const platformFeePercent = parseFloat(Deno.env.get('STYLD_PLATFORM_FEE_PERCENT') ?? '1') / 100;
+    const stripeFeeCents = Math.round(amountCents * 0.029 + 30);
+    const platformFeeCents = Math.round(amountCents * platformFeePercent);
+    const applicationFeeCents = stripeFeeCents + platformFeeCents;
+    // Safety: application fee can never exceed the charge amount
+    const safeAppFee = Math.min(applicationFeeCents, Math.round(amountCents) - 50);
+
     // Create a PaymentIntent on the platform, routing funds to the connected account.
     // We do NOT confirm server-side — the frontend confirms with the card element
     // via stripe.confirmCardPayment(clientSecret). This avoids PaymentMethod
@@ -60,13 +72,18 @@ Deno.serve(async (req) => {
     params.set('description', `Styld booking — ${subdomain}`);
     params.set('metadata[subdomain]', subdomain);
     params.set('metadata[source]', 'styld_booking');
+    params.set('metadata[stripe_fee_cents]', String(stripeFeeCents));
+    params.set('metadata[platform_fee_cents]', String(platformFeeCents));
     if (bookingId) params.set('metadata[bookingId]', String(bookingId));
     if (customerEmail) params.set('receipt_email', String(customerEmail));
 
-    // Destination charge: platform processes, funds route to connected account.
-    // on_behalf_of ensures the charge shows the merchant's statement descriptor.
+    // Destination charge with application_fee_amount:
+    //   - Stripe fee is covered by the application_fee
+    //   - Platform keeps (application_fee - stripe_fee) = platformFeeCents as profit
+    //   - Stylist receives: amount - application_fee_amount
     params.set('transfer_data[destination]', stripeAccountId);
     params.set('on_behalf_of', stripeAccountId);
+    params.set('application_fee_amount', String(safeAppFee));
 
     const piRes = await fetch('https://api.stripe.com/v1/payment_intents', {
       method: 'POST',
@@ -90,6 +107,12 @@ Deno.serve(async (req) => {
       paymentIntentId: pi.id,
       subdomain,
       bookingId: bookingId ?? null,
+      fees: {
+        stripeFeeCents,
+        platformFeeCents,
+        applicationFeeCents: safeAppFee,
+        stylistReceivesCents: Math.round(amountCents) - safeAppFee,
+      },
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Internal error';
