@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useMemo, useRef, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -13,8 +14,6 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import PeriodSelector from '../components/PeriodSelector';
-import { getSiteAnalytics, Period } from '../data/periods';
 import SitePreviewWebView from '../components/site/SitePreviewWebView';
 import ViewLiveSiteButton from '../components/site/ViewLiveSiteButton';
 import { useServiceCatalog } from '../context/ServiceCatalogContext';
@@ -26,6 +25,7 @@ import { SitePreviewTheme } from '../lib/sitePreviewHtml';
 import { getSiteRootDomain, normalizeSubdomain } from '../data/sitePublish';
 import { useOnboarding } from '../context/OnboardingContext';
 import { useSiteData } from '../context/SiteDataContext';
+import { fetchAnalyticsSummary, friendlyPath, type AnalyticsSummary } from '../lib/siteAnalytics';
 import { SiteStackParamList } from '../navigation/SiteNavigator';
 import { colors } from '../theme';
 
@@ -205,15 +205,46 @@ function SitePreviewPanel({ loading }: { loading: boolean }) {
   );
 }
 
+type AnalyticsPeriod = '7d' | '30d';
+
 export default function SiteScreen({ navigation }: Props) {
   const { isLoading } = useSiteData();
   const { needsSetup, isLoading: onboardingLoading, sitePublish } = useOnboarding();
   const [activeTab, setActiveTab] = useState<SiteTab>('site');
-  const [selectedPeriod, setSelectedPeriod] = useState<Period>('month');
+  const [analyticsPeriod, setAnalyticsPeriod] = useState<AnalyticsPeriod>('7d');
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsSummary | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const slideAnim = useRef(new Animated.Value(0)).current;
 
-  const analytics = useMemo(() => getSiteAnalytics(selectedPeriod), [selectedPeriod]);
-  const maxChartValue = Math.max(...analytics.chartValues);
+  useFocusEffect(
+    useCallback(() => {
+      if (activeTab !== 'analytics') return;
+      setAnalyticsLoading(true);
+      fetchAnalyticsSummary()
+        .then((d) => setAnalyticsData(d))
+        .catch(() => {})
+        .finally(() => setAnalyticsLoading(false));
+    }, [activeTab]),
+  );
+
+  // Build chart data from dailyTrend
+  const chartPoints = useMemo(() => {
+    const trend = analyticsData?.dailyTrend ?? [];
+    if (analyticsPeriod === '7d') return trend.slice(-7);
+    // 30d: group into 6 blocks of 5 days for readability
+    const blocks: { label: string; views: number }[] = [];
+    for (let i = 0; i < 30; i += 5) {
+      const slice = trend.slice(i, i + 5);
+      const views = slice.reduce((s, d) => s + d.views, 0);
+      const label = slice[0]?.date.slice(5) ?? '';
+      blocks.push({ label, views });
+    }
+    return blocks;
+  }, [analyticsData, analyticsPeriod]);
+
+  const maxChartValue = Math.max(1, ...chartPoints.map((p) => p.views));
+  const totalViews    = analyticsPeriod === '7d' ? (analyticsData?.views7d ?? 0)    : (analyticsData?.views30d ?? 0);
+  const totalSessions = analyticsPeriod === '7d' ? (analyticsData?.sessions7d ?? 0) : (analyticsData?.sessions30d ?? 0);
 
   const switchTab = (tab: SiteTab) => {
     setActiveTab(tab);
@@ -223,6 +254,13 @@ export default function SiteScreen({ navigation }: Props) {
       tension: 90,
       useNativeDriver: true,
     }).start();
+    if (tab === 'analytics' && !analyticsData) {
+      setAnalyticsLoading(true);
+      fetchAnalyticsSummary()
+        .then((d) => setAnalyticsData(d))
+        .catch(() => {})
+        .finally(() => setAnalyticsLoading(false));
+    }
   };
 
   const indicatorX = slideAnim.interpolate({
@@ -284,90 +322,162 @@ export default function SiteScreen({ navigation }: Props) {
         </ScrollView>
       ) : (
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <Text style={styles.title}>Analytics</Text>
-          <Text style={styles.subtitle}>How your site is performing</Text>
-
-          <PeriodSelector
-            selectedPeriod={selectedPeriod}
-            onPeriodChange={setSelectedPeriod}
-          />
-
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>{analytics.chartTitle}</Text>
-            <View style={styles.chartRow}>
-              {analytics.chartValues.map((value, index) => (
-                <WeekBar
-                  key={`${analytics.chartLabels[index]}-${index}`}
-                  value={value}
-                  label={analytics.chartLabels[index]}
-                  maxVal={maxChartValue}
-                />
-              ))}
+          <View style={styles.analyticsHeader}>
+            <View>
+              <Text style={styles.title}>Analytics</Text>
+              <Text style={styles.subtitle}>Live data from your site</Text>
             </View>
+            <Pressable
+              style={styles.refreshBtn}
+              onPress={() => {
+                setAnalyticsLoading(true);
+                fetchAnalyticsSummary()
+                  .then((d) => setAnalyticsData(d))
+                  .catch(() => {})
+                  .finally(() => setAnalyticsLoading(false));
+              }}
+            >
+              <Ionicons name="refresh-outline" size={18} color={colors.textMuted} />
+            </Pressable>
           </View>
 
-          <View style={styles.statTileRow}>
-            <StatTile
-              icon="eye-outline"
-              label="Total views"
-              value={`${analytics.totalViews.toLocaleString()}`}
-              sub={analytics.periodSub}
-            />
-            <StatTile
-              icon="calendar-outline"
-              label="Bookings"
-              value={`${analytics.bookings}`}
-              sub={analytics.periodSub}
-            />
-          </View>
-          <View style={styles.statTileRow}>
-            <StatTile
-              icon="trending-up-outline"
-              label="Conversion"
-              value={analytics.conversion}
-              sub="views → bookings"
-            />
-            <StatTile
-              icon="time-outline"
-              label="Avg. session"
-              value={analytics.avgSession}
-              sub="on site"
-            />
-          </View>
-
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Traffic sources</Text>
-            {analytics.trafficSources.map((source) => (
-              <View key={source.label} style={styles.sourceRow}>
-                <View style={styles.sourceLeft}>
-                  <View style={[styles.sourceDot, { backgroundColor: source.color }]} />
-                  <Text style={styles.sourceLabel}>{source.label}</Text>
-                </View>
-                <View style={styles.sourceBarTrack}>
-                  <View
-                    style={[
-                      styles.sourceBarFill,
-                      { width: `${source.pct}%` as `${number}%`, backgroundColor: source.color },
-                    ]}
-                  />
-                </View>
-                <Text style={styles.sourcePct}>{source.pct}%</Text>
-              </View>
+          {/* Period toggle */}
+          <View style={styles.periodToggleRow}>
+            {(['7d', '30d'] as AnalyticsPeriod[]).map((p) => (
+              <Pressable
+                key={p}
+                style={[styles.periodToggleBtn, analyticsPeriod === p && styles.periodToggleBtnActive]}
+                onPress={() => setAnalyticsPeriod(p)}
+              >
+                <Text style={[styles.periodToggleText, analyticsPeriod === p && styles.periodToggleTextActive]}>
+                  {p === '7d' ? 'Last 7 days' : 'Last 30 days'}
+                </Text>
+              </Pressable>
             ))}
           </View>
 
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>Top services booked online</Text>
-            {analytics.topServices.map((service) => (
-              <View key={service.name} style={styles.serviceRow}>
-                <Text style={styles.serviceRowName}>{service.name}</Text>
-                <View style={styles.serviceRowRight}>
-                  <Text style={styles.serviceRowCount}>{service.count}</Text>
-                  <Text style={styles.serviceRowCountLabel}> bookings</Text>
-                </View>
+          {analyticsLoading ? (
+            <ActivityIndicator color={colors.accentPink} style={{ marginTop: 48 }} />
+          ) : !analyticsData?.subdomain ? (
+            <View style={styles.emptyAnalytics}>
+              <Ionicons name="globe-outline" size={40} color={colors.textMuted} />
+              <Text style={styles.emptyAnalyticsTitle}>No data yet</Text>
+              <Text style={styles.emptyAnalyticsBody}>
+                Visitors to your published site will show up here automatically.
+              </Text>
+            </View>
+          ) : (
+            <>
+              {/* Stat tiles */}
+              <View style={styles.statTileRow}>
+                <StatTile
+                  icon="eye-outline"
+                  label="Page views"
+                  value={totalViews.toLocaleString()}
+                  sub={analyticsPeriod === '7d' ? 'last 7 days' : 'last 30 days'}
+                />
+                <StatTile
+                  icon="people-outline"
+                  label="Unique visitors"
+                  value={totalSessions.toLocaleString()}
+                  sub={analyticsPeriod === '7d' ? 'last 7 days' : 'last 30 days'}
+                />
               </View>
-            ))}
-          </View>
+
+              {/* Views chart */}
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>
+                  Daily page views — {analyticsPeriod === '7d' ? 'last 7 days' : 'last 30 days'}
+                </Text>
+                {totalViews === 0 ? (
+                  <Text style={styles.emptyCardNote}>No views in this period yet.</Text>
+                ) : (
+                  <View style={styles.chartRow}>
+                    {chartPoints.map((point, index) => (
+                      <WeekBar
+                        key={`${point.label}-${index}`}
+                        value={point.views}
+                        label={analyticsPeriod === '7d'
+                          ? new Date(analyticsData.dailyTrend.slice(-7)[index]?.date ?? '').toLocaleDateString('en-US', { weekday: 'short' }).slice(0, 2)
+                          : point.label}
+                        maxVal={maxChartValue}
+                      />
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              {/* Traffic sources */}
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Traffic sources — last 30 days</Text>
+                {analyticsData.referrers.length === 0 ? (
+                  <Text style={styles.emptyCardNote}>No external referrers tracked yet.</Text>
+                ) : (
+                  analyticsData.referrers.map((ref, i) => {
+                    const maxCount = Math.max(1, ...analyticsData.referrers.map((r) => r.count));
+                    const pct = Math.round((ref.count / maxCount) * 100);
+                    return (
+                      <View key={ref.source} style={[styles.sourceRow, i > 0 && { marginTop: 4 }]}>
+                        <View style={styles.sourceLeft}>
+                          <View style={[styles.sourceDot, { backgroundColor: colors.accentPink }]} />
+                          <Text style={styles.sourceLabel} numberOfLines={1}>{ref.source}</Text>
+                        </View>
+                        <View style={styles.sourceBarTrack}>
+                          <View style={[styles.sourceBarFill, { width: `${pct}%` as `${number}%`, backgroundColor: colors.accentPink }]} />
+                        </View>
+                        <Text style={styles.sourcePct}>{ref.count}</Text>
+                      </View>
+                    );
+                  })
+                )}
+              </View>
+
+              {/* Top pages */}
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Top pages — last 30 days</Text>
+                {analyticsData.topPages.length === 0 ? (
+                  <Text style={styles.emptyCardNote}>No page data yet.</Text>
+                ) : (
+                  analyticsData.topPages.map((page) => (
+                    <View key={page.path} style={styles.serviceRow}>
+                      <Text style={styles.serviceRowName} numberOfLines={1}>{friendlyPath(page.path)}</Text>
+                      <View style={styles.serviceRowRight}>
+                        <Text style={styles.serviceRowCount}>{page.views}</Text>
+                        <Text style={styles.serviceRowCountLabel}> views</Text>
+                      </View>
+                    </View>
+                  ))
+                )}
+              </View>
+
+              {/* Devices */}
+              <View style={styles.card}>
+                <Text style={styles.cardTitle}>Visitor devices — last 30 days</Text>
+                {analyticsData.views30d === 0 ? (
+                  <Text style={styles.emptyCardNote}>No data yet.</Text>
+                ) : (
+                  <>
+                    {[
+                      { label: 'Mobile',  pct: analyticsData.devices.mobile,  color: colors.accentPink },
+                      { label: 'Desktop', pct: analyticsData.devices.desktop, color: '#7c3aed' },
+                      { label: 'Tablet',  pct: analyticsData.devices.tablet,  color: '#0891b2' },
+                    ].filter((d) => d.pct > 0).map((d) => (
+                      <View key={d.label} style={styles.sourceRow}>
+                        <View style={styles.sourceLeft}>
+                          <View style={[styles.sourceDot, { backgroundColor: d.color }]} />
+                          <Text style={styles.sourceLabel}>{d.label}</Text>
+                        </View>
+                        <View style={styles.sourceBarTrack}>
+                          <View style={[styles.sourceBarFill, { width: `${d.pct}%` as `${number}%`, backgroundColor: d.color }]} />
+                        </View>
+                        <Text style={styles.sourcePct}>{d.pct}%</Text>
+                      </View>
+                    ))}
+                  </>
+                )}
+              </View>
+            </>
+          )}
         </ScrollView>
       )}
 
@@ -545,6 +655,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 140,
   },
+  analyticsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 16,
+  },
+  refreshBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
   title: {
     color: colors.text,
     fontSize: 28,
@@ -555,7 +678,54 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 14,
     fontWeight: '500',
-    marginBottom: 22,
+  },
+  periodToggleRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+  },
+  periodToggleBtn: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  periodToggleBtnActive: {
+    backgroundColor: colors.accentPinkMuted,
+    borderColor: colors.accentPinkBorder,
+  },
+  periodToggleText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+  },
+  periodToggleTextActive: {
+    color: colors.accentPink,
+  },
+  emptyAnalytics: {
+    alignItems: 'center',
+    paddingTop: 48,
+    gap: 10,
+  },
+  emptyAnalyticsTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  emptyAnalyticsBody: {
+    color: colors.textMuted,
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 260,
+  },
+  emptyCardNote: {
+    color: colors.textMuted,
+    fontSize: 13,
+    paddingVertical: 4,
   },
   card: {
     backgroundColor: colors.card,
