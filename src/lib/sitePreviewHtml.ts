@@ -104,7 +104,7 @@ const SITE_PREVIEW_CSS = `
 .profile-menu-blurb{color:var(--muted);font-size:.9rem;margin:0}
 .profile-service-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.875rem}
 .profile-service-card{display:flex;align-items:center;gap:.85rem;padding:.75rem;border-radius:14px;background:var(--white);border:1px solid rgba(0,0,0,.07);text-decoration:none;color:inherit;transition:box-shadow .15s}
-.profile-service-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.08);border-color:rgba(219,39,119,.2)}
+.profile-service-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.08);border-color:rgba(219,39,119,.2)}.profile-service-card--outlined{background:var(--cream);border:1.5px solid var(--ink)}.profile-service-card--outlined:hover{box-shadow:0 4px 16px rgba(0,0,0,.1);border-color:var(--ink)}
 .profile-service-card__img{width:64px;height:64px;border-radius:12px;flex-shrink:0;background:linear-gradient(145deg,#e8e3db,#d6d0c7);background-size:cover;background-position:center}
 .profile-service-card__body{flex:1;min-width:0}
 .profile-service-card__name{font-weight:700;font-size:.88rem;color:var(--ink);line-height:1.3}
@@ -351,19 +351,20 @@ function isLocationPartHidden(content: SiteContent, part: LocationPart): boolean
   return Array.isArray(content.hiddenLocationParts) && content.hiddenLocationParts.includes(part);
 }
 
-function buildProfileServiceCardHtml(style: SitePreviewStyle): string {
+function buildProfileServiceCardHtml(style: SitePreviewStyle, outlined = false): string {
+  const cls = outlined ? 'profile-service-card profile-service-card--outlined' : 'profile-service-card';
   const imgStyle = style.imageUrl
     ? ` style="background-image:url('${style.imageUrl.replace(/'/g, '%27')}');background-size:cover;background-position:center;"`
     : '';
   const bookHref = style.id ? `/booking?style=${encodeURIComponent(style.id)}` : '/booking';
-  return `<a class="profile-service-card" href="${bookHref}"><div class="profile-service-card__img" aria-hidden="true"${imgStyle}></div><div class="profile-service-card__body"><div class="profile-service-card__name">${escapeHtml(style.title)}</div>${style.priceLabel ? `<div class="profile-service-card__price">${escapeHtml(style.priceLabel)}</div>` : ''}${style.durationLabel ? `<div class="profile-service-card__duration">${escapeHtml(style.durationLabel)}</div>` : ''}</div></a>`;
+  return `<a class="${cls}" href="${bookHref}"><div class="profile-service-card__img" aria-hidden="true"${imgStyle}></div><div class="profile-service-card__body"><div class="profile-service-card__name">${escapeHtml(style.title)}</div>${style.priceLabel ? `<div class="profile-service-card__price">${escapeHtml(style.priceLabel)}</div>` : ''}${style.durationLabel ? `<div class="profile-service-card__duration">${escapeHtml(style.durationLabel)}</div>` : ''}</div></a>`;
 }
 
-function buildProfileServiceGridHtml(styles: SitePreviewStyle[]): string {
+function buildProfileServiceGridHtml(styles: SitePreviewStyle[], outlined = false): string {
   if (!styles.length) {
-    return `<div class="profile-service-grid">${buildProfileServiceCardHtml({ title: 'Add styles in your app', description: '', priceLabel: '', sizeLabel: '' })}</div>`;
+    return `<div class="profile-service-grid">${buildProfileServiceCardHtml({ title: 'Add styles in your app', description: '', priceLabel: '', sizeLabel: '' }, outlined)}</div>`;
   }
-  return `<div class="profile-service-grid">${styles.slice(0, 12).map(buildProfileServiceCardHtml).join('')}</div>`;
+  return `<div class="profile-service-grid">${styles.slice(0, 12).map((s) => buildProfileServiceCardHtml(s, outlined)).join('')}</div>`;
 }
 
 export function buildProfileSitePreviewHtml(
@@ -393,9 +394,10 @@ export function buildProfileSitePreviewHtml(
     ? `<p class="profile-policy-body">${escapeHtml(content.bookingPolicy)}</p>`
     : `<p class="profile-policy-body" style="color:#bbb;font-style:italic">Add your booking policy…</p>`;
 
+  const isOutlined = theme.styleCardLayout === 'outlined';
   const menuSection = isSectionHidden(content, 'menu')
     ? ''
-    : `<section class="profile-menu-section" id="preview-menu-section"><div class="container"><div class="profile-menu-head"><h2>${escapeHtml(content.menuTitle || 'Menu')}</h2>${content.menuBlurb ? `<p class="profile-menu-blurb">${escapeHtml(content.menuBlurb)}</p>` : ''}</div>${buildProfileServiceGridHtml(styles)}</div></section>`;
+    : `<section class="profile-menu-section" id="preview-menu-section"><div class="container"><div class="profile-menu-head"><h2>${escapeHtml(content.menuTitle || 'Menu')}</h2>${content.menuBlurb ? `<p class="profile-menu-blurb">${escapeHtml(content.menuBlurb)}</p>` : ''}</div>${buildProfileServiceGridHtml(styles, isOutlined)}</div></section>`;
 
   const address = formatSiteAddress(content);
   const mapsSearchUrl = buildGoogleMapsSearchUrl(address);

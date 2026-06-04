@@ -237,6 +237,14 @@ export default function SiteDesignEditor({ onEditHeroContent }: { onEditHeroCont
         label="Pills"
         description="Compact horizontal row — great for long menus"
       />
+      <CardLayoutOption
+        value="outlined"
+        current={theme.styleCardLayout}
+        onSelect={(styleCardLayout) => updateTheme({ styleCardLayout })}
+        icon="square-outline"
+        label="Outlined"
+        description="Card blends with background — bordered in your text color"
+      />
 
       <Text style={styles.groupTitle}>Hero photo</Text>
       <Text style={styles.helper}>

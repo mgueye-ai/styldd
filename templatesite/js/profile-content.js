@@ -40,7 +40,8 @@
     return content.hiddenLocationParts.indexOf(part) !== -1;
   }
 
-  function buildServiceCard(style) {
+  function buildServiceCard(style, cardClass) {
+    var cls = cardClass || 'profile-service-card';
     var imgStyle = style.imageUrl
       ? ' style="background-image:url(\'' +
         String(style.imageUrl).replace(/'/g, '%27') +
@@ -50,7 +51,7 @@
       ? '/booking?style=' + encodeURIComponent(style.id)
       : '/booking';
     return (
-      '<a class="profile-service-card" href="' +
+      '<a class="' + cls + '" href="' +
       escapeHtml(bookHref) +
       '">' +
       '<div class="profile-service-card__img" aria-hidden="true"' +
@@ -75,9 +76,14 @@
   }
 
   function buildProfileServiceCards(styles, theme) {
+    var layout = theme && theme.styleCardLayout;
+    var cardClass = layout === 'outlined'
+      ? 'profile-service-card profile-service-card--outlined'
+      : 'profile-service-card';
+
     if (!styles || !styles.length) {
       return (
-        '<a class="profile-service-card" href="/booking">' +
+        '<a class="' + cardClass + '" href="/booking">' +
         '<div class="profile-service-card__img"></div>' +
         '<div class="profile-service-card__body">' +
         '<div class="profile-service-card__name">Add your services</div>' +
@@ -86,8 +92,7 @@
       );
     }
 
-    var styleCardLayout =
-      theme && theme.styleCardLayout === 'pill' ? 'pill' : 'card';
+    var styleCardLayout = layout === 'pill' ? 'pill' : layout === 'outlined' ? 'outlined' : 'card';
 
     if (styleCardLayout === 'pill') {
       return buildProfileStylePills(styles);
@@ -108,11 +113,11 @@
     var hasCategories = categoryOrder.some(function (c) { return c !== ''; });
 
     if (!hasCategories) {
-      return styles.slice(0, 24).map(buildServiceCard).join('');
+      return styles.slice(0, 24).map(function (s) { return buildServiceCard(s, cardClass); }).join('');
     }
 
     return categoryOrder.map(function (cat) {
-      var cards = grouped[cat].map(buildServiceCard).join('');
+      var cards = grouped[cat].map(function (s) { return buildServiceCard(s, cardClass); }).join('');
       var header = cat
         ? '<div class="catalog-section" style="grid-column:1/-1">' +
           '<div class="catalog-section__header">' +

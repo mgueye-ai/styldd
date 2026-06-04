@@ -1,5 +1,5 @@
 export type HeroLayout = 'split' | 'image-below' | 'minimal';
-export type StyleCardLayout = 'card' | 'pill';
+export type StyleCardLayout = 'card' | 'pill' | 'outlined';
 export type FontFamily = 'cormorant' | 'inter' | 'playfair' | 'dm-sans' | 'montserrat';
 export type TemplateId = 'classic' | 'profile';
 
@@ -111,7 +111,11 @@ export function normalizeSiteTheme(value: unknown): SiteTheme {
       ? (source.backgroundColor as string).trim()
       : null,
     styleCardLayout:
-      source.styleCardLayout === 'pill' ? 'pill' : DEFAULT_SITE_THEME.styleCardLayout,
+      source.styleCardLayout === 'pill'
+        ? 'pill'
+        : source.styleCardLayout === 'outlined'
+          ? 'outlined'
+          : DEFAULT_SITE_THEME.styleCardLayout,
     fontFamily: validFontIds.includes(source.fontFamily as FontFamily)
       ? (source.fontFamily as FontFamily)
       : DEFAULT_SITE_THEME.fontFamily,
