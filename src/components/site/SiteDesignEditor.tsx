@@ -137,10 +137,11 @@ function CardLayoutOption({ value, current, onSelect, icon, label, description }
   );
 }
 
-export default function SiteDesignEditor() {
+export default function SiteDesignEditor({ onEditHeroContent }: { onEditHeroContent?: () => void }) {
   const { content, updateContent } = useSiteContent();
   const { theme, updateTheme, uploadHeroImage, uploadLogoImage, removeHeroImage, heroImageUrl, logoImageUrl, isSaving } =
     useSiteTheme();
+  const isProfileTemplate = !theme.templateId || theme.templateId === 'profile';
 
   return (
     <View>
@@ -267,39 +268,26 @@ export default function SiteDesignEditor() {
         onChangeText={(taglineRightLine2) => updateContent({ taglineRightLine2 })}
       />
 
-      <Text style={styles.groupTitle}>Bio / description</Text>
-      <Text style={styles.helper}>
-        Tell clients who you are, your specialty, and why they should book with you.
-      </Text>
-      <View style={styles.field}>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          value={content.heroDescription}
-          onChangeText={(heroDescription) => updateContent({ heroDescription })}
-          placeholder="e.g. Specializing in protective styles, braids, and natural hair care. 5+ years experience..."
-          placeholderTextColor={colors.textMuted}
-          multiline
-          numberOfLines={4}
-          textAlignVertical="top"
-        />
-      </View>
-
-      <Text style={styles.groupTitle}>Booking policy</Text>
-      <Text style={styles.helper}>
-        Cancellation rules, deposit requirements, late arrivals, etc.
-      </Text>
-      <View style={styles.field}>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          value={content.bookingPolicy}
-          onChangeText={(bookingPolicy) => updateContent({ bookingPolicy })}
-          placeholder="e.g. A deposit is required to secure your appointment. Cancellations within 48 hours are non-refundable."
-          placeholderTextColor={colors.textMuted}
-          multiline
-          numberOfLines={4}
-          textAlignVertical="top"
-        />
-      </View>
+      {isProfileTemplate && (
+        <>
+          <Text style={styles.groupTitle}>Bio & policy</Text>
+          <Text style={styles.helper}>
+            Add a short bio and booking policy — shown on the right side of your hero.
+          </Text>
+          <Pressable style={styles.navRow} onPress={onEditHeroContent}>
+            <View style={styles.navRowIcon}>
+              <Ionicons name="person-circle-outline" size={20} color={colors.accentPink} />
+            </View>
+            <View style={styles.navRowBody}>
+              <Text style={styles.navRowLabel}>Bio & booking policy</Text>
+              <Text style={styles.navRowValue} numberOfLines={1}>
+                {content.heroDescription ? content.heroDescription.slice(0, 40) + (content.heroDescription.length > 40 ? '…' : '') : 'Not set'}
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+          </Pressable>
+        </>
+      )}
     </View>
   );
 }
@@ -486,9 +474,37 @@ const styles = StyleSheet.create({
     fontSize: 15,
     backgroundColor: colors.card,
   },
-  textArea: {
-    minHeight: 100,
-    paddingTop: 12,
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+  },
+  navRowIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: colors.accentPinkMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navRowBody: {
+    flex: 1,
+    gap: 2,
+  },
+  navRowLabel: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  navRowValue: {
+    color: colors.textMuted,
+    fontSize: 12,
   },
   layoutOption: {
     flexDirection: 'row',

@@ -365,7 +365,7 @@ export default function SiteEditorScreen({ navigation }: Props) {
       </View>
 
       <ScrollView contentContainerStyle={styles.form} showsVerticalScrollIndicator={false}>
-        {tab === 'design' ? <SiteDesignEditor /> : null}
+        {tab === 'design' ? <SiteDesignEditor onEditHeroContent={() => navigation.navigate('HeroContent')} /> : null}
 
         {tab === 'content' ? (
           <>

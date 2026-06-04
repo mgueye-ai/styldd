@@ -30,7 +30,7 @@ const HIDDEN_TAB_BAR_SCREENS: Record<string, string[] | 'all-but-home'> = {
   Dashboard: ['EarningDetails', 'AppointmentDetail', 'AllUpcoming', 'AllBookings', 'BookingDetail'],
   Profile: 'all-but-home',
   Client: ['ClientDetail'],
-  Site: ['SiteEditor', 'SiteSetup', 'SiteDeploy'],
+  Site: ['SiteEditor', 'SiteSetup', 'SiteDeploy', 'HeroContent'],
 };
 
 function shouldHideTabBar(state: BottomTabBarProps['state']): boolean {
