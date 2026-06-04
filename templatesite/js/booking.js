@@ -1174,16 +1174,20 @@
     var intent = confirmResult.paymentIntent;
     var success = intent && intent.status === "succeeded";
 
-    // Immediately mark the booking as paid in the DB so the stylist sees the
-    // correct status without waiting for the Stripe webhook.
+    // Mark the booking as paid in the DB before redirecting.
+    // Must be awaited — fire-and-forget gets cancelled when the page navigates away.
     if (success && intent.id && payload.bookingId && payload.subdomain) {
-      sb.functions.invoke("stripe-booking-confirm", {
-        body: {
-          bookingId: payload.bookingId,
-          subdomain: payload.subdomain,
-          paymentIntentId: intent.id,
-        },
-      }).catch(function(e) { console.warn("stripe-booking-confirm:", e); });
+      try {
+        await sb.functions.invoke("stripe-booking-confirm", {
+          body: {
+            bookingId: payload.bookingId,
+            subdomain: payload.subdomain,
+            paymentIntentId: intent.id,
+          },
+        });
+      } catch (e) {
+        console.warn("stripe-booking-confirm:", e);
+      }
     }
 
     return { ok: !!success, paymentId: intent && intent.id, status: intent && intent.status };
@@ -1643,6 +1647,7 @@
     });
   })();
 })();
+
 
 
 
