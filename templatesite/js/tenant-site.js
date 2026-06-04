@@ -34,8 +34,7 @@
   };
 
   function rest(path) {
-    var sep = path.indexOf('?') !== -1 ? '&' : '?';
-    var url = cfg.supabaseUrl.replace(/\/$/, '') + '/rest/v1/' + path + sep + '_t=' + Date.now();
+    var url = cfg.supabaseUrl.replace(/\/$/, '') + '/rest/v1/' + path;
     return fetch(url, { headers: headers, cache: 'no-store' }).then(function (res) {
       if (!res.ok) throw new Error('Could not load site data.');
       return res.json();
