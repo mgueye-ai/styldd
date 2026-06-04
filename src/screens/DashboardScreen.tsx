@@ -364,7 +364,11 @@ export default function DashboardScreen({ navigation }: Props) {
 
           {/* Revenue */}
           <View style={styles.revenueSection}>
-            <PeriodSelector selectedPeriod={selectedPeriod} onPeriodChange={switchPeriod} />
+            {/* Only show period selector when falling back to booking revenue */}
+            {!stripeSummary || stripeSummary.status !== 'ready'
+              ? <PeriodSelector selectedPeriod={selectedPeriod} onPeriodChange={switchPeriod} />
+              : <Text style={styles.revenueContextLabel}>Stripe wallet balance</Text>
+            }
             <Pressable
               style={styles.revenueAmountWrap}
               onPress={() => navigation.navigate('EarningDetails')}
@@ -373,11 +377,15 @@ export default function DashboardScreen({ navigation }: Props) {
                 {maskMoney(displayValue, privacyMode)}
               </Text>
             </Pressable>
-            {stripeSummary?.status === 'ready' && (
+            {stripeSummary?.status === 'ready' ? (
               <Text style={styles.stripeBalanceLine}>
                 {privacyMode
                   ? '•••• available · •••• processing'
                   : `${formatUsdFromCents(stripeSummary.balanceAvailableCents)} available · ${formatUsdFromCents(stripeSummary.balancePendingCents)} processing`}
+              </Text>
+            ) : (
+              <Text style={styles.stripeBalanceLine}>
+                {hasLinkedSite ? 'From your bookings' : 'Link your site to see earnings'}
               </Text>
             )}
           </View>
@@ -535,6 +543,14 @@ const styles = StyleSheet.create({
   },
   stripeBalanceLine: {
     fontSize: 13, color: colors.textMuted, textAlign: 'center', marginTop: 6,
+  },
+  revenueContextLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 4,
   },
 
   /* Card base */

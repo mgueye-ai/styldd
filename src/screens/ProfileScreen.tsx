@@ -75,7 +75,7 @@ function timeSince(isoDate: string | null | undefined): string {
 export default function ProfileScreen({ navigation }: Props) {
   const { privacyMode, setPrivacyMode } = usePrivacyMode();
   const { profile, user, signOut } = useAuth();
-  const { clients, appointments, hasLinkedSite } = useSiteData();
+  const { clients, appointments, hasLinkedSite, isLoading } = useSiteData();
 
   const completedJobs = appointments.filter((a) => a.status === 'completed').length;
   const memberSince = timeSince(profile?.created_at ?? user?.created_at);
@@ -123,12 +123,14 @@ export default function ProfileScreen({ navigation }: Props) {
         <SectionLabel title="Overview" />
         <View style={styles.statsRow}>
           <View style={[styles.statCard, styles.statCardDark]}>
-            <Text style={styles.statValue}>{hasLinkedSite ? clients.length : '—'}</Text>
+            <Text style={styles.statValue}>
+              {isLoading ? '…' : hasLinkedSite ? clients.length : '—'}
+            </Text>
             <Text style={styles.statLabel}>Clients</Text>
           </View>
           <View style={[styles.statCard, styles.statCardAccent]}>
             <Text style={[styles.statValue, styles.statValueAccent]}>
-              {hasLinkedSite ? completedJobs : '—'}
+              {isLoading ? '…' : hasLinkedSite ? completedJobs : '—'}
             </Text>
             <Text style={[styles.statLabel, styles.statLabelAccent]}>Jobs done</Text>
           </View>
