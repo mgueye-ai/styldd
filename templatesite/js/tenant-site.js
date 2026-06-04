@@ -169,6 +169,13 @@
           root.style.setProperty('--hero-pink-deep', darken(primary, 0.68));
           root.style.setProperty('--pink-light', lighten(primary, 0.22));
           root.style.setProperty('--ink', secondary);
+
+          var bg = (theme.backgroundColor || '').trim();
+          if (bg && /^#[0-9a-fA-F]{6}$/.test(bg)) {
+            root.style.setProperty('--cream', bg);
+            root.style.setProperty('--white', bg);
+            document.body.style.backgroundColor = bg;
+          }
         })();
       }
 

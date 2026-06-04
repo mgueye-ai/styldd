@@ -50,6 +50,25 @@ const SECONDARY_PRESETS = [
   '#fdf4ff', // lavender
 ];
 
+const BACKGROUND_PRESETS = [
+  '#fafafa', // off-white (default)
+  '#ffffff', // pure white
+  '#f5f5f4', // stone
+  '#fef9f0', // warm cream
+  '#fdf4ff', // soft lavender
+  '#f0fdf4', // soft mint
+  '#eff6ff', // soft blue
+  '#fff7ed', // warm peach
+  '#fafaf0', // ivory
+  '#f1f5f9', // slate light
+  '#18181b', // zinc dark
+  '#0a0a0a', // near black
+  '#0e0e1a', // dark navy
+  '#1e1b4b', // deep indigo
+  '#1c1917', // warm dark
+  '#0c0a09', // deep warm black
+];
+
 function hexToRgb(hex: string): [number, number, number] | null {
   const clean = hex.replace('#', '');
   if (clean.length !== 6) return null;
@@ -70,7 +89,7 @@ export function getContrastColor(hex: string): string {
 type ColorPickerProps = {
   label: string;
   value: string;
-  presets: 'primary' | 'secondary';
+  presets: 'primary' | 'secondary' | 'background';
   onChange: (color: string) => void;
 };
 
@@ -78,7 +97,10 @@ export default function ColorPicker({ label, value, presets, onChange }: ColorPi
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
 
-  const swatches = presets === 'primary' ? PRIMARY_PRESETS : SECONDARY_PRESETS;
+  const swatches =
+    presets === 'primary' ? PRIMARY_PRESETS :
+    presets === 'background' ? BACKGROUND_PRESETS :
+    SECONDARY_PRESETS;
   const contrastColor = getContrastColor(value);
 
   const handleSelect = (hex: string) => {

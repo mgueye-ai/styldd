@@ -37,6 +37,13 @@
       document.documentElement.style.setProperty('--ink', secondary);
     }
 
+    var bg = (theme.backgroundColor || '').trim();
+    if (bg && /^#[0-9a-fA-F]{6}$/.test(bg)) {
+      document.documentElement.style.setProperty('--cream', bg);
+      document.documentElement.style.setProperty('--white', bg);
+      document.body.style.backgroundColor = bg;
+    }
+
     if (window.StyldTenant.applySiteFooter) {
       window.StyldTenant.applySiteFooter(content);
     }

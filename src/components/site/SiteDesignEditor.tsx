@@ -70,7 +70,7 @@ export default function SiteDesignEditor() {
     <View>
       <Text style={styles.groupTitle}>Brand colors</Text>
       <Text style={styles.helper}>
-        Choose your primary accent color and the dominant dark color for text and backgrounds.
+        Choose your accent color, text/dark color, and the page background color for your site.
       </Text>
       <ColorPicker
         label="Primary color"
@@ -83,6 +83,12 @@ export default function SiteDesignEditor() {
         value={theme.secondaryColor}
         presets="secondary"
         onChange={(secondaryColor) => updateTheme({ secondaryColor })}
+      />
+      <ColorPicker
+        label="Background color"
+        value={theme.backgroundColor ?? '#fafafa'}
+        presets="background"
+        onChange={(backgroundColor) => updateTheme({ backgroundColor })}
       />
 
       <Text style={styles.groupTitle}>Logo</Text>

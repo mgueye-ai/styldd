@@ -7,6 +7,7 @@ export type SiteTheme = {
   logoImagePath: string | null;
   primaryColor: string;
   secondaryColor: string;
+  backgroundColor: string | null;
   styleCardLayout: StyleCardLayout;
 };
 
@@ -16,6 +17,7 @@ export const DEFAULT_SITE_THEME: SiteTheme = {
   logoImagePath: null,
   primaryColor: '#db2777',
   secondaryColor: '#0a0a0a',
+  backgroundColor: null,
   styleCardLayout: 'card',
 };
 
@@ -73,6 +75,9 @@ export function normalizeSiteTheme(value: unknown): SiteTheme {
     secondaryColor: isValidHexColor(source.secondaryColor)
       ? source.secondaryColor.trim()
       : DEFAULT_SITE_THEME.secondaryColor,
+    backgroundColor: isValidHexColor(source.backgroundColor)
+      ? (source.backgroundColor as string).trim()
+      : null,
     styleCardLayout:
       source.styleCardLayout === 'pill' ? 'pill' : DEFAULT_SITE_THEME.styleCardLayout,
   };
