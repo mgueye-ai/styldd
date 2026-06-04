@@ -1,5 +1,4 @@
 import HeroImagePicker from './HeroImagePicker';
-import HeroLayoutPicker from './HeroLayoutPicker';
 import ColorPicker from './ColorPicker';
 import { useSiteContent } from '../../context/SiteContentContext';
 import { useSiteTheme } from '../../context/SiteThemeContext';
@@ -63,7 +62,7 @@ function CardLayoutOption({ value, current, onSelect, icon, label, description }
 
 export default function SiteDesignEditor() {
   const { content, updateContent } = useSiteContent();
-  const { theme, updateTheme, setHeroLayout, uploadHeroImage, uploadLogoImage, removeHeroImage, heroImageUrl, logoImageUrl, isSaving } =
+  const { theme, updateTheme, uploadHeroImage, uploadLogoImage, removeHeroImage, heroImageUrl, logoImageUrl, isSaving } =
     useSiteTheme();
 
   return (
@@ -116,9 +115,6 @@ export default function SiteDesignEditor() {
         label="Pills"
         description="Compact horizontal row — great for long menus"
       />
-
-      <Text style={styles.groupTitle}>Hero layout</Text>
-      <HeroLayoutPicker value={theme.heroLayout} onChange={setHeroLayout} />
 
       <Text style={styles.groupTitle}>Hero photo</Text>
       <Text style={styles.helper}>
