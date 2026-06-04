@@ -14,7 +14,6 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import SiteDesignEditor from '../components/site/SiteDesignEditor';
 import SitePreviewWebView from '../components/site/SitePreviewWebView';
-import SiteStylesEditor from '../components/site/SiteStylesEditor';
 import { useServiceCatalog } from '../context/ServiceCatalogContext';
 import { useSiteContent } from '../context/SiteContentContext';
 import { useSiteTheme } from '../context/SiteThemeContext';
@@ -28,7 +27,7 @@ import { colors } from '../theme';
 
 type Props = NativeStackScreenProps<SiteStackParamList, 'SiteEditor'>;
 
-type EditorTab = 'design' | 'content' | 'location' | 'styles';
+type EditorTab = 'design' | 'content' | 'location';
 type PreviewMode = 'split' | 'fullscreen' | 'hidden';
 
 function Field({
@@ -193,7 +192,6 @@ export default function SiteEditorScreen({ navigation }: Props) {
   const [previewMode, setPreviewMode] = useState<PreviewMode>('split');
 
   useEffect(() => {
-    if (tab === 'styles') void refresh();
   }, [tab, refresh]);
 
   const previewStyles = useMemo(
@@ -352,7 +350,6 @@ export default function SiteEditorScreen({ navigation }: Props) {
           ['design', 'Design'],
           ['content', 'Content'],
           ['location', 'Location'],
-          ['styles', 'Styles'],
         ] as const).map(([key, label]) => (
           <Pressable
             key={key}
@@ -508,7 +505,6 @@ export default function SiteEditorScreen({ navigation }: Props) {
           </>
         ) : null}
 
-        {tab === 'styles' ? <SiteStylesEditor /> : null}
       </ScrollView>
 
       {/* Fullscreen preview modal */}
