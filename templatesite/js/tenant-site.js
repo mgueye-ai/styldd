@@ -8,6 +8,29 @@
     subdomain = host.slice(0, -(rootDomain.length + 1));
   }
 
+  // ── Early template redirect from localStorage cache ──
+  if (subdomain) {
+    try {
+      var cachedTpl = localStorage.getItem('styld_tpl_' + subdomain);
+      if (cachedTpl) {
+        var currentTplParam = new URLSearchParams(window.location.search).get('tpl') || 'classic';
+        var needRedirect =
+          (cachedTpl === 'profile' && currentTplParam !== 'profile') ||
+          (cachedTpl !== 'profile' && currentTplParam === 'profile');
+        if (needRedirect) {
+          var eUrl = new URL(window.location.href);
+          if (cachedTpl === 'profile') {
+            eUrl.searchParams.set('tpl', 'profile');
+          } else {
+            eUrl.searchParams.delete('tpl');
+          }
+          window.location.replace(eUrl.toString());
+          return;
+        }
+      }
+    } catch (e) { /* localStorage may be unavailable */ }
+  }
+
   var statusEl = document.getElementById('tenant-status');
 
   function showError(message) {
@@ -129,6 +152,31 @@
         throw new Error('Site content not found.');
       }
 
+      var templateId = theme.templateId || 'profile';
+
+      // ── Template routing ──
+      (function routeTemplate() {
+        try {
+          if (subdomain) {
+            localStorage.setItem('styld_tpl_' + subdomain, templateId);
+          }
+          var currentTplParam = new URLSearchParams(window.location.search).get('tpl') || 'classic';
+          var needRedirect =
+            (templateId === 'profile' && currentTplParam !== 'profile') ||
+            (templateId !== 'profile' && currentTplParam === 'profile');
+          if (needRedirect) {
+            var rUrl = new URL(window.location.href);
+            if (templateId === 'profile') {
+              rUrl.searchParams.set('tpl', 'profile');
+            } else {
+              rUrl.searchParams.delete('tpl');
+            }
+            window.location.replace(rUrl.toString());
+            return;
+          }
+        } catch (e) { /* ignore */ }
+      })();
+
       window.__STYLD_SITE_CONTENT__ = content;
       window.__STYLD_SITE_THEME__ = {
         heroLayout: theme.heroLayout || 'split',
@@ -137,47 +185,59 @@
         primaryColor: theme.primaryColor || null,
         secondaryColor: theme.secondaryColor || null,
         styleCardLayout: theme.styleCardLayout || 'card',
+        fontFamily: theme.fontFamily || 'cormorant',
+        templateId: templateId,
       };
 
-      // Apply brand colors as CSS variables
-      if (theme.primaryColor || theme.secondaryColor) {
-        (function applyBrandColors() {
-          var primary = theme.primaryColor || '#db2777';
-          var secondary = theme.secondaryColor || '#0a0a0a';
+      // ── Apply brand colors + font as CSS variables ──
+      (function applyTheme() {
+        var primary = theme.primaryColor || '#db2777';
+        var secondary = theme.secondaryColor || '#0a0a0a';
 
-          function hexToRgb(hex) {
-            var clean = hex.replace('#', '');
-            if (clean.length !== 6) return null;
-            return [parseInt(clean.slice(0, 2), 16), parseInt(clean.slice(2, 4), 16), parseInt(clean.slice(4, 6), 16)];
-          }
-          function darken(hex, factor) {
-            var rgb = hexToRgb(hex);
-            if (!rgb) return hex;
-            return '#' + rgb.map(function(c){ return Math.max(0, Math.round(c * factor)).toString(16).padStart(2, '0'); }).join('');
-          }
-          function lighten(hex, factor) {
-            var rgb = hexToRgb(hex);
-            if (!rgb) return hex;
-            return '#' + rgb.map(function(c){ return Math.min(255, Math.round(c + (255 - c) * factor)).toString(16).padStart(2, '0'); }).join('');
-          }
+        function hexToRgb(hex) {
+          var clean = hex.replace('#', '');
+          if (clean.length !== 6) return null;
+          return [parseInt(clean.slice(0, 2), 16), parseInt(clean.slice(2, 4), 16), parseInt(clean.slice(4, 6), 16)];
+        }
+        function darken(hex, factor) {
+          var rgb = hexToRgb(hex);
+          if (!rgb) return hex;
+          return '#' + rgb.map(function(c){ return Math.max(0, Math.round(c * factor)).toString(16).padStart(2, '0'); }).join('');
+        }
+        function lighten(hex, factor) {
+          var rgb = hexToRgb(hex);
+          if (!rgb) return hex;
+          return '#' + rgb.map(function(c){ return Math.min(255, Math.round(c + (255 - c) * factor)).toString(16).padStart(2, '0'); }).join('');
+        }
 
-          var root = document.documentElement;
-          root.style.setProperty('--pink', primary);
-          root.style.setProperty('--pink-dark', darken(primary, 0.68));
-          root.style.setProperty('--pink-heading', lighten(primary, 0.1));
-          root.style.setProperty('--hero-pink', lighten(primary, 0.22));
-          root.style.setProperty('--hero-pink-deep', darken(primary, 0.68));
-          root.style.setProperty('--pink-light', lighten(primary, 0.22));
-          root.style.setProperty('--ink', secondary);
+        var root = document.documentElement;
+        root.style.setProperty('--pink', primary);
+        root.style.setProperty('--pink-dark', darken(primary, 0.68));
+        root.style.setProperty('--pink-heading', lighten(primary, 0.1));
+        root.style.setProperty('--hero-pink', lighten(primary, 0.22));
+        root.style.setProperty('--hero-pink-deep', darken(primary, 0.68));
+        root.style.setProperty('--pink-light', lighten(primary, 0.22));
+        root.style.setProperty('--ink', secondary);
 
-          var bg = (theme.backgroundColor || '').trim();
-          if (bg && /^#[0-9a-fA-F]{6}$/.test(bg)) {
-            root.style.setProperty('--cream', bg);
-            root.style.setProperty('--white', bg);
-            document.body.style.backgroundColor = bg;
-          }
-        })();
-      }
+        var bg = (theme.backgroundColor || '').trim();
+        if (bg && /^#[0-9a-fA-F]{6}$/.test(bg)) {
+          root.style.setProperty('--cream', bg);
+          root.style.setProperty('--white', bg);
+          document.body.style.backgroundColor = bg;
+        }
+
+        // Apply font family
+        var fontFamilyMap = {
+          'cormorant': '"Cormorant Garamond", Georgia, serif',
+          'playfair': '"Playfair Display", Georgia, serif',
+          'inter': 'Inter, system-ui, sans-serif',
+          'dm-sans': '"DM Sans", system-ui, sans-serif',
+          'montserrat': 'Montserrat, system-ui, sans-serif',
+        };
+        var fontId = theme.fontFamily || 'cormorant';
+        var fontCss = fontFamilyMap[fontId] || fontFamilyMap['cormorant'];
+        root.style.setProperty('--font-display', fontCss);
+      })();
 
       var styleIds = {};
       Object.keys(meta || {}).forEach(function (id) {

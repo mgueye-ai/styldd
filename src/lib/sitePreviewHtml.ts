@@ -6,7 +6,7 @@ import {
   SiteContent,
   SiteSection,
 } from '../data/siteContent';
-import { HeroLayout, StyleCardLayout } from '../data/siteTheme';
+import { FontFamily, FONT_FAMILY_OPTIONS, GOOGLE_FONTS_URL, HeroLayout, StyleCardLayout, TemplateId } from '../data/siteTheme';
 
 const SITE_PREVIEW_CSS = `
 :root{--pink:#db2777;--pink-dark:#9f1239;--ink:#0a0a0a;--cream:#fafafa;--muted:#525252;--muted-soft:#737373;--pink-heading:#ec4899;--hero-pink:#f472b6;--hero-pink-deep:#be185d;--white:#fff;--radius:12px;--shadow:0 8px 32px rgba(13,13,13,.08);--font-display:"Cormorant Garamond",Georgia,serif;--font-body:"Source Sans 3",system-ui,sans-serif}
@@ -82,6 +82,45 @@ const SITE_PREVIEW_CSS = `
 .style-pill__desc{font-size:.75rem;color:var(--muted);margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .style-pill__price{font-weight:800;font-size:.9rem;color:var(--pink);flex-shrink:0;white-space:nowrap}
 @media (max-width:768px){.section{padding:2.4rem 0}.section-head{margin-bottom:1.65rem;text-align:center}.card-grid{display:flex;flex-wrap:nowrap;gap:1rem;overflow-x:auto;scroll-snap-type:x mandatory;padding:0 .25rem .85rem;margin-inline:-.25rem;-webkit-overflow-scrolling:touch}.card-grid>*{flex:0 0 min(18.25rem,calc(100vw - 3rem));scroll-snap-align:start;max-width:min(18.25rem,calc(100vw - 3rem))}.info-cards{display:grid;grid-template-columns:1fr;gap:1rem}.location-map{height:220px}.hero-ctas--scale{flex-direction:column;align-items:stretch;width:100%;max-width:360px;margin-inline:auto}.hero-ctas--scale .hero-btn--lg{width:100%;justify-content:center}}
+.profile-nav{background:#fff;border-bottom:1px solid rgba(0,0,0,.06);padding:.875rem 0;position:sticky;top:0;z-index:100}
+.profile-nav__inner{display:flex;align-items:center;justify-content:space-between;gap:1rem}
+.profile-brand{font-family:var(--font-display);font-size:1.15rem;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:.6rem;text-decoration:none}
+.profile-brand__logo{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#fce7f3,#fbcfe8);flex-shrink:0}
+.profile-brand__logo-img{width:38px;height:38px;border-radius:10px;object-fit:cover;flex-shrink:0}
+.profile-book-btn{display:inline-flex;align-items:center;padding:.6rem 1.25rem;background:var(--pink);color:#fff;border-radius:999px;font-weight:700;font-size:.9rem;text-decoration:none;box-shadow:0 4px 14px rgba(219,39,119,.28);white-space:nowrap}
+.profile-hero{padding:2.5rem 0 2rem;background:var(--cream)}
+.profile-hero__grid{display:grid;grid-template-columns:2fr 3fr;gap:2.5rem;align-items:start}
+.profile-photo{border-radius:20px;overflow:hidden;aspect-ratio:3/4;background:linear-gradient(180deg,#f0ece5 0%,#e4dfd7 100%);box-shadow:0 12px 40px rgba(0,0,0,.10)}
+.profile-photo__bg{width:100%;height:100%;background-size:cover;background-position:center;min-height:240px}
+.profile-info{display:flex;flex-direction:column;gap:1.75rem;padding-top:.5rem}
+.profile-section-block{display:flex;flex-direction:column;gap:.5rem}
+.profile-about-head,.profile-policy-head{font-family:var(--font-display);color:var(--ink);margin:0}
+.profile-about-head{font-size:1.5rem;font-weight:700;border-bottom:2px solid var(--pink);display:inline-block;padding-bottom:.2rem}
+.profile-policy-head{font-size:1.1rem;font-weight:600}
+.profile-about-body,.profile-policy-body{color:var(--muted);font-size:.95rem;line-height:1.7;margin:0}
+.profile-menu-section{padding:2.5rem 0;background:#fff;border-top:1px solid rgba(0,0,0,.06)}
+.profile-menu-head{margin-bottom:1.25rem}
+.profile-menu-head h2{font-family:var(--font-display);font-size:clamp(1.5rem,3vw,2.1rem);font-weight:700;color:var(--ink);margin:0 0 .3rem;border-bottom:2px solid var(--pink);display:inline-block;padding-bottom:.2rem}
+.profile-menu-blurb{color:var(--muted);font-size:.9rem;margin:0}
+.profile-service-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.875rem}
+.profile-service-card{display:flex;align-items:center;gap:.85rem;padding:.75rem;border-radius:14px;background:var(--cream);border:1px solid rgba(0,0,0,.07);text-decoration:none;color:inherit;transition:box-shadow .15s}
+.profile-service-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.08);border-color:rgba(219,39,119,.2)}
+.profile-service-card__img{width:64px;height:64px;border-radius:12px;flex-shrink:0;background:linear-gradient(145deg,#e8e3db,#d6d0c7);background-size:cover;background-position:center}
+.profile-service-card__body{flex:1;min-width:0}
+.profile-service-card__name{font-weight:700;font-size:.88rem;color:var(--ink);line-height:1.3}
+.profile-service-card__price{font-size:.83rem;font-weight:700;color:var(--pink);margin-top:.15rem}
+.profile-service-card__duration{font-size:.75rem;color:var(--muted)}
+.profile-location-section{padding:2.5rem 0;background:var(--cream);border-top:1px solid rgba(0,0,0,.06)}
+.profile-location-head{margin-bottom:1.25rem}
+.profile-location-head h2{font-family:var(--font-display);font-size:clamp(1.4rem,2.5vw,2rem);font-weight:700;color:var(--ink);margin:0;border-bottom:2px solid var(--pink);display:inline-block;padding-bottom:.2rem}
+.profile-location-card{background:#fff;border-radius:20px;border:1px solid rgba(0,0,0,.07);overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.06)}
+.profile-location-info{padding:1.25rem 1.5rem;display:flex;flex-wrap:wrap;gap:1.25rem 2.5rem}
+.profile-location-col h3{font-family:var(--font-display);font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 .4rem}
+.profile-location-col p{margin:.2rem 0;color:var(--ink);font-size:.9rem}
+.profile-location-col a{color:var(--pink);text-decoration:none}
+.profile-location-col a:hover{text-decoration:underline}
+.profile-location-map{width:100%;height:240px;border:0;border-top:1px solid rgba(0,0,0,.06);display:block}
+@media(max-width:680px){.profile-hero__grid{grid-template-columns:1fr}.profile-photo{aspect-ratio:4/3;max-height:260px}.profile-service-grid{grid-template-columns:1fr}}
 `;
 
 function escapeHtml(value: string): string {
@@ -109,8 +148,11 @@ export type SitePreviewTheme = {
   logoImageUrl?: string | null;
   primaryColor?: string | null;
   secondaryColor?: string | null;
+  backgroundColor?: string | null;
   zoomedOut?: boolean;
   styleCardLayout?: StyleCardLayout;
+  fontFamily?: FontFamily | null;
+  templateId?: TemplateId | null;
 };
 
 export const DEFAULT_PREVIEW_THEME: SitePreviewTheme = {
@@ -119,7 +161,10 @@ export const DEFAULT_PREVIEW_THEME: SitePreviewTheme = {
   logoImageUrl: null,
   primaryColor: '#db2777',
   secondaryColor: '#0a0a0a',
+  backgroundColor: null,
   zoomedOut: false,
+  fontFamily: 'cormorant',
+  templateId: 'profile',
 };
 
 function hexToRgb(hex: string): [number, number, number] | null {
@@ -160,7 +205,13 @@ function buildColorOverrideCss(theme: SitePreviewTheme): string {
   const primaryDark = darkenHex(primary, 0.68);
   const primaryLight = lightenHex(primary, 0.22);
   const primaryHeading = lightenHex(primary, 0.1);
-  return `:root{--pink:${primary};--pink-dark:${primaryDark};--pink-heading:${primaryHeading};--hero-pink:${primaryLight};--hero-pink-deep:${primaryDark};--pink-light:${primaryLight};--ink:${secondary};}`;
+  const fontOpt = FONT_FAMILY_OPTIONS.find((f) => f.id === theme.fontFamily);
+  const fontDisplay = fontOpt ? fontOpt.css : '"Cormorant Garamond", Georgia, serif';
+  const bgColor = theme.backgroundColor && /^#[0-9a-fA-F]{6}$/.test(theme.backgroundColor)
+    ? theme.backgroundColor
+    : null;
+  const bgPart = bgColor ? `--cream:${bgColor};--white:${bgColor};` : '';
+  return `:root{--pink:${primary};--pink-dark:${primaryDark};--pink-heading:${primaryHeading};--hero-pink:${primaryLight};--hero-pink-deep:${primaryDark};--pink-light:${primaryLight};--ink:${secondary};--font-display:${fontDisplay};${bgPart}}`;
 }
 
 export function getSitePreviewPageUrl(): string | null {
@@ -297,11 +348,115 @@ function isLocationPartHidden(content: SiteContent, part: LocationPart): boolean
   return Array.isArray(content.hiddenLocationParts) && content.hiddenLocationParts.includes(part);
 }
 
+function buildProfileServiceCardHtml(style: SitePreviewStyle): string {
+  const imgStyle = style.imageUrl
+    ? ` style="background-image:url('${style.imageUrl.replace(/'/g, '%27')}');background-size:cover;background-position:center;"`
+    : '';
+  const bookHref = style.id ? `/booking?style=${encodeURIComponent(style.id)}` : '/booking';
+  return `<a class="profile-service-card" href="${bookHref}"><div class="profile-service-card__img" aria-hidden="true"${imgStyle}></div><div class="profile-service-card__body"><div class="profile-service-card__name">${escapeHtml(style.title)}</div>${style.priceLabel ? `<div class="profile-service-card__price">${escapeHtml(style.priceLabel)}</div>` : ''}${style.durationLabel ? `<div class="profile-service-card__duration">${escapeHtml(style.durationLabel)}</div>` : ''}</div></a>`;
+}
+
+function buildProfileServiceGridHtml(styles: SitePreviewStyle[]): string {
+  if (!styles.length) {
+    return `<div class="profile-service-grid">${buildProfileServiceCardHtml({ title: 'Add styles in your app', description: '', priceLabel: '', sizeLabel: '' })}</div>`;
+  }
+  return `<div class="profile-service-grid">${styles.slice(0, 12).map(buildProfileServiceCardHtml).join('')}</div>`;
+}
+
+export function buildProfileSitePreviewHtml(
+  content: SiteContent,
+  styles: SitePreviewStyle[] = [],
+  theme: SitePreviewTheme = DEFAULT_PREVIEW_THEME,
+): string {
+  const colorOverrideCss = buildColorOverrideCss(theme);
+  const viewportContent = theme.zoomedOut
+    ? 'width=800'
+    : 'width=device-width,initial-scale=1,maximum-scale=1';
+
+  const logoHtml = theme.logoImageUrl
+    ? `<img class="profile-brand__logo-img" src="${theme.logoImageUrl.replace(/"/g, '%22')}" alt="" width="38" height="38" decoding="async"/>`
+    : `<div class="profile-brand__logo" aria-hidden="true"></div>`;
+
+  const photoStyle = theme.heroImageUrl
+    ? ` style="background-image:url('${theme.heroImageUrl.replace(/'/g, '%27')}');"`
+    : '';
+  const photoHtml = `<div class="profile-photo__bg"${photoStyle}></div>`;
+
+  const aboutHtml = content.heroDescription
+    ? `<p class="profile-about-body">${escapeHtml(content.heroDescription)}</p>`
+    : `<p class="profile-about-body" style="color:#bbb;font-style:italic">Add your bio in the editor…</p>`;
+
+  const policyHtml = content.bookingPolicy
+    ? `<p class="profile-policy-body">${escapeHtml(content.bookingPolicy)}</p>`
+    : `<p class="profile-policy-body" style="color:#bbb;font-style:italic">Add your booking policy…</p>`;
+
+  const menuSection = isSectionHidden(content, 'menu')
+    ? ''
+    : `<section class="profile-menu-section" id="preview-menu-section"><div class="container"><div class="profile-menu-head"><h2>${escapeHtml(content.menuTitle || 'Menu')}</h2>${content.menuBlurb ? `<p class="profile-menu-blurb">${escapeHtml(content.menuBlurb)}</p>` : ''}</div>${buildProfileServiceGridHtml(styles)}</div></section>`;
+
+  const address = formatSiteAddress(content);
+  const mapsSearchUrl = buildGoogleMapsSearchUrl(address);
+  const mapSrc = buildGoogleMapsEmbedUrl(content);
+
+  const addressColHtml = !isLocationPartHidden(content, 'address') && address.trim()
+    ? `<div class="profile-location-col"><h3>Address</h3><p><a href="${escapeHtml(mapsSearchUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(address)}</a></p></div>`
+    : '';
+
+  const instagram = content.instagramHandle.replace(/^@/, '');
+  const contactColHtml = !isLocationPartHidden(content, 'contact') && (content.phoneDisplay || content.email || instagram)
+    ? `<div class="profile-location-col"><h3>Contact</h3>${content.phoneDisplay ? `<p>${escapeHtml(content.phoneDisplay)}</p>` : ''}${content.email ? `<p>${escapeHtml(content.email)}</p>` : ''}${instagram ? `<p><a href="https://instagram.com/${encodeURIComponent(instagram)}" target="_blank" rel="noopener noreferrer">@${escapeHtml(instagram)}</a></p>` : ''}</div>`
+    : '';
+
+  const mapHtml = !isLocationPartHidden(content, 'map') && mapSrc
+    ? `<iframe class="profile-location-map" title="Map" loading="lazy" src="${escapeHtml(mapSrc)}"></iframe>`
+    : '';
+
+  const visitSection = isSectionHidden(content, 'visit')
+    ? ''
+    : `<section class="profile-location-section" id="preview-visit-section"><div class="container"><div class="profile-location-head"><h2>${escapeHtml(content.visitTitle || 'Location')}</h2></div><div class="profile-location-card"><div class="profile-location-info">${addressColHtml}${contactColHtml}</div>${mapHtml}</div></div></section>`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="${viewportContent}"/>
+<title>${escapeHtml(content.brandName)} | Preview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="${GOOGLE_FONTS_URL}" rel="stylesheet"/>
+<style>${SITE_PREVIEW_CSS}${colorOverrideCss}</style>
+</head>
+<body class="tpl-profile page-home">
+<div class="preview-banner">Styld preview — this is how your booking site will look</div>
+<nav class="profile-nav"><div class="container profile-nav__inner">
+<a class="profile-brand" href="#">${logoHtml}<span>${escapeHtml(content.brandName)}</span></a>
+<a class="profile-book-btn" href="#">Book Now</a>
+</div></nav>
+<section class="profile-hero"><div class="container profile-hero__grid">
+<div class="profile-photo">${photoHtml}</div>
+<div class="profile-info">
+<div class="profile-section-block"><h2 class="profile-about-head">About Me</h2>${aboutHtml}</div>
+<div class="profile-section-block"><h3 class="profile-policy-head">Policies</h3>${policyHtml}</div>
+</div>
+</div></section>
+<main>
+${menuSection}
+${visitSection}
+</main>
+<footer class="site-footer site-footer--home-promo"><div class="container footer-bottom">
+<p>&copy; ${escapeHtml(content.brandName)}</p>
+<p class="footer-built-by"><a class="footer-built-by__link" href="https://styldd.com" target="_blank" rel="noopener noreferrer"><span>Built with Styld</span></a></p></div></footer>
+</body></html>`;
+}
+
 export function buildSitePreviewHtml(
   content: SiteContent,
   styles: SitePreviewStyle[] = [],
   theme: SitePreviewTheme = DEFAULT_PREVIEW_THEME,
 ): string {
+  if (theme.templateId !== 'classic') {
+    return buildProfileSitePreviewHtml(content, styles, theme);
+  }
   const address = formatSiteAddress(content);
   const instagram = content.instagramHandle.replace(/^@/, '');
   const mapsSearchUrl = buildGoogleMapsSearchUrl(address);
@@ -369,7 +524,7 @@ ${addressBlock}${contactBlock}${mapBlock}
 <title>${escapeHtml(content.brandName)} | Preview</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Source+Sans+3:wght@400;600;700&display=swap" rel="stylesheet"/>
+<link href="${GOOGLE_FONTS_URL}" rel="stylesheet"/>
 <style>${SITE_PREVIEW_CSS}${colorOverrideCss}</style>
 </head>
 <body class="page-home">

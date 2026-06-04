@@ -2,10 +2,87 @@ import HeroImagePicker from './HeroImagePicker';
 import ColorPicker from './ColorPicker';
 import { useSiteContent } from '../../context/SiteContentContext';
 import { useSiteTheme } from '../../context/SiteThemeContext';
-import { StyleCardLayout } from '../../data/siteTheme';
+import { FontFamily, FONT_FAMILY_OPTIONS, StyleCardLayout, TemplateId } from '../../data/siteTheme';
 import { colors } from '../../theme';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+
+type TemplateCardProps = {
+  id: TemplateId;
+  current: TemplateId;
+  onSelect: (id: TemplateId) => void;
+  label: string;
+  description: string;
+  children: React.ReactNode;
+};
+
+function TemplateCard({ id, current, onSelect, label, description, children }: TemplateCardProps) {
+  const active = id === current;
+  return (
+    <Pressable
+      style={[styles.templateCard, active && styles.templateCardActive]}
+      onPress={() => onSelect(id)}
+    >
+      <View style={[styles.templatePreview, active && styles.templatePreviewActive]}>
+        {children}
+      </View>
+      <View style={styles.templateMeta}>
+        <Text style={[styles.templateLabel, active && styles.templateLabelActive]}>{label}</Text>
+        <Text style={styles.templateDesc}>{description}</Text>
+      </View>
+      {active && (
+        <View style={styles.templateCheck}>
+          <Ionicons name="checkmark-circle" size={18} color={colors.accentPink} />
+        </View>
+      )}
+    </Pressable>
+  );
+}
+
+function ProfileTemplateThumbnail() {
+  return (
+    <View style={styles.thumb}>
+      <View style={styles.thumbNavBar}>
+        <View style={styles.thumbDot} />
+        <View style={[styles.thumbBar, { width: 28, height: 5 }]} />
+      </View>
+      <View style={styles.thumbRow}>
+        <View style={styles.thumbPhoto} />
+        <View style={{ flex: 1, gap: 3 }}>
+          <View style={[styles.thumbBar, { width: '80%', height: 5 }]} />
+          <View style={[styles.thumbBar, { width: '100%', height: 3 }]} />
+          <View style={[styles.thumbBar, { width: '90%', height: 3 }]} />
+          <View style={[styles.thumbBar, { width: '60%', height: 3 }]} />
+        </View>
+      </View>
+      <View style={[styles.thumbBar, { width: '50%', height: 5, marginTop: 6 }]} />
+      <View style={styles.thumbCardRow}>
+        <View style={styles.thumbCard} />
+        <View style={styles.thumbCard} />
+      </View>
+    </View>
+  );
+}
+
+function ClassicTemplateThumbnail() {
+  return (
+    <View style={styles.thumb}>
+      <View style={styles.thumbNavBar}>
+        <View style={styles.thumbDot} />
+        <View style={[styles.thumbBar, { width: 24, height: 5 }]} />
+      </View>
+      <View style={[styles.thumbHeroBlock]}>
+        <View style={[styles.thumbBar, { width: '45%', height: 4, alignSelf: 'center' }]} />
+        <View style={[styles.thumbBar, { width: '70%', height: 7, alignSelf: 'center', marginTop: 3 }]} />
+        <View style={[styles.thumbBar, { width: '55%', height: 7, alignSelf: 'center', marginTop: 2, backgroundColor: colors.accentPink }]} />
+      </View>
+      <View style={[styles.thumbCardRow, { marginTop: 6 }]}>
+        <View style={styles.thumbCard} />
+        <View style={styles.thumbCard} />
+      </View>
+    </View>
+  );
+}
 
 function Field({
   label,
@@ -67,18 +144,62 @@ export default function SiteDesignEditor() {
 
   return (
     <View>
-      <Text style={styles.groupTitle}>Brand colors</Text>
+      {/* ── Template ── */}
+      <Text style={styles.groupTitle}>Template</Text>
+      <Text style={styles.helper}>Choose your site layout. This affects the overall page structure.</Text>
+      <View style={styles.templateRow}>
+        <TemplateCard
+          id="profile"
+          current={theme.templateId}
+          onSelect={(templateId) => updateTheme({ templateId })}
+          label="Profile"
+          description="Photo + bio, clean menu"
+        >
+          <ProfileTemplateThumbnail />
+        </TemplateCard>
+        <TemplateCard
+          id="classic"
+          current={theme.templateId}
+          onSelect={(templateId) => updateTheme({ templateId })}
+          label="Classic"
+          description="Bold hero + headline"
+        >
+          <ClassicTemplateThumbnail />
+        </TemplateCard>
+      </View>
+
+      {/* ── Font ── */}
+      <Text style={styles.groupTitle}>Font</Text>
+      <Text style={styles.helper}>Choose a typeface for headings and brand text.</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.fontScroll} contentContainerStyle={styles.fontScrollContent}>
+        {FONT_FAMILY_OPTIONS.map((opt) => {
+          const active = theme.fontFamily === opt.id;
+          return (
+            <Pressable
+              key={opt.id}
+              style={[styles.fontPill, active && styles.fontPillActive]}
+              onPress={() => updateTheme({ fontFamily: opt.id as FontFamily })}
+            >
+              <Text style={[styles.fontPillSample, active && styles.fontPillSampleActive]}>Aa</Text>
+              <Text style={[styles.fontPillLabel, active && styles.fontPillLabelActive]}>{opt.label}</Text>
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+
+      {/* ── Colors ── */}
+      <Text style={styles.groupTitle}>Colors</Text>
       <Text style={styles.helper}>
-        Choose your accent color, text/dark color, and the page background color for your site.
+        Set your accent, text, and background colors.
       </Text>
       <ColorPicker
-        label="Primary color"
+        label="Accent color"
         value={theme.primaryColor}
         presets="primary"
         onChange={(primaryColor) => updateTheme({ primaryColor })}
       />
       <ColorPicker
-        label="Secondary color"
+        label="Text color"
         value={theme.secondaryColor}
         presets="secondary"
         onChange={(secondaryColor) => updateTheme({ secondaryColor })}
@@ -184,6 +305,154 @@ export default function SiteDesignEditor() {
 }
 
 const styles = StyleSheet.create({
+  templateRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 6,
+  },
+  templateCard: {
+    flex: 1,
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: colors.cardBorder,
+    overflow: 'hidden',
+    padding: 10,
+  },
+  templateCardActive: {
+    borderColor: colors.accentPink,
+    backgroundColor: colors.accentPinkMuted,
+  },
+  templatePreview: {
+    borderRadius: 8,
+    overflow: 'hidden',
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    marginBottom: 8,
+  },
+  templatePreviewActive: {
+    borderColor: colors.accentPinkBorder,
+  },
+  templateMeta: {
+    gap: 2,
+  },
+  templateLabel: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  templateLabelActive: {
+    color: colors.accentPink,
+  },
+  templateDesc: {
+    color: colors.textMuted,
+    fontSize: 11,
+    lineHeight: 15,
+  },
+  templateCheck: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+  },
+  // Thumbnail
+  thumb: {
+    padding: 8,
+    gap: 4,
+  },
+  thumbNavBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  thumbDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.accentPink,
+  },
+  thumbRow: {
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'flex-start',
+  },
+  thumbPhoto: {
+    width: 28,
+    height: 38,
+    borderRadius: 5,
+    backgroundColor: colors.textMuted,
+    opacity: 0.25,
+  },
+  thumbBar: {
+    borderRadius: 3,
+    backgroundColor: colors.textMuted,
+    opacity: 0.25,
+  },
+  thumbHeroBlock: {
+    padding: 4,
+    gap: 2,
+    backgroundColor: colors.background,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    marginVertical: 2,
+  },
+  thumbCardRow: {
+    flexDirection: 'row',
+    gap: 4,
+    marginTop: 4,
+  },
+  thumbCard: {
+    flex: 1,
+    height: 20,
+    borderRadius: 4,
+    backgroundColor: colors.textMuted,
+    opacity: 0.15,
+  },
+  // Font picker
+  fontScroll: {
+    marginBottom: 6,
+  },
+  fontScrollContent: {
+    gap: 8,
+    paddingBottom: 4,
+  },
+  fontPill: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: colors.card,
+    borderWidth: 1.5,
+    borderColor: colors.cardBorder,
+    minWidth: 72,
+    gap: 3,
+  },
+  fontPillActive: {
+    borderColor: colors.accentPink,
+    backgroundColor: colors.accentPinkMuted,
+  },
+  fontPillSample: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.textMuted,
+    lineHeight: 22,
+  },
+  fontPillSampleActive: {
+    color: colors.accentPink,
+  },
+  fontPillLabel: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  fontPillLabelActive: {
+    color: colors.accentPink,
+  },
   helper: {
     color: colors.textMuted,
     fontSize: 14,

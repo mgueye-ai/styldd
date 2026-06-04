@@ -1,5 +1,7 @@
 export type HeroLayout = 'split' | 'image-below' | 'minimal';
 export type StyleCardLayout = 'card' | 'pill';
+export type FontFamily = 'cormorant' | 'inter' | 'playfair' | 'dm-sans' | 'montserrat';
+export type TemplateId = 'classic' | 'profile';
 
 export type SiteTheme = {
   heroLayout: HeroLayout;
@@ -9,6 +11,8 @@ export type SiteTheme = {
   secondaryColor: string;
   backgroundColor: string | null;
   styleCardLayout: StyleCardLayout;
+  fontFamily: FontFamily;
+  templateId: TemplateId;
 };
 
 export const DEFAULT_SITE_THEME: SiteTheme = {
@@ -19,7 +23,33 @@ export const DEFAULT_SITE_THEME: SiteTheme = {
   secondaryColor: '#0a0a0a',
   backgroundColor: null,
   styleCardLayout: 'card',
+  fontFamily: 'cormorant',
+  templateId: 'profile',
 };
+
+export type FontFamilyOption = {
+  id: FontFamily;
+  label: string;
+  css: string;
+  sampleText: string;
+};
+
+export const FONT_FAMILY_OPTIONS: FontFamilyOption[] = [
+  { id: 'cormorant', label: 'Cormorant', css: '"Cormorant Garamond", Georgia, serif', sampleText: 'Aa' },
+  { id: 'playfair', label: 'Playfair', css: '"Playfair Display", Georgia, serif', sampleText: 'Aa' },
+  { id: 'inter', label: 'Inter', css: 'Inter, system-ui, sans-serif', sampleText: 'Aa' },
+  { id: 'dm-sans', label: 'DM Sans', css: '"DM Sans", system-ui, sans-serif', sampleText: 'Aa' },
+  { id: 'montserrat', label: 'Montserrat', css: 'Montserrat, system-ui, sans-serif', sampleText: 'Aa' },
+];
+
+export const GOOGLE_FONTS_URL =
+  'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500' +
+  '&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700' +
+  '&family=Inter:wght@400;500;600;700' +
+  '&family=Montserrat:wght@400;500;600;700' +
+  '&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500' +
+  '&family=Source+Sans+3:wght@400;600;700' +
+  '&display=swap';
 
 export type HeroLayoutOption = {
   id: HeroLayout;
@@ -59,6 +89,8 @@ export function normalizeSiteTheme(value: unknown): SiteTheme {
       ? layout
       : DEFAULT_SITE_THEME.heroLayout;
 
+  const validFontIds: FontFamily[] = ['cormorant', 'inter', 'playfair', 'dm-sans', 'montserrat'];
+
   return {
     heroLayout,
     heroImagePath:
@@ -80,5 +112,9 @@ export function normalizeSiteTheme(value: unknown): SiteTheme {
       : null,
     styleCardLayout:
       source.styleCardLayout === 'pill' ? 'pill' : DEFAULT_SITE_THEME.styleCardLayout,
+    fontFamily: validFontIds.includes(source.fontFamily as FontFamily)
+      ? (source.fontFamily as FontFamily)
+      : DEFAULT_SITE_THEME.fontFamily,
+    templateId: source.templateId === 'classic' ? 'classic' : DEFAULT_SITE_THEME.templateId,
   };
 }

@@ -11,15 +11,16 @@
 
     var endpoint = supabaseUrl + '/functions/v1/analytics-ingest';
 
-    // Subdomain: extract from hostname (e.g. "pearson" from "pearson.styldd.com")
+    // Subdomain: check query param first (tenant templates), then extract from hostname
     var hostname = window.location.hostname;
     var rootDomain = cfg.rootDomain || 'styldd.com';
-    var subdomain = '';
-    if (hostname.endsWith('.' + rootDomain)) {
-      subdomain = hostname.slice(0, -(rootDomain.length + 1));
-    } else if (hostname !== rootDomain && hostname !== 'localhost') {
-      // Possibly a custom domain — use full hostname as identifier
-      subdomain = hostname;
+    var subdomain = new URLSearchParams(window.location.search).get('subdomain') || '';
+    if (!subdomain) {
+      if (hostname.endsWith('.' + rootDomain)) {
+        subdomain = hostname.slice(0, -(rootDomain.length + 1));
+      } else if (hostname !== rootDomain && hostname !== 'localhost') {
+        subdomain = hostname;
+      }
     }
     if (!subdomain) return;
 
