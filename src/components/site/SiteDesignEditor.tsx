@@ -250,23 +250,27 @@ export default function SiteDesignEditor({ onEditHeroContent }: { onEditHeroCont
         large
       />
 
-      <Text style={styles.groupTitle}>Headline text</Text>
-      <Field
-        label="Left word"
-        value={content.taglineLeft}
-        onChangeText={(taglineLeft) => updateContent({ taglineLeft })}
-        placeholder="Book with"
-      />
-      <Field
-        label="Right word (top)"
-        value={content.taglineRightLine1}
-        onChangeText={(taglineRightLine1) => updateContent({ taglineRightLine1 })}
-      />
-      <Field
-        label="Right word (bottom)"
-        value={content.taglineRightLine2}
-        onChangeText={(taglineRightLine2) => updateContent({ taglineRightLine2 })}
-      />
+      {!isProfileTemplate && (
+        <>
+          <Text style={styles.groupTitle}>Headline text</Text>
+          <Field
+            label="Left word"
+            value={content.taglineLeft}
+            onChangeText={(taglineLeft) => updateContent({ taglineLeft })}
+            placeholder="Book with"
+          />
+          <Field
+            label="Right word (top)"
+            value={content.taglineRightLine1}
+            onChangeText={(taglineRightLine1) => updateContent({ taglineRightLine1 })}
+          />
+          <Field
+            label="Right word (bottom)"
+            value={content.taglineRightLine2}
+            onChangeText={(taglineRightLine2) => updateContent({ taglineRightLine2 })}
+          />
+        </>
+      )}
 
       {isProfileTemplate && (
         <>
