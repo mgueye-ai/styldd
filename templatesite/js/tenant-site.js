@@ -57,7 +57,9 @@
   };
 
   function rest(path) {
-    return fetch(cfg.supabaseUrl.replace(/\/$/, '') + '/rest/v1/' + path, { headers: headers }).then(function (res) {
+    var sep = path.indexOf('?') !== -1 ? '&' : '?';
+    var url = cfg.supabaseUrl.replace(/\/$/, '') + '/rest/v1/' + path + sep + '_t=' + Date.now();
+    return fetch(url, { headers: headers, cache: 'no-store' }).then(function (res) {
       if (!res.ok) throw new Error('Could not load site data.');
       return res.json();
     });
@@ -224,8 +226,10 @@
 
         var bg = (theme.backgroundColor || '').trim();
         if (bg && /^#[0-9a-fA-F]{6}$/.test(bg)) {
+          // Set --cream (section/body backgrounds) to the user's chosen background color.
+          // Do NOT set --white — service cards and modals use --white and must remain
+          // visually distinct from the page background.
           root.style.setProperty('--cream', bg);
-          root.style.setProperty('--white', bg);
           document.body.style.backgroundColor = bg;
         }
 

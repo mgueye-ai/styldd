@@ -103,7 +103,7 @@ const SITE_PREVIEW_CSS = `
 .profile-menu-head h2{font-family:var(--font-display);font-size:clamp(1.5rem,3vw,2.1rem);font-weight:700;color:var(--ink);margin:0 0 .3rem;border-bottom:2px solid var(--pink);display:inline-block;padding-bottom:.2rem}
 .profile-menu-blurb{color:var(--muted);font-size:.9rem;margin:0}
 .profile-service-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.875rem}
-.profile-service-card{display:flex;align-items:center;gap:.85rem;padding:.75rem;border-radius:14px;background:var(--cream);border:1px solid rgba(0,0,0,.07);text-decoration:none;color:inherit;transition:box-shadow .15s}
+.profile-service-card{display:flex;align-items:center;gap:.85rem;padding:.75rem;border-radius:14px;background:var(--white);border:1px solid rgba(0,0,0,.07);text-decoration:none;color:inherit;transition:box-shadow .15s}
 .profile-service-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.08);border-color:rgba(219,39,119,.2)}
 .profile-service-card__img{width:64px;height:64px;border-radius:12px;flex-shrink:0;background:linear-gradient(145deg,#e8e3db,#d6d0c7);background-size:cover;background-position:center}
 .profile-service-card__body{flex:1;min-width:0}
@@ -210,7 +210,10 @@ function buildColorOverrideCss(theme: SitePreviewTheme): string {
   const bgColor = theme.backgroundColor && /^#[0-9a-fA-F]{6}$/.test(theme.backgroundColor)
     ? theme.backgroundColor
     : null;
-  const bgPart = bgColor ? `--cream:${bgColor};--white:${bgColor};` : '';
+  // Only set --cream (body/section background) to the user's chosen color.
+  // --white is intentionally NOT overridden so service cards remain visually
+  // distinct from the page background.
+  const bgPart = bgColor ? `--cream:${bgColor};` : '';
   return `:root{--pink:${primary};--pink-dark:${primaryDark};--pink-heading:${primaryHeading};--hero-pink:${primaryLight};--hero-pink-deep:${primaryDark};--pink-light:${primaryLight};--ink:${secondary};--font-display:${fontDisplay};${bgPart}}`;
 }
 

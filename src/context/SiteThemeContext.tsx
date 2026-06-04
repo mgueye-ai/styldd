@@ -31,6 +31,7 @@ type SiteThemeContextValue = {
   uploadHeroImage: (fileUri: string) => Promise<void>;
   uploadLogoImage: (fileUri: string) => Promise<void>;
   removeHeroImage: () => void;
+  saveThemeNow: () => Promise<void>;
   refresh: () => Promise<void>;
 };
 
@@ -168,6 +169,14 @@ export function SiteThemeProvider({ children }: { children: React.ReactNode }) {
     updateTheme({ heroImagePath: null });
   }, [updateTheme]);
 
+  const saveThemeNow = useCallback(async () => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    await persist(theme);
+  }, [persist, theme]);
+
   const heroImageUrl = useMemo(() => {
     if (!theme.heroImagePath) return null;
     return getStyleCoverImageUrl(theme.heroImagePath, linkedSite);
@@ -198,6 +207,7 @@ export function SiteThemeProvider({ children }: { children: React.ReactNode }) {
       uploadHeroImage,
       uploadLogoImage,
       removeHeroImage,
+      saveThemeNow,
       refresh,
     }),
     [
@@ -212,6 +222,7 @@ export function SiteThemeProvider({ children }: { children: React.ReactNode }) {
       uploadHeroImage,
       uploadLogoImage,
       removeHeroImage,
+      saveThemeNow,
       refresh,
     ],
   );
@@ -230,7 +241,8 @@ const SITE_THEME_FALLBACK: SiteThemeContextValue = {
   setHeroLayout: () => {},
   uploadHeroImage: async () => {},
   uploadLogoImage: async () => {},
-  removeHeroImage: async () => {},
+  removeHeroImage: () => {},
+  saveThemeNow: async () => {},
   refresh: async () => {},
 };
 

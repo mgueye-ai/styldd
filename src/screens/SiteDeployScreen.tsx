@@ -16,6 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useOnboarding } from '../context/OnboardingContext';
 import { useSiteContent } from '../context/SiteContentContext';
+import { useSiteTheme } from '../context/SiteThemeContext';
 import {
   buildPublicSiteUrl,
   getSiteRootDomain,
@@ -31,7 +32,8 @@ type Props = NativeStackScreenProps<SiteStackParamList, 'SiteDeploy'>;
 type PublishStep = 'idle' | 'publishing' | 'success' | 'error';
 
 export default function SiteDeployScreen({ navigation }: Props) {
-  const { content } = useSiteContent();
+  const { content, saveContentNow } = useSiteContent();
+  const { saveThemeNow } = useSiteTheme();
   const { user } = useAuth();
   const { sitePublish, publishSite } = useOnboarding();
   const [subdomain, setSubdomain] = useState(sitePublish.subdomain || '');
@@ -72,6 +74,8 @@ export default function SiteDeployScreen({ navigation }: Props) {
     setStep('publishing');
     setErrorMsg(null);
     try {
+      // Flush any pending debounced saves so the live site reflects the latest edits
+      await Promise.all([saveContentNow(content), saveThemeNow()]);
       const result = await publishSite(subdomain);
       const url = result.config.publicUrl ?? previewUrl;
       setPublishedUrl(url);
