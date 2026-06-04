@@ -12,62 +12,161 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors } from '../../theme';
 
-const PRIMARY_PRESETS = [
-  '#db2777', // pink (default)
-  '#e11d48', // rose
-  '#be185d', // deep pink
-  '#9333ea', // purple
-  '#7c3aed', // violet
-  '#2563eb', // blue
-  '#0891b2', // cyan
-  '#059669', // emerald
-  '#16a34a', // green
-  '#ca8a04', // yellow
-  '#d97706', // amber
-  '#ea580c', // orange
-  '#dc2626', // red
-  '#b45309', // brown gold
-  '#6d28d9', // deep violet
-  '#0f766e', // teal
+// ─── Color palettes ───────────────────────────────────────────────────────────
+
+type ColorSwatch = { hex: string; name: string };
+type ColorGroup = { label: string; swatches: ColorSwatch[] };
+
+const PRIMARY_GROUPS: ColorGroup[] = [
+  {
+    label: 'Pinks & Roses',
+    swatches: [
+      { hex: '#fc61a3', name: 'Bubblegum' },
+      { hex: '#db2777', name: 'Hot Pink' },
+      { hex: '#be185d', name: 'Deep Rose' },
+      { hex: '#e11d48', name: 'Rose Red' },
+      { hex: '#f43f5e', name: 'Coral Rose' },
+    ],
+  },
+  {
+    label: 'Purples',
+    swatches: [
+      { hex: '#a855f7', name: 'Lavender' },
+      { hex: '#9333ea', name: 'Amethyst' },
+      { hex: '#7c3aed', name: 'Violet' },
+      { hex: '#6d28d9', name: 'Deep Violet' },
+      { hex: '#c026d3', name: 'Fuchsia' },
+    ],
+  },
+  {
+    label: 'Blues & Teals',
+    swatches: [
+      { hex: '#3b82f6', name: 'Sky Blue' },
+      { hex: '#2563eb', name: 'Royal Blue' },
+      { hex: '#0ea5e9', name: 'Cyan' },
+      { hex: '#0891b2', name: 'Teal Blue' },
+      { hex: '#0f766e', name: 'Deep Teal' },
+    ],
+  },
+  {
+    label: 'Greens',
+    swatches: [
+      { hex: '#22c55e', name: 'Mint' },
+      { hex: '#16a34a', name: 'Emerald' },
+      { hex: '#059669', name: 'Forest' },
+      { hex: '#65a30d', name: 'Lime' },
+      { hex: '#15803d', name: 'Deep Green' },
+    ],
+  },
+  {
+    label: 'Warm Tones',
+    swatches: [
+      { hex: '#f97316', name: 'Orange' },
+      { hex: '#ea580c', name: 'Burnt Orange' },
+      { hex: '#d97706', name: 'Amber' },
+      { hex: '#ca8a04', name: 'Gold' },
+      { hex: '#dc2626', name: 'Red' },
+    ],
+  },
+  {
+    label: 'Sophisticated',
+    swatches: [
+      { hex: '#b45309', name: 'Bronze' },
+      { hex: '#78716c', name: 'Warm Gray' },
+      { hex: '#334155', name: 'Slate' },
+      { hex: '#1e293b', name: 'Midnight' },
+      { hex: '#292524', name: 'Espresso' },
+    ],
+  },
 ];
 
-const SECONDARY_PRESETS = [
-  '#0a0a0a', // ink (default)
-  '#1e1b4b', // deep navy
-  '#1e293b', // slate dark
-  '#18181b', // zinc dark
-  '#1c1917', // warm dark
-  '#0c4a6e', // ocean
-  '#14532d', // forest
-  '#4a044e', // deep plum
-  '#7f1d1d', // deep red
-  '#431407', // deep amber
-  '#ffffff', // white
-  '#fafafa', // cream
-  '#f5f5f4', // stone
-  '#e2e8f0', // slate light
-  '#f0fdf4', // mint
-  '#fdf4ff', // lavender
+const SECONDARY_GROUPS: ColorGroup[] = [
+  {
+    label: 'Rich Darks',
+    swatches: [
+      { hex: '#0a0a0a', name: 'Jet Black' },
+      { hex: '#18181b', name: 'Zinc' },
+      { hex: '#1c1917', name: 'Warm Black' },
+      { hex: '#111827', name: 'Charcoal' },
+      { hex: '#0f172a', name: 'Deep Slate' },
+    ],
+  },
+  {
+    label: 'Colored Darks',
+    swatches: [
+      { hex: '#1e1b4b', name: 'Indigo Dark' },
+      { hex: '#1e3a5f', name: 'Navy' },
+      { hex: '#14532d', name: 'Forest' },
+      { hex: '#4a044e', name: 'Deep Plum' },
+      { hex: '#7f1d1d', name: 'Burgundy' },
+    ],
+  },
+  {
+    label: 'For Dark Sites',
+    swatches: [
+      { hex: '#ffffff', name: 'White' },
+      { hex: '#f5f5f5', name: 'Off White' },
+      { hex: '#e5e7eb', name: 'Pearl' },
+      { hex: '#d1d5db', name: 'Silver' },
+      { hex: '#f8fafc', name: 'Snow' },
+    ],
+  },
 ];
 
-const BACKGROUND_PRESETS = [
-  '#fafafa', // off-white (default)
-  '#ffffff', // pure white
-  '#f5f5f4', // stone
-  '#fef9f0', // warm cream
-  '#fdf4ff', // soft lavender
-  '#f0fdf4', // soft mint
-  '#eff6ff', // soft blue
-  '#fff7ed', // warm peach
-  '#fafaf0', // ivory
-  '#f1f5f9', // slate light
-  '#18181b', // zinc dark
-  '#0a0a0a', // near black
-  '#0e0e1a', // dark navy
-  '#1e1b4b', // deep indigo
-  '#1c1917', // warm dark
-  '#0c0a09', // deep warm black
+const BACKGROUND_GROUPS: ColorGroup[] = [
+  {
+    label: 'Clean Lights',
+    swatches: [
+      { hex: '#ffffff', name: 'Pure White' },
+      { hex: '#fafafa', name: 'Off White' },
+      { hex: '#f9fafb', name: 'Snow' },
+      { hex: '#f8fafc', name: 'Cool White' },
+      { hex: '#f5f5f4', name: 'Stone' },
+    ],
+  },
+  {
+    label: 'Warm & Cozy',
+    swatches: [
+      { hex: '#fef9f0', name: 'Warm Cream' },
+      { hex: '#fffbf0', name: 'Ivory' },
+      { hex: '#fff7ed', name: 'Peach Mist' },
+      { hex: '#fdf6e3', name: 'Linen' },
+      { hex: '#fef3c7', name: 'Butter' },
+    ],
+  },
+  {
+    label: 'Soft Pastels',
+    swatches: [
+      { hex: '#fdf4ff', name: 'Lavender' },
+      { hex: '#fce7f3', name: 'Blush' },
+      { hex: '#f0fdf4', name: 'Mint' },
+      { hex: '#eff6ff', name: 'Sky' },
+      { hex: '#f0f9ff', name: 'Ice Blue' },
+    ],
+  },
+  {
+    label: 'Rich Darks',
+    swatches: [
+      { hex: '#0a0a0a', name: 'Jet Black' },
+      { hex: '#0e0e1a', name: 'Dark Navy' },
+      { hex: '#18181b', name: 'Zinc Dark' },
+      { hex: '#1c1917', name: 'Warm Dark' },
+      { hex: '#0f172a', name: 'Deep Slate' },
+    ],
+  },
+  {
+    label: 'Moody Tones',
+    swatches: [
+      { hex: '#1e1b4b', name: 'Deep Indigo' },
+      { hex: '#1e3a5f', name: 'Deep Navy' },
+      { hex: '#14532d', name: 'Deep Forest' },
+      { hex: '#2d1b69', name: 'Deep Violet' },
+      { hex: '#3b0764', name: 'Midnight' },
+    ],
+  },
 ];
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function hexToRgb(hex: string): [number, number, number] | null {
   const clean = hex.replace('#', '');
@@ -86,6 +185,18 @@ export function getContrastColor(hex: string): string {
   return luminance > 0.5 ? '#000000' : '#ffffff';
 }
 
+function findColorName(hex: string, groups: ColorGroup[]): string | null {
+  const normalized = hex.toLowerCase();
+  for (const group of groups) {
+    for (const s of group.swatches) {
+      if (s.hex.toLowerCase() === normalized) return s.name;
+    }
+  }
+  return null;
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
 type ColorPickerProps = {
   label: string;
   value: string;
@@ -93,14 +204,19 @@ type ColorPickerProps = {
   onChange: (color: string) => void;
 };
 
+// ─── Component ────────────────────────────────────────────────────────────────
+
 export default function ColorPicker({ label, value, presets, onChange }: ColorPickerProps) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
 
-  const swatches =
-    presets === 'primary' ? PRIMARY_PRESETS :
-    presets === 'background' ? BACKGROUND_PRESETS :
-    SECONDARY_PRESETS;
+  const groups =
+    presets === 'primary' ? PRIMARY_GROUPS :
+    presets === 'background' ? BACKGROUND_GROUPS :
+    SECONDARY_GROUPS;
+
+  const allSwatches = groups.flatMap((g) => g.swatches);
+  const colorName = findColorName(value, groups);
   const contrastColor = getContrastColor(value);
 
   const handleSelect = (hex: string) => {
@@ -120,55 +236,99 @@ export default function ColorPicker({ label, value, presets, onChange }: ColorPi
 
   return (
     <>
+      {/* Trigger row */}
       <Pressable style={styles.row} onPress={() => { setDraft(value); setOpen(true); }}>
-        <View style={[styles.swatch, { backgroundColor: value }]}>
-          <Ionicons name="color-palette-outline" size={14} color={contrastColor} />
-        </View>
+        <View style={[styles.swatchThumb, { backgroundColor: value }]} />
         <View style={styles.rowText}>
           <Text style={styles.rowLabel}>{label}</Text>
-          <Text style={styles.rowValue}>{value.toUpperCase()}</Text>
+          <Text style={styles.rowSub} numberOfLines={1}>
+            {colorName ?? value.toUpperCase()}
+          </Text>
         </View>
-        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+        <View style={styles.rowRight}>
+          <Text style={styles.rowHex}>{value.toUpperCase()}</Text>
+          <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+        </View>
       </Pressable>
 
+      {/* Sheet modal */}
       <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
         <SafeAreaView style={styles.modalBg} edges={['bottom']}>
           <View style={styles.sheet}>
+
+            {/* Handle */}
+            <View style={styles.handle} />
+
+            {/* Header */}
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>{label}</Text>
-              <Pressable onPress={() => setOpen(false)} hitSlop={10}>
-                <Ionicons name="close" size={22} color={colors.text} />
+              <Pressable onPress={() => setOpen(false)} hitSlop={10} style={styles.closeBtn}>
+                <Ionicons name="close" size={20} color={colors.text} />
               </Pressable>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.sectionLabel}>Presets</Text>
-              <View style={styles.grid}>
-                {swatches.map((hex) => (
-                  <Pressable
-                    key={hex}
-                    style={[
-                      styles.gridSwatch,
-                      { backgroundColor: hex },
-                      value === hex && styles.gridSwatchActive,
-                    ]}
-                    onPress={() => handleSelect(hex)}
-                  >
-                    {value === hex && (
-                      <Ionicons name="checkmark" size={18} color={getContrastColor(hex)} />
-                    )}
-                  </Pressable>
-                ))}
-              </View>
+            {/* Current color preview */}
+            <View style={[styles.preview, { backgroundColor: value }]}>
+              <Text style={[styles.previewName, { color: contrastColor }]}>
+                {colorName ?? 'Custom'}
+              </Text>
+              <Text style={[styles.previewHex, { color: contrastColor + 'cc' }]}>
+                {value.toUpperCase()}
+              </Text>
+            </View>
 
-              <Text style={styles.sectionLabel}>Custom hex code</Text>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+
+              {/* Grouped swatches */}
+              {groups.map((group) => (
+                <View key={group.label} style={styles.group}>
+                  <Text style={styles.groupLabel}>{group.label}</Text>
+                  <View style={styles.swatchRow}>
+                    {group.swatches.map((swatch) => {
+                      const active = value.toLowerCase() === swatch.hex.toLowerCase();
+                      return (
+                        <Pressable
+                          key={swatch.hex}
+                          style={styles.swatchWrap}
+                          onPress={() => handleSelect(swatch.hex)}
+                        >
+                          <View
+                            style={[
+                              styles.swatch,
+                              { backgroundColor: swatch.hex },
+                              active && styles.swatchActive,
+                            ]}
+                          >
+                            {active && (
+                              <Ionicons
+                                name="checkmark"
+                                size={18}
+                                color={getContrastColor(swatch.hex)}
+                              />
+                            )}
+                          </View>
+                          <Text
+                            style={[styles.swatchName, active && styles.swatchNameActive]}
+                            numberOfLines={2}
+                          >
+                            {swatch.name}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
+
+              {/* Custom hex */}
+              <Text style={styles.groupLabel}>Custom</Text>
               <View style={styles.hexRow}>
                 <View style={[styles.hexPreview, { backgroundColor: draft }]} />
                 <TextInput
                   style={styles.hexInput}
                   value={draft}
                   onChangeText={setDraft}
-                  placeholder="#db2777"
+                  placeholder="#a855f7"
                   placeholderTextColor={colors.textMuted}
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -180,6 +340,7 @@ export default function ColorPicker({ label, value, presets, onChange }: ColorPi
                   <Text style={styles.hexApplyText}>Apply</Text>
                 </Pressable>
               </View>
+
             </ScrollView>
           </View>
         </SafeAreaView>
@@ -188,90 +349,168 @@ export default function ColorPicker({ label, value, presets, onChange }: ColorPi
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
+
 const styles = StyleSheet.create({
+  // Trigger row
   row: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 14,
     backgroundColor: colors.card,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     borderColor: colors.cardBorder,
-    padding: 12,
+    padding: 14,
     marginBottom: 10,
   },
-  swatch: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+  swatchThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
   },
   rowText: {
     flex: 1,
+    gap: 3,
   },
   rowLabel: {
     color: colors.text,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700',
   },
-  rowValue: {
+  rowSub: {
     color: colors.textMuted,
-    fontSize: 12,
-    marginTop: 2,
+    fontSize: 13,
   },
+  rowRight: {
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  rowHex: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+
+  // Modal
   modalBg: {
     flex: 1,
     justifyContent: 'flex-end',
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    backgroundColor: 'rgba(0,0,0,0.65)',
   },
   sheet: {
     backgroundColor: colors.background,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingHorizontal: 20,
-    paddingTop: 20,
-    paddingBottom: 32,
-    maxHeight: '80%',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingTop: 10,
+    paddingBottom: 8,
+    maxHeight: '88%',
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignSelf: 'center',
+    marginBottom: 14,
   },
   sheetHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 20,
+    paddingHorizontal: 20,
+    marginBottom: 16,
   },
   sheetTitle: {
     color: colors.text,
-    fontSize: 17,
-    fontWeight: '700',
+    fontSize: 18,
+    fontWeight: '800',
+    letterSpacing: -0.3,
   },
-  sectionLabel: {
+  closeBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.card,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // Preview bar
+  preview: {
+    marginHorizontal: 20,
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  previewName: {
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  previewHex: {
+    fontSize: 13,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingBottom: 32,
+  },
+
+  // Groups
+  group: {
+    marginBottom: 20,
+  },
+  groupLabel: {
     color: colors.textMuted,
     fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.6,
+    fontWeight: '800',
+    letterSpacing: 0.8,
     textTransform: 'uppercase',
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  grid: {
+  swatchRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 24,
+    gap: 8,
   },
-  gridSwatch: {
-    width: 48,
-    height: 48,
+  swatchWrap: {
+    flex: 1,
+    alignItems: 'center',
+    gap: 5,
+  },
+  swatch: {
+    width: '100%',
+    aspectRatio: 1,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  gridSwatchActive: {
+  swatchActive: {
     borderColor: colors.text,
     borderWidth: 2.5,
   },
+  swatchName: {
+    color: colors.textMuted,
+    fontSize: 10,
+    textAlign: 'center',
+    lineHeight: 13,
+    fontWeight: '500',
+  },
+  swatchNameActive: {
+    color: colors.text,
+    fontWeight: '700',
+  },
+
+  // Custom hex
   hexRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -279,9 +518,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   hexPreview: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: colors.cardBorder,
   },
@@ -291,16 +530,17 @@ const styles = StyleSheet.create({
     borderColor: colors.cardBorder,
     borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 11,
     color: colors.text,
     fontSize: 15,
     backgroundColor: colors.card,
+    letterSpacing: 0.5,
   },
   hexApply: {
     backgroundColor: colors.accentPink,
     borderRadius: 12,
     paddingHorizontal: 16,
-    paddingVertical: 10,
+    paddingVertical: 11,
   },
   hexApplyText: {
     color: '#fff',
