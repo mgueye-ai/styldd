@@ -452,11 +452,6 @@ export default function SiteEditorScreen({ navigation }: Props) {
                       onChangeText={(instagramHandle) => updateContent({ instagramHandle })}
                       placeholder="yourhandle"
                     />
-                    <Field
-                      label="Footer text"
-                      value={content.footerText}
-                      onChangeText={(footerText) => updateContent({ footerText })}
-                    />
                   </>
                 ) : null}
               </SectionCard>
@@ -506,7 +501,6 @@ export default function SiteEditorScreen({ navigation }: Props) {
                     <Field label="Phone (tel link)" value={content.phoneTel} onChangeText={(phoneTel) => updateContent({ phoneTel })} />
                     <Field label="Email" value={content.email} onChangeText={(email) => updateContent({ email })} />
                     <Field label="Instagram handle" value={content.instagramHandle} onChangeText={(instagramHandle) => updateContent({ instagramHandle })} placeholder="yourhandle" />
-                    <Field label="Footer text" value={content.footerText} onChangeText={(footerText) => updateContent({ footerText })} />
                   </>
                 ) : null}
               </LocationPartCard>
