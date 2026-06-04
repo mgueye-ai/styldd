@@ -185,14 +185,30 @@ function parseUnifiedBooking(record: UnifiedSiteRecord): SiteBookingRecord | nul
     location: asString(data.service_address, 'Studio'),
     price: asNumber(data.estimated_total),
     depositAmount: asNumber(data.deposit_amount),
-    depositPaid:
-      asNumber(data.deposit_amount) > 0 &&
-      !['pending', 'in_person'].includes(asString(data.payment_status)),
+    depositPaid: resolveDepositPaid(
+      asString(data.payment_status),
+      asString(data.booking_status),
+      asNumber(data.deposit_amount),
+    ),
     bookingStatus: asString(data.booking_status, 'pending_payment'),
     startsAt,
     durationMinutes: asNumber(data.duration_minutes, 120),
     createdAt: parseDate(record.created_at) ?? new Date(),
   };
+}
+
+/**
+ * A deposit (or full payment) is considered "paid" when:
+ *  - payment_status is explicitly 'deposit_paid' or 'paid'
+ *  - OR booking_status is 'confirmed' or 'completed' (webhook/confirm updated it)
+ *    AND a deposit amount exists
+ *  - NOT when it's in_person or still pending
+ */
+function resolveDepositPaid(paymentStatus: string, bookingStatus: string, depositAmount: number): boolean {
+  if (['in_person', 'pending'].includes(paymentStatus)) return false;
+  if (['deposit_paid', 'paid'].includes(paymentStatus)) return true;
+  if (['confirmed', 'completed'].includes(bookingStatus) && depositAmount > 0) return true;
+  return false;
 }
 
 function parseFlatBooking(record: FlatBookingRecord): SiteBookingRecord | null {
@@ -214,9 +230,11 @@ function parseFlatBooking(record: FlatBookingRecord): SiteBookingRecord | null {
     location: asString(record.service_address, 'Studio'),
     price: asNumber(record.estimated_total),
     depositAmount: asNumber(record.deposit_amount),
-    depositPaid:
-      asNumber(record.deposit_amount) > 0 &&
-      !['pending', 'in_person'].includes(asString(record.payment_status)),
+    depositPaid: resolveDepositPaid(
+      asString(record.payment_status),
+      asString(record.booking_status),
+      asNumber(record.deposit_amount),
+    ),
     bookingStatus: asString(record.booking_status, 'pending_payment'),
     startsAt,
     durationMinutes: asNumber(record.duration_minutes, 120),

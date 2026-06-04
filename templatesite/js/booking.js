@@ -1173,6 +1173,19 @@
 
     var intent = confirmResult.paymentIntent;
     var success = intent && intent.status === "succeeded";
+
+    // Immediately mark the booking as paid in the DB so the stylist sees the
+    // correct status without waiting for the Stripe webhook.
+    if (success && intent.id && payload.bookingId && payload.subdomain) {
+      sb.functions.invoke("stripe-booking-confirm", {
+        body: {
+          bookingId: payload.bookingId,
+          subdomain: payload.subdomain,
+          paymentIntentId: intent.id,
+        },
+      }).catch(function(e) { console.warn("stripe-booking-confirm:", e); });
+    }
+
     return { ok: !!success, paymentId: intent && intent.id, status: intent && intent.status };
   }
 
@@ -1630,5 +1643,6 @@
     });
   })();
 })();
+
 
 
