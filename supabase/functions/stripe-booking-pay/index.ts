@@ -60,7 +60,7 @@ Deno.serve(async (req) => {
     //   chargeAmount = (amountCents × (1 + platformRate) + 30) / (1 − 0.029)
     //   application_fee_amount = chargeAmount − amountCents
     //   platform net = application_fee_amount − stripeFeeCents = platformRate × amountCents ✓
-    const platformRate = parseFloat(Deno.env.get('STYLD_PLATFORM_FEE_PERCENT') ?? '3') / 100;
+    const platformRate = parseFloat(Deno.env.get('STYLD_PLATFORM_FEE_PERCENT') ?? '5.5') / 100;
     const base = Math.round(amountCents);
     const chargeAmount = Math.round((base * (1 + platformRate) + 30) / (1 - 0.029));
     const stripeFeeCents = Math.round(chargeAmount * 0.029 + 30);
