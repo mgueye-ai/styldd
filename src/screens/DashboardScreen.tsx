@@ -2,17 +2,18 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import NotificationsPanel, { AppNotification } from '../components/NotificationsPanel';
 import PeriodSelector from '../components/PeriodSelector';
-import BrandLogo from '../components/BrandLogo';
 import ScreenGradient from '../components/ScreenGradient';
 import ServiceImage from '../components/ServiceImage';
 import { Period } from '../data/periods';
 import { usePrivacyMode } from '../context/PrivacyContext';
+import { useSiteContent } from '../context/SiteContentContext';
 import { useSiteData } from '../context/SiteDataContext';
+import { useSiteTheme } from '../context/SiteThemeContext';
 import { buildNotificationsFromBookings } from '../lib/notifications';
 import { fetchStripeConnectStatus, formatUsdFromCents, type StripeConnectSummary } from '../lib/stripeConnect';
 import { DashboardStackParamList } from '../navigation/DashboardNavigator';
@@ -229,6 +230,8 @@ export default function DashboardScreen({ navigation }: Props) {
   const [displayValue, setDisplayValue] = useState(MONTH_VALUE);
   const [stripeSummary, setStripeSummary] = useState<StripeConnectSummary | null>(null);
   const { privacyMode } = usePrivacyMode();
+  const { content } = useSiteContent();
+  const { logoImageUrl } = useSiteTheme();
   const {
     businessLabel,
     hasLinkedSite,
@@ -238,6 +241,11 @@ export default function DashboardScreen({ navigation }: Props) {
     getTodayJobStats,
     getUpcomingAppointments,
   } = useSiteData();
+
+  // Prefer name from site_content (set in Account Settings), fall back to linked site label
+  const displayName = (content.brandName && content.brandName !== 'Your brand name')
+    ? content.brandName
+    : (businessLabel || 'Styld');
 
   const notifications = useMemo<AppNotification[]>(() => {
     if (!hasLinkedSite) return [];
@@ -250,7 +258,7 @@ export default function DashboardScreen({ navigation }: Props) {
   const revenueValue = getRevenueForPeriod(selectedPeriod);
   const jobStats = getTodayJobStats();
   const upcomingAppointments = getUpcomingAppointments(100);
-  const businessInitials = getInitials(businessLabel || 'Styld');
+  const businessInitials = getInitials(displayName);
 
   // Group upcoming appointments by date — show only first 3, across day groups
   const { groupedUpcoming, totalUpcoming } = useMemo(() => {
@@ -338,15 +346,19 @@ export default function DashboardScreen({ navigation }: Props) {
           {/* Header */}
           <View style={styles.headerRow}>
             <View style={styles.businessHeader}>
-              {hasLinkedSite ? (
-                <BrandLogo circular size={38} style={styles.logoAvatar} />
+              {logoImageUrl ? (
+                <Image
+                  source={{ uri: logoImageUrl }}
+                  style={[styles.logoAvatar, { width: 38, height: 38, borderRadius: 19 }]}
+                  resizeMode="cover"
+                />
               ) : (
                 <View style={styles.avatar}>
                   <Text style={styles.avatarText}>{businessInitials}</Text>
                 </View>
               )}
               <Text style={styles.businessName} numberOfLines={1}>
-                {hasLinkedSite ? businessLabel : 'Styld'}
+                {displayName}
               </Text>
             </View>
             <Pressable
