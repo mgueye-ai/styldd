@@ -828,6 +828,20 @@
     }
   }
 
+  // Styld service fee grossup: customer pays this on top so the stylist gets their full amount.
+  // Matches the backend formula in stripe-booking-pay.
+  const STYLD_PLATFORM_RATE = 0.05; // 5%
+  function computeServiceFee(depositDollars) {
+    if (!depositDollars || depositDollars <= 0) return 0;
+    const amountCents = Math.round(depositDollars * 100);
+    const chargeAmount = Math.round((amountCents * (1 + STYLD_PLATFORM_RATE) + 30) / (1 - 0.029));
+    return round2((chargeAmount - amountCents) / 100);
+  }
+  function totalChargeWithFee(depositDollars) {
+    if (!depositDollars || depositDollars <= 0) return 0;
+    return round2(depositDollars + computeServiceFee(depositDollars));
+  }
+
   function onlineChargeForTotal(total, style) {
     const mode = PAYMENT.mode || "deposit";
     if (mode === "in_person") return 0;
@@ -911,7 +925,17 @@
     if (els.lengthAddonOut) els.lengthAddonOut.textContent = lengthUsd > 0 ? money(lengthUsd) : "—";
     if (els.totalOut) els.totalOut.textContent = money(total);
     if (els.depositOut) {
-      els.depositOut.textContent = mode === "in_person" ? "$0.00" : money(deposit);
+      if (mode === "in_person") {
+        els.depositOut.textContent = "$0.00";
+      } else {
+        const fee = computeServiceFee(deposit);
+        const chargeTotal = totalChargeWithFee(deposit);
+        els.depositOut.textContent = money(chargeTotal);
+        // Show fee breakdown beneath if a style is selected
+        if (hasPricedStyle && fee > 0) {
+          els.depositOut.title = `${money(deposit)} + ${money(fee)} service fee`;
+        }
+      }
     }
 
     const onlineLabel =
@@ -927,6 +951,8 @@
     }
 
     if (els.depositDetailOut) {
+      const serviceFee = mode !== "in_person" ? computeServiceFee(deposit) : 0;
+      const feeNote = serviceFee > 0 ? ` Includes ${money(serviceFee)} service fee.` : "";
       if (!hasPricedStyle) {
         els.depositDetailOut.textContent = "";
       } else if (mode === "in_person") {
@@ -936,18 +962,18 @@
             : "";
       } else if (mode === "full") {
         els.depositDetailOut.textContent =
-          "Pay the full estimated price online to secure your appointment. Final price may be adjusted after consultation.";
+          `Pay ${money(totalChargeWithFee(deposit))} online to secure your appointment (includes ${money(serviceFee)} service fee). Final price may be adjusted after consultation.`;
       } else if (USE_LEGACY_DEPOSIT_RULES && isHouseBooking) {
-        let detail = `Includes ${money(pctDeposit)} (10% of your estimate) plus ${money(15)} house-call deposit. `;
+        let detail = `Includes ${money(pctDeposit)} (10% of your estimate) plus ${money(15)} house-call deposit.${feeNote} `;
         detail += `Remaining balance ${money(balanceDue)} due in person at your appointment. All deposits are non-refundable.`;
         els.depositDetailOut.textContent = detail;
       } else if (PAYMENT.depositKind === "fixed") {
         els.depositDetailOut.textContent =
-          `${money(deposit)} deposit due now. Remaining balance ${money(balanceDue)} due in person at your appointment.`;
+          `${money(totalChargeWithFee(deposit))} due now (includes ${money(serviceFee)} service fee). Remaining balance ${money(balanceDue)} due in person at your appointment.`;
       } else {
         const pct = Math.min(100, Math.max(0, Number(PAYMENT.depositValue) || 10));
         els.depositDetailOut.textContent =
-          `${money(deposit)} (${pct}% of your estimate) due now. Remaining balance ${money(balanceDue)} due in person at your appointment.`;
+          `${money(totalChargeWithFee(deposit))} due now — ${money(deposit)} deposit (${pct}% of estimate) + ${money(serviceFee)} service fee. Remaining balance ${money(balanceDue)} due at appointment.`;
       }
     }
 

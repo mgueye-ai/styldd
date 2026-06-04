@@ -50,23 +50,30 @@ Deno.serve(async (req) => {
     }
 
     // ── Fee calculation ──────────────────────────────────────────────────────
-    // Stripe US card fee: 2.9% + $0.30.
-    // Platform fee: configurable via STYLD_PLATFORM_FEE_PERCENT env (default 1%).
-    // application_fee_amount = stripe_fee + platform_fee
-    //   → platform keeps platform_fee (net of Stripe cost), stylist gets the rest.
-    const platformFeePercent = parseFloat(Deno.env.get('STYLD_PLATFORM_FEE_PERCENT') ?? '1') / 100;
-    const stripeFeeCents = Math.round(amountCents * 0.029 + 30);
-    const platformFeeCents = Math.round(amountCents * platformFeePercent);
-    const applicationFeeCents = stripeFeeCents + platformFeeCents;
-    // Safety: application fee can never exceed the charge amount
-    const safeAppFee = Math.min(applicationFeeCents, Math.round(amountCents) - 50);
+    // Customer pays a service fee on top of the booking amount so the stylist
+    // receives their full amount and Styld keeps a profit after Stripe fees.
+    //
+    // Stripe US card fee: 2.9% + $0.30 (on the TOTAL charged amount).
+    // Platform fee: configurable via STYLD_PLATFORM_FEE_PERCENT (default 5%).
+    //
+    // Grossup formula so stylist gets exactly amountCents:
+    //   chargeAmount = (amountCents × (1 + platformRate) + 30) / (1 − 0.029)
+    //   application_fee_amount = chargeAmount − amountCents
+    //   platform net = application_fee_amount − stripeFeeCents = platformRate × amountCents ✓
+    const platformRate = parseFloat(Deno.env.get('STYLD_PLATFORM_FEE_PERCENT') ?? '5') / 100;
+    const base = Math.round(amountCents);
+    const chargeAmount = Math.round((base * (1 + platformRate) + 30) / (1 - 0.029));
+    const stripeFeeCents = Math.round(chargeAmount * 0.029 + 30);
+    const platformFeeCents = Math.round(base * platformRate); // Styld profit
+    const applicationFeeCents = chargeAmount - base;          // covers stripe + profit
+    const safeAppFee = Math.max(0, Math.min(applicationFeeCents, chargeAmount - 50));
 
     // Create a PaymentIntent on the platform, routing funds to the connected account.
     // We do NOT confirm server-side — the frontend confirms with the card element
     // via stripe.confirmCardPayment(clientSecret). This avoids PaymentMethod
     // ownership issues (pm_xxx must match the account being charged).
     const params = new URLSearchParams();
-    params.set('amount', String(Math.round(amountCents)));
+    params.set('amount', String(chargeAmount)); // grossed-up: stylist gets base, Styld keeps the rest
     params.set('currency', 'usd');
     params.set('payment_method_types[]', 'card');
     params.set('description', `Styld booking — ${subdomain}`);
@@ -108,10 +115,11 @@ Deno.serve(async (req) => {
       subdomain,
       bookingId: bookingId ?? null,
       fees: {
+        bookingAmountCents: base,        // what stylist earns
+        serviceFeeCents: safeAppFee,     // what customer pays extra (covers Stripe + Styld)
+        totalChargeCents: chargeAmount,  // total on customer card
         stripeFeeCents,
-        platformFeeCents,
-        applicationFeeCents: safeAppFee,
-        stylistReceivesCents: Math.round(amountCents) - safeAppFee,
+        platformFeeCents,               // Styld net profit
       },
     });
   } catch (err: unknown) {
