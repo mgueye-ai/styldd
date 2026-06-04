@@ -27,7 +27,7 @@ const Tab = createBottomTabNavigator<TabParamList>();
 const TAB_BAR_WIDTH = Math.min(Dimensions.get('window').width - 40, 360);
 
 const HIDDEN_TAB_BAR_SCREENS: Record<string, string[] | 'all-but-home'> = {
-  Dashboard: ['EarningDetails'],
+  Dashboard: ['EarningDetails', 'AppointmentDetail', 'AllUpcoming', 'AllBookings', 'BookingDetail'],
   Profile: 'all-but-home',
   Client: ['ClientDetail'],
   Site: ['SiteEditor', 'SiteSetup', 'SiteDeploy'],
