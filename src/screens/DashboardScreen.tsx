@@ -91,21 +91,19 @@ function DayHeader({ label, count }: { label: string; count: number }) {
   );
 }
 
-/** Compact appointment row inside a day group card */
+/** Compact appointment pill card */
 function AppointmentRow({
   appointment,
-  isLast,
   privacyMode,
   onPress,
 }: {
   appointment: AppointmentDetail;
-  isLast: boolean;
   privacyMode: boolean;
   onPress: () => void;
 }) {
   return (
     <Pressable
-      style={[styles.apptRow, !isLast && styles.apptRowBorder]}
+      style={styles.apptRow}
       onPress={onPress}
     >
       {/* Time column */}
@@ -151,15 +149,13 @@ function AppointmentRow({
   );
 }
 
-/** Recent booking row */
+/** Recent booking row — standalone pill card */
 function RecentBookingRow({
   booking,
-  isLast,
   privacyMode,
   onPress,
 }: {
   booking: SiteBookingRecord;
-  isLast: boolean;
   privacyMode: boolean;
   onPress: () => void;
 }) {
@@ -173,7 +169,7 @@ function RecentBookingRow({
     : null;
 
   return (
-    <Pressable style={[styles.recentRow, !isLast && styles.recentRowBorder]} onPress={onPress}>
+    <Pressable style={styles.recentRow} onPress={onPress}>
       {/* Service image */}
       <ServiceImage
         styleId={booking.styleId}
@@ -432,19 +428,16 @@ export default function DashboardScreen({ navigation }: Props) {
             groupedUpcoming.map(({ date, appointments }) => (
               <View key={date} style={styles.dayGroup}>
                 <DayHeader label={date} count={appointments.length} />
-                <View style={styles.dayCard}>
-                  {appointments.map((appt, idx) => (
-                    <AppointmentRow
-                      key={appt.id}
-                      appointment={appt}
-                      isLast={idx === appointments.length - 1}
-                      privacyMode={privacyMode}
-                      onPress={() =>
-                        navigation.navigate('AppointmentDetail', { appointmentId: appt.id })
-                      }
-                    />
-                  ))}
-                </View>
+                {appointments.map((appt) => (
+                  <AppointmentRow
+                    key={appt.id}
+                    appointment={appt}
+                    privacyMode={privacyMode}
+                    onPress={() =>
+                      navigation.navigate('AppointmentDetail', { appointmentId: appt.id })
+                    }
+                  />
+                ))}
               </View>
             ))
           )}
@@ -467,17 +460,16 @@ export default function DashboardScreen({ navigation }: Props) {
                   <Text style={styles.emptyCardText}>No bookings yet.</Text>
                 </View>
               ) : (
-                <View style={styles.card}>
-                  {recentBookings.map((booking, idx) => (
+                <>
+                  {recentBookings.map((booking) => (
                     <RecentBookingRow
                       key={booking.id}
                       booking={booking}
-                      isLast={idx === recentBookings.length - 1}
                       privacyMode={privacyMode}
                       onPress={() => navigation.navigate('BookingDetail', { bookingId: booking.id })}
                     />
                   ))}
-                </View>
+                </>
               )}
             </>
           )}
@@ -593,7 +585,7 @@ const styles = StyleSheet.create({
   seeAllText: { color: colors.accentPink, fontSize: 13, fontWeight: '600' },
 
   /* Day group */
-  dayGroup: { marginBottom: 16 },
+  dayGroup: { marginBottom: 4 },
   dayHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -615,25 +607,19 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   dayCountText: { color: colors.textMuted, fontSize: 11, fontWeight: '600' },
-  dayCard: {
-    backgroundColor: colors.card,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    overflow: 'hidden',
-  },
 
-  /* Appointment row */
+  /* Appointment pill card */
   apptRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 14,
     gap: 10,
-  },
-  apptRowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.cardBorder,
+    backgroundColor: colors.card,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    marginBottom: 8,
   },
   apptTimeCol: { width: 52, alignItems: 'flex-start' },
   apptTimeText: { color: colors.text, fontSize: 13, fontWeight: '700', letterSpacing: -0.2 },
@@ -654,17 +640,18 @@ const styles = StyleSheet.create({
   },
   depositBadgeText: { color: colors.accentPink, fontSize: 10, fontWeight: '700' },
 
-  /* Recent booking row */
+  /* Recent booking pill card */
   recentRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 14,
     paddingVertical: 13,
     gap: 12,
-  },
-  recentRowBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.cardBorder,
+    backgroundColor: colors.card,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    marginBottom: 8,
   },
   recentImage: { flexShrink: 0 },
   recentInfo: { flex: 1, minWidth: 0, gap: 3 },
