@@ -466,19 +466,6 @@ export default function SiteEditorScreen({ navigation }: Props) {
 
         {tab === 'location' ? (
           <>
-            <Text style={styles.groupTitle}>Visit section</Text>
-            <Field
-              label="Section title"
-              value={content.visitTitle}
-              onChangeText={(visitTitle) => updateContent({ visitTitle })}
-            />
-            <Field
-              label="Section intro"
-              value={content.visitBody}
-              onChangeText={(visitBody) => updateContent({ visitBody })}
-              multiline
-            />
-
             <Text style={styles.groupTitle}>Location parts</Text>
             <Text style={styles.helper}>
               Toggle each part on or off, and tap to edit its details.
