@@ -163,30 +163,63 @@ function RecentBookingRow({
   privacyMode: boolean;
   onPress: () => void;
 }) {
-  const initials = getInitials(booking.fullName);
   const statusLabel = bookingStatusLabel(booking.bookingStatus, booking.depositPaid);
   const statusColor = bookingStatusColor(booking.bookingStatus, booking.depositPaid);
 
+  const apptDateStr = booking.startsAt
+    ? booking.startsAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
+      ' · ' +
+      booking.startsAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+    : null;
+
   return (
     <Pressable style={[styles.recentRow, !isLast && styles.recentRowBorder]} onPress={onPress}>
-      {/* Avatar */}
-      <View style={styles.recentAvatar}>
-        <Text style={styles.recentAvatarText}>{initials}</Text>
-      </View>
+      {/* Service image */}
+      <ServiceImage
+        styleId={booking.styleId}
+        serviceName={booking.service}
+        size={48}
+        circular
+        style={styles.recentImage}
+      />
 
       {/* Info */}
       <View style={styles.recentInfo}>
-        <Text style={styles.recentName} numberOfLines={1}>{booking.fullName}</Text>
+        <View style={styles.recentTopRow}>
+          <Text style={styles.recentName} numberOfLines={1}>{booking.fullName}</Text>
+          <Text style={styles.recentAmount}>
+            {maskMoney(`$${booking.price.toFixed(2)}`, privacyMode)}
+          </Text>
+        </View>
+
         <Text style={styles.recentService} numberOfLines={1}>{booking.service}</Text>
-        <Text style={styles.recentTime}>{timeAgo(booking.createdAt)}</Text>
+
+        <View style={styles.recentBottomRow}>
+          {/* Status badge */}
+          <View style={[styles.recentStatusBadge, {
+            backgroundColor: statusColor + '1a',
+            borderColor: statusColor + '44',
+          }]}>
+            <View style={[styles.recentStatusDot, { backgroundColor: statusColor }]} />
+            <Text style={[styles.recentStatusText, { color: statusColor }]}>{statusLabel}</Text>
+          </View>
+
+          {/* Deposit pill */}
+          {booking.depositPaid && (
+            <View style={styles.recentDepositBadge}>
+              <Ionicons name="checkmark" size={9} color={colors.accentPink} />
+              <Text style={styles.recentDepositText}>dep.</Text>
+            </View>
+          )}
+
+          {/* Time placed / appointment date */}
+          <Text style={styles.recentMeta} numberOfLines={1}>
+            {apptDateStr ?? timeAgo(booking.createdAt)}
+          </Text>
+        </View>
       </View>
 
-      {/* Amount + status + chevron */}
-      <View style={styles.recentRight}>
-        <Text style={styles.recentAmount}>{maskMoney(`$${booking.price}`, privacyMode)}</Text>
-        <Text style={[styles.recentStatus, { color: statusColor }]}>{statusLabel}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+      <Ionicons name="chevron-forward" size={14} color={colors.textMuted} style={styles.recentChevron} />
     </Pressable>
   );
 }
@@ -625,26 +658,35 @@ const styles = StyleSheet.create({
   recentRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
     gap: 12,
   },
   recentRowBorder: {
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.cardBorder,
   },
-  recentAvatar: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: colors.progressTrack,
-    alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+  recentImage: { flexShrink: 0 },
+  recentInfo: { flex: 1, minWidth: 0, gap: 3 },
+  recentTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+  recentName: { flex: 1, color: colors.text, fontSize: 14, fontWeight: '700', letterSpacing: -0.1 },
+  recentAmount: { color: colors.chartBlue, fontSize: 15, fontWeight: '800', letterSpacing: -0.3, flexShrink: 0 },
+  recentService: { color: colors.textMuted, fontSize: 12, fontWeight: '500' },
+  recentBottomRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  recentStatusBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    borderRadius: 999, borderWidth: 1, paddingHorizontal: 7, paddingVertical: 2,
   },
-  recentAvatarText: { color: colors.textMuted, fontSize: 13, fontWeight: '700' },
-  recentInfo: { flex: 1, minWidth: 0 },
-  recentName: { color: colors.text, fontSize: 14, fontWeight: '600', marginBottom: 2 },
-  recentService: { color: colors.textMuted, fontSize: 12, fontWeight: '500', marginBottom: 2 },
-  recentTime: { color: colors.textMuted, fontSize: 11 },
-  recentRight: { alignItems: 'flex-end', gap: 3 },
-  recentAmount: { color: colors.text, fontSize: 14, fontWeight: '700' },
-  recentStatus: { fontSize: 11, fontWeight: '600' },
+  recentStatusDot: { width: 5, height: 5, borderRadius: 2.5 },
+  recentStatusText: { fontSize: 10, fontWeight: '700' },
+  recentDepositBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: colors.accentPinkMuted, borderRadius: 999,
+    paddingHorizontal: 6, paddingVertical: 2,
+  },
+  recentDepositText: { color: colors.accentPink, fontSize: 10, fontWeight: '700' },
+  recentMeta: { color: colors.textMuted, fontSize: 10, fontWeight: '500', flex: 1 },
+  recentChevron: { flexShrink: 0 },
 
   /* Empty states */
   emptyCard: {
