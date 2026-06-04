@@ -84,7 +84,6 @@
     var left = escapeHtml(content.taglineLeft || 'Put your');
     var r1 = escapeHtml(content.taglineRightLine1 || 'style');
     var r2 = escapeHtml(content.taglineRightLine2 || 'here');
-    var layout = (theme && theme.heroLayout) || 'split';
     var heroUrl = theme && theme.heroImageUrl ? theme.heroImageUrl : null;
     var photoClass = heroUrl ? ' hero-scale-visual--photo' : '';
     var photoStyle = heroImageStyle(heroUrl);
@@ -92,90 +91,45 @@
     var placeholderImg =
       '<img class="hero-scale-visual__img" src="/assets/placeholders/hero.svg" alt="" width="560" height="840" decoding="async" />';
 
-    if (layout === 'minimal') {
-      return (
-        '<div class="hero-scale-layout hero-layout--minimal">' +
-        '<h1 class="hero-scale-title"><span class="hero-scale-title__grid">' +
-        '<span class="hero-scale-col hero-scale-col--center">' +
-        '<span class="hero-scale-kicker" id="preview-kicker">' +
-        brand +
-        '</span>' +
-        '<span class="hero-scale-display hero-scale-display--ink" id="preview-tagline-left">' +
-        left +
-        '</span>' +
-        '<span class="hero-scale-display hero-scale-display--brand">' +
-        '<span class="hero-scale-display__line" id="preview-tagline-right-1">' +
-        r1 +
-        '</span>' +
-        '<span class="hero-scale-display__line" id="preview-tagline-right-2">' +
-        r2 +
-        '</span>' +
-        '</span></span></span></h1>' +
-        ctas +
-        '</div>'
-      );
-    }
+    // Description block
+    var desc = String((content && content.heroDescription) || '').trim();
+    var descHtml = desc
+      ? '<p class="hero-profile-desc" id="preview-hero-desc">' + escapeHtml(desc) + '</p>'
+      : '';
 
-    if (layout === 'image-below') {
-      return (
-        '<div class="hero-scale-layout hero-layout--image-below">' +
-        '<span class="hero-scale-visual' +
-        photoClass +
-        '"' +
-        photoStyle +
-        '>' +
-        (heroUrl ? '' : placeholderImg) +
-        '</span>' +
-        '<h1 class="hero-scale-title">' +
-        '<span class="hero-scale-col hero-scale-col--center">' +
-        '<span class="hero-scale-kicker" id="preview-kicker">' +
-        brand +
-        '</span>' +
-        '<span class="hero-scale-display hero-scale-display--ink" id="preview-tagline-left">' +
-        left +
-        '</span>' +
-        '<span class="hero-scale-display hero-scale-display--brand">' +
-        '<span class="hero-scale-display__line" id="preview-tagline-right-1">' +
-        r1 +
-        '</span>' +
-        '<span class="hero-scale-display__line" id="preview-tagline-right-2">' +
-        r2 +
-        '</span>' +
-        '</span></span></h1>' +
-        ctas +
+    // Booking policy block
+    var policy = String((content && content.bookingPolicy) || '').trim();
+    var policyHtml = policy
+      ? '<div class="hero-profile-policy" id="preview-booking-policy">' +
+        '<span class="hero-profile-policy__label">Booking policy</span>' +
+        '<p>' + escapeHtml(policy) + '</p>' +
         '</div>'
-      );
-    }
+      : '';
 
+    // Always render: image LEFT | info panel RIGHT
     return (
-      '<div class="hero-scale-layout hero-layout--split">' +
-      '<h1 class="hero-scale-title">' +
-      '<span class="hero-scale-title__grid">' +
-      '<span class="hero-scale-col hero-scale-col--left">' +
-      '<span class="hero-scale-kicker" id="preview-kicker">' +
-      brand +
-      '</span>' +
-      '<span class="hero-scale-display hero-scale-display--ink" id="preview-tagline-left">' +
-      left +
-      '</span>' +
-      '</span>' +
-      '<span class="hero-scale-visual' +
-      photoClass +
-      '"' +
-      photoStyle +
-      '>' +
+      '<div class="hero-scale-layout hero-layout--profile">' +
+
+      // Left: portrait image
+      '<span class="hero-scale-visual hero-profile-img' + photoClass + '"' + photoStyle + '>' +
       (heroUrl ? '' : placeholderImg) +
       '</span>' +
-      '<span class="hero-scale-col hero-scale-col--right">' +
+
+      // Right: info panel
+      '<div class="hero-profile-panel">' +
+      '<span class="hero-scale-kicker" id="preview-kicker">' + brand + '</span>' +
+      '<h1 class="hero-profile-title">' +
+      '<span class="hero-scale-display hero-scale-display--ink" id="preview-tagline-left">' + left + '</span>' +
       '<span class="hero-scale-display hero-scale-display--brand">' +
-      '<span class="hero-scale-display__line" id="preview-tagline-right-1">' +
-      r1 +
+      '<span class="hero-scale-display__line" id="preview-tagline-right-1">' + r1 + '</span>' +
+      '<span class="hero-scale-display__line" id="preview-tagline-right-2">' + r2 + '</span>' +
       '</span>' +
-      '<span class="hero-scale-display__line" id="preview-tagline-right-2">' +
-      r2 +
-      '</span>' +
-      '</span></span></span></h1>' +
+      '</h1>' +
+      descHtml +
+      policyHtml +
       ctas +
+      '</div>' +
+
       '</div>'
     );
   }

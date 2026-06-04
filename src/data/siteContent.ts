@@ -6,6 +6,8 @@ export type SiteContent = {
   taglineLeft: string;
   taglineRightLine1: string;
   taglineRightLine2: string;
+  heroDescription: string;
+  bookingPolicy: string;
   metaDescription: string;
   reelsTitle: string;
   reelsBlurb: string;
@@ -48,6 +50,8 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
   taglineLeft: 'Put your',
   taglineRightLine1: 'style',
   taglineRightLine2: 'here',
+  heroDescription: '',
+  bookingPolicy: '',
   metaDescription:
     'Your brand name — put your headline here. Swap this text, images, and booking details for your business.',
   reelsTitle: 'Put your video or social section title here',

@@ -121,49 +121,68 @@ export default function SiteDesignEditor() {
       <HeroLayoutPicker value={theme.heroLayout} onChange={setHeroLayout} />
 
       <Text style={styles.groupTitle}>Hero photo</Text>
+      <Text style={styles.helper}>
+        Your photo always appears on the left. Add a bio and booking policy on the right side.
+      </Text>
       <HeroImagePicker
         imageUrl={heroImageUrl}
         busy={isSaving}
         onPick={uploadHeroImage}
-        onRemove={theme.heroLayout === 'minimal' ? undefined : removeHeroImage}
+        onRemove={removeHeroImage}
         large
       />
 
-      {theme.heroLayout !== 'minimal' ? (
-        <>
-          <Text style={styles.groupTitle}>Headline text</Text>
-          <Field
-            label="Left line"
-            value={content.taglineLeft}
-            onChangeText={(taglineLeft) => updateContent({ taglineLeft })}
-            placeholder="Book with"
-          />
-          <Field
-            label="Right line (top)"
-            value={content.taglineRightLine1}
-            onChangeText={(taglineRightLine1) => updateContent({ taglineRightLine1 })}
-          />
-          <Field
-            label="Right line (bottom)"
-            value={content.taglineRightLine2}
-            onChangeText={(taglineRightLine2) => updateContent({ taglineRightLine2 })}
-          />
-        </>
-      ) : (
-        <>
-          <Text style={styles.groupTitle}>Headline text</Text>
-          <Field
-            label="Main line"
-            value={content.taglineLeft}
-            onChangeText={(taglineLeft) => updateContent({ taglineLeft })}
-          />
-          <Field
-            label="Accent line"
-            value={content.taglineRightLine1}
-            onChangeText={(taglineRightLine1) => updateContent({ taglineRightLine1 })}
-          />
-        </>
-      )}
+      <Text style={styles.groupTitle}>Headline text</Text>
+      <Field
+        label="Left word"
+        value={content.taglineLeft}
+        onChangeText={(taglineLeft) => updateContent({ taglineLeft })}
+        placeholder="Book with"
+      />
+      <Field
+        label="Right word (top)"
+        value={content.taglineRightLine1}
+        onChangeText={(taglineRightLine1) => updateContent({ taglineRightLine1 })}
+      />
+      <Field
+        label="Right word (bottom)"
+        value={content.taglineRightLine2}
+        onChangeText={(taglineRightLine2) => updateContent({ taglineRightLine2 })}
+      />
+
+      <Text style={styles.groupTitle}>Bio / description</Text>
+      <Text style={styles.helper}>
+        Tell clients who you are, your specialty, and why they should book with you.
+      </Text>
+      <View style={styles.field}>
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          value={content.heroDescription}
+          onChangeText={(heroDescription) => updateContent({ heroDescription })}
+          placeholder="e.g. Specializing in protective styles, braids, and natural hair care. 5+ years experience..."
+          placeholderTextColor={colors.textMuted}
+          multiline
+          numberOfLines={4}
+          textAlignVertical="top"
+        />
+      </View>
+
+      <Text style={styles.groupTitle}>Booking policy</Text>
+      <Text style={styles.helper}>
+        Cancellation rules, deposit requirements, late arrivals, etc.
+      </Text>
+      <View style={styles.field}>
+        <TextInput
+          style={[styles.input, styles.textArea]}
+          value={content.bookingPolicy}
+          onChangeText={(bookingPolicy) => updateContent({ bookingPolicy })}
+          placeholder="e.g. A deposit is required to secure your appointment. Cancellations within 48 hours are non-refundable."
+          placeholderTextColor={colors.textMuted}
+          multiline
+          numberOfLines={4}
+          textAlignVertical="top"
+        />
+      </View>
     </View>
   );
 }
@@ -201,6 +220,10 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 15,
     backgroundColor: colors.card,
+  },
+  textArea: {
+    minHeight: 100,
+    paddingTop: 12,
   },
   layoutOption: {
     flexDirection: 'row',

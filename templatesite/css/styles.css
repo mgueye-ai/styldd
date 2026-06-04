@@ -849,6 +849,76 @@ a:hover {
   display: flex;
 }
 
+/* ── Profile layout: image LEFT | info panel RIGHT ───────────────────────── */
+.hero-layout--profile {
+  display: grid;
+  grid-template-columns: minmax(260px, 420px) 1fr;
+  gap: clamp(2rem, 5vw, 4.5rem);
+  align-items: center;
+  width: 100%;
+  max-width: min(96vw, 1360px);
+  margin-inline: auto;
+}
+
+.hero-layout--profile .hero-profile-img {
+  justify-self: start;
+  max-width: none;
+  width: 100%;
+}
+
+.hero-profile-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  min-width: 0;
+}
+
+.hero-profile-title {
+  margin: 0;
+  padding: 0;
+  font-weight: inherit;
+  line-height: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.05em;
+}
+
+.hero-profile-desc {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: clamp(0.95rem, 1.5vw, 1.1rem);
+  line-height: 1.7;
+  color: rgba(255, 255, 255, 0.78);
+  max-width: 520px;
+}
+
+.hero-profile-policy {
+  background: rgba(255, 255, 255, 0.07);
+  border-left: 3px solid var(--pink);
+  border-radius: 0 10px 10px 0;
+  padding: 0.8rem 1.1rem;
+  max-width: 520px;
+}
+
+.hero-profile-policy__label {
+  display: block;
+  font-family: var(--font-body);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--pink);
+  margin-bottom: 0.35rem;
+}
+
+.hero-profile-policy p {
+  margin: 0;
+  font-family: var(--font-body);
+  font-size: 0.88rem;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.62);
+}
+
 @media (max-width: 767px) {
   .hero-landing__content {
     justify-content: center;
@@ -900,6 +970,29 @@ a:hover {
     margin-inline: auto;
     margin-bottom: 0.25rem;
     align-self: center;
+  }
+
+  /* Profile layout stacks on mobile: image on top, info below */
+  .hero-layout--profile {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .hero-layout--profile .hero-profile-img {
+    width: min(280px, 80vw);
+    margin: 0 auto;
+    justify-self: center;
+  }
+
+  .hero-profile-panel {
+    align-items: center;
+    text-align: center;
+  }
+
+  .hero-profile-desc,
+  .hero-profile-policy {
+    max-width: 100%;
+    text-align: left;
   }
 
   /* For image-below layout: image stays below, centered */
