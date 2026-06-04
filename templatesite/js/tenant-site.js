@@ -8,29 +8,6 @@
     subdomain = host.slice(0, -(rootDomain.length + 1));
   }
 
-  // ── Early template redirect from localStorage cache ──
-  if (subdomain) {
-    try {
-      var cachedTpl = localStorage.getItem('styld_tpl_' + subdomain);
-      if (cachedTpl) {
-        var currentTplParam = new URLSearchParams(window.location.search).get('tpl') || 'profile';
-        var needRedirect =
-          (cachedTpl === 'classic' && currentTplParam !== 'classic') ||
-          (cachedTpl !== 'classic' && currentTplParam === 'classic');
-        if (needRedirect) {
-          var eUrl = new URL(window.location.href);
-          if (cachedTpl === 'classic') {
-            eUrl.searchParams.set('tpl', 'classic');
-          } else {
-            eUrl.searchParams.delete('tpl');
-          }
-          window.location.replace(eUrl.toString());
-          return;
-        }
-      }
-    } catch (e) { /* localStorage may be unavailable */ }
-  }
-
   var statusEl = document.getElementById('tenant-status');
 
   function showError(message) {
