@@ -13,6 +13,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { WebView } from 'react-native-webview';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import SitePreviewWebView from '../components/site/SitePreviewWebView';
@@ -289,31 +290,61 @@ export default function SiteScreen({ navigation }: Props) {
       </View>
 
       {activeTab === 'site' ? (
-        <ScrollView
-          contentContainerStyle={styles.sitePanelScroll}
-          showsVerticalScrollIndicator={false}
-          scrollEventThrottle={16}
-        >
-          {needsSetup && !onboardingLoading ? (
-            <Pressable
-              style={styles.setupBanner}
-              onPress={() => navigation.navigate('SiteSetup')}
-            >
-              <View style={styles.setupBannerIcon}>
-                <Ionicons name="sparkles" size={20} color={colors.accentPink} />
+        needsSetup && !onboardingLoading ? (
+          <Pressable
+            style={styles.emptyStatePressable}
+            onPress={() => navigation.navigate('SiteSetup')}
+            accessibilityRole="button"
+          >
+            {/* Ghosted fake site layout behind the blur */}
+            <View style={styles.emptyStateBackground}>
+              <View style={styles.ghostBrowserBar}>
+                <View style={styles.ghostDots}>
+                  <View style={[styles.ghostDot, { backgroundColor: '#ff5f57' }]} />
+                  <View style={[styles.ghostDot, { backgroundColor: '#febc2e' }]} />
+                  <View style={[styles.ghostDot, { backgroundColor: '#28c840' }]} />
+                </View>
+                <View style={styles.ghostUrlBar} />
               </View>
-              <View style={styles.setupBannerText}>
-                <Text style={styles.setupBannerTitle}>Finish setting up your site</Text>
-                <Text style={styles.setupBannerBody}>
-                  Quick steps — business info, photos, location, design — then publish to{' '}
-                  {getSiteRootDomain()}.
-                </Text>
+              <View style={styles.ghostHero} />
+              <View style={styles.ghostSection}>
+                <View style={styles.ghostLine} />
+                <View style={[styles.ghostLine, { width: '60%' }]} />
               </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.textMuted} />
-            </Pressable>
-          ) : null}
-          <SitePreviewPanel loading={isLoading} />
-        </ScrollView>
+              <View style={styles.ghostCards}>
+                {[0, 1, 2].map((i) => (
+                  <View key={i} style={styles.ghostCard} />
+                ))}
+              </View>
+            </View>
+
+            {/* Blur overlay */}
+            <BlurView intensity={28} tint="dark" style={StyleSheet.absoluteFill} />
+
+            {/* CTA card */}
+            <View style={styles.emptyStateCta}>
+              <View style={styles.emptyStateIconWrap}>
+                <Ionicons name="globe-outline" size={28} color={colors.accentPink} />
+              </View>
+              <Text style={styles.emptyStateTitle}>Create your site today</Text>
+              <Text style={styles.emptyStateBody}>
+                Build a beautiful booking site in minutes — business info, photos, and your own subdomain.
+              </Text>
+              <View style={styles.emptyStateBtn}>
+                <Ionicons name="sparkles" size={16} color="#fff" />
+                <Text style={styles.emptyStateBtnText}>Get started</Text>
+              </View>
+            </View>
+          </Pressable>
+        ) : (
+          <ScrollView
+            contentContainerStyle={styles.sitePanelScroll}
+            showsVerticalScrollIndicator={false}
+            scrollEventThrottle={16}
+          >
+            <SitePreviewPanel loading={isLoading} />
+          </ScrollView>
+        )
       ) : (
         <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.analyticsHeader}>
@@ -475,19 +506,12 @@ export default function SiteScreen({ navigation }: Props) {
         </ScrollView>
       )}
 
-      {activeTab === 'site' ? (
+      {activeTab === 'site' && !needsSetup ? (
         <Pressable
-          style={[styles.fab, needsSetup && styles.fabHighlight]}
-          onPress={() => {
-            if (needsSetup) navigation.navigate('SiteSetup');
-            else navigation.navigate('SiteEditor');
-          }}
+          style={styles.fab}
+          onPress={() => navigation.navigate('SiteEditor')}
         >
-          <Ionicons
-            name={needsSetup ? 'sparkles' : 'create-outline'}
-            size={24}
-            color={needsSetup ? colors.accentPink : colors.text}
-          />
+          <Ionicons name="create-outline" size={24} color={colors.text} />
         </Pressable>
       ) : null}
     </SafeAreaView>
@@ -850,39 +874,123 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '400',
   },
-  setupBanner: {
+  // Empty state / no site yet
+  emptyStatePressable: {
+    flex: 1,
+    overflow: 'hidden',
+  },
+  emptyStateBackground: {
+    ...StyleSheet.absoluteFillObject,
+    padding: 20,
+    gap: 14,
+  },
+  ghostBrowserBar: {
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    marginHorizontal: 16,
-    marginBottom: 12,
-    padding: 14,
+    paddingHorizontal: 14,
+    gap: 10,
+  },
+  ghostDots: { flexDirection: 'row', gap: 5 },
+  ghostDot: { width: 8, height: 8, borderRadius: 4, opacity: 0.5 },
+  ghostUrlBar: {
+    flex: 1,
+    height: 10,
+    borderRadius: 6,
+    backgroundColor: colors.cardBorder,
+  },
+  ghostHero: {
+    height: 180,
+    borderRadius: 20,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    opacity: 0.7,
+  },
+  ghostSection: {
+    paddingHorizontal: 8,
+    gap: 10,
+  },
+  ghostLine: {
+    height: 12,
+    width: '80%',
+    borderRadius: 6,
+    backgroundColor: colors.cardBorder,
+    opacity: 0.8,
+  },
+  ghostCards: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  ghostCard: {
+    flex: 1,
+    height: 120,
     borderRadius: 16,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    opacity: 0.6,
+  },
+  emptyStateCta: {
+    position: 'absolute',
+    left: 28,
+    right: 28,
+    top: '30%',
+    backgroundColor: colors.card,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    padding: 28,
+    alignItems: 'center',
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
+    elevation: 16,
+  },
+  emptyStateIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 20,
     backgroundColor: colors.accentPinkMuted,
     borderWidth: 1,
     borderColor: colors.accentPinkBorder,
-  },
-  setupBannerIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.card,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 4,
   },
-  setupBannerText: {
-    flex: 1,
-    gap: 4,
-  },
-  setupBannerTitle: {
+  emptyStateTitle: {
     color: colors.text,
+    fontSize: 22,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  emptyStateBody: {
+    color: colors.textMuted,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
+    maxWidth: 280,
+  },
+  emptyStateBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 4,
+    backgroundColor: colors.accentPink,
+    borderRadius: 14,
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+  },
+  emptyStateBtnText: {
+    color: '#fff',
     fontSize: 15,
     fontWeight: '700',
-  },
-  setupBannerBody: {
-    color: colors.textMuted,
-    fontSize: 13,
-    lineHeight: 18,
   },
   fab: {
     position: 'absolute',
@@ -899,10 +1007,5 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.3,
     shadowRadius: 10,
     elevation: 8,
-  },
-  fabHighlight: {
-    backgroundColor: colors.accentPinkMuted,
-    borderWidth: 1,
-    borderColor: colors.accentPinkBorder,
   },
 });

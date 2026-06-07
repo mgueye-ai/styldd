@@ -1,7 +1,7 @@
 export type HeroLayout = 'split' | 'image-below' | 'minimal';
 export type StyleCardLayout = 'card' | 'pill' | 'outlined';
 export type FontFamily = 'cormorant' | 'inter' | 'playfair' | 'dm-sans' | 'montserrat';
-export type TemplateId = 'classic' | 'profile';
+export type TemplateId = 'profile';
 
 export type SiteTheme = {
   heroLayout: HeroLayout;
@@ -10,6 +10,7 @@ export type SiteTheme = {
   primaryColor: string;
   secondaryColor: string;
   backgroundColor: string | null;
+  navbarColor: string | null;
   styleCardLayout: StyleCardLayout;
   fontFamily: FontFamily;
   templateId: TemplateId;
@@ -22,6 +23,7 @@ export const DEFAULT_SITE_THEME: SiteTheme = {
   primaryColor: '#db2777',
   secondaryColor: '#0a0a0a',
   backgroundColor: null,
+  navbarColor: null,
   styleCardLayout: 'card',
   fontFamily: 'cormorant',
   templateId: 'profile',
@@ -110,6 +112,9 @@ export function normalizeSiteTheme(value: unknown): SiteTheme {
     backgroundColor: isValidHexColor(source.backgroundColor)
       ? (source.backgroundColor as string).trim()
       : null,
+    navbarColor: isValidHexColor(source.navbarColor)
+      ? (source.navbarColor as string).trim()
+      : null,
     styleCardLayout:
       source.styleCardLayout === 'pill'
         ? 'pill'
@@ -119,6 +124,6 @@ export function normalizeSiteTheme(value: unknown): SiteTheme {
     fontFamily: validFontIds.includes(source.fontFamily as FontFamily)
       ? (source.fontFamily as FontFamily)
       : DEFAULT_SITE_THEME.fontFamily,
-    templateId: source.templateId === 'classic' ? 'classic' : DEFAULT_SITE_THEME.templateId,
+    templateId: 'profile',
   };
 }

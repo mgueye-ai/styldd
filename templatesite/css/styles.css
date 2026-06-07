@@ -296,7 +296,7 @@ a:hover {
   top: 0;
   z-index: 100;
   padding: 0.85rem 0 0.65rem;
-  background: rgba(255, 255, 255, 0.97);
+  background: var(--nav-bg, rgba(255, 255, 255, 0.97));
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border-bottom: 1px solid rgba(219, 39, 119, 0.1);
@@ -304,7 +304,7 @@ a:hover {
 }
 
 .page-catalog .hero-nav--site {
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--nav-bg, rgba(255, 255, 255, 0.92));
   border-bottom-color: rgba(219, 39, 119, 0.1);
 }
 
@@ -6191,12 +6191,25 @@ ul.price-menu__policy-list {
   font-size: 1.15rem;
   font-weight: 600;
 }
-.profile-about-body,
+.profile-about-body {
+  color: var(--muted);
+  font-size: 0.975rem;
+  line-height: 1.72;
+  margin: 0;
+}
 .profile-policy-body {
   color: var(--muted);
   font-size: 0.975rem;
   line-height: 1.72;
   margin: 0;
+  padding-left: 1.25rem;
+  list-style: disc;
+}
+.profile-policy-body li {
+  margin-bottom: 0.35rem;
+}
+.profile-policy-body li:last-child {
+  margin-bottom: 0;
 }
 
 /* Menu */

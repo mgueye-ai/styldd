@@ -19,9 +19,32 @@
       }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://gogpjxxsrcjpbugocvnd.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable__J8Bidf6aB7WjweWBv66og_3JkNeADO",
+        "EXPO_PUBLIC_SITE_DATA_SUPABASE_URL": "https://xynxvpnfytsyusiuurhu.supabase.co",
+        "EXPO_PUBLIC_SITE_DATA_SUPABASE_ANON_KEY": "sb_publishable_FY1bac1Y1yI8bIzezzSXnA_h8yg8xTh",
+        "EXPO_PUBLIC_STYLD_ROOT_DOMAIN": "styldd.com",
+        "EXPO_PUBLIC_LOGOKIT_TOKEN": "pk_fraa0d6affbc47c8598ca0",
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51TeN9j5Arlwr2NfVi6DnwVAUTlXodaOG8RJj2VqYNoY2DEIXHmb8IQ5mTK1uecKw32RDdXpXab463rYu449pKHvd00Z2rx9sdZ",
+        "EXPO_PUBLIC_REVENUECAT_IOS_KEY": "test_AWrvYWQeKnOQsIaCPRkbHcVHUoF",
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_KEY": "test_AWrvYWQeKnOQsIaCPRkbHcVHUoF"
+      }
     },
-    "production": {}
+    "production": {
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://gogpjxxsrcjpbugocvnd.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable__J8Bidf6aB7WjweWBv66og_3JkNeADO",
+        "EXPO_PUBLIC_SITE_DATA_SUPABASE_URL": "https://xynxvpnfytsyusiuurhu.supabase.co",
+        "EXPO_PUBLIC_SITE_DATA_SUPABASE_ANON_KEY": "sb_publishable_FY1bac1Y1yI8bIzezzSXnA_h8yg8xTh",
+        "EXPO_PUBLIC_STYLD_ROOT_DOMAIN": "styldd.com",
+        "EXPO_PUBLIC_LOGOKIT_TOKEN": "pk_fraa0d6affbc47c8598ca0",
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51TeN9j5Arlwr2NfVi6DnwVAUTlXodaOG8RJj2VqYNoY2DEIXHmb8IQ5mTK1uecKw32RDdXpXab463rYu449pKHvd00Z2rx9sdZ",
+        "EXPO_PUBLIC_REVENUECAT_IOS_KEY": "appl_LVmmNNETUGkwGCLqkRtgMBzDQCJ",
+        "EXPO_PUBLIC_REVENUECAT_ANDROID_KEY": "test_AWrvYWQeKnOQsIaCPRkbHcVHUoF"
+      }
+    }
   },
   "submit": {
     "production": {}

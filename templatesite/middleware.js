@@ -15,10 +15,9 @@ function isRootHost(host) {
   return host === ROOT_DOMAIN || host === `www.${ROOT_DOMAIN}`;
 }
 
-function resolveTenantHtmlPath(pathname, searchParams) {
+function resolveTenantHtmlPath(pathname) {
   if (!pathname || pathname === '/') {
-    const tpl = searchParams && searchParams.get('tpl');
-    return tpl === 'classic' ? '/tenant/index.html' : '/tenant/profile.html';
+    return '/tenant/profile.html';
   }
 
   const clean = pathname.replace(/\/$/, '').toLowerCase();
@@ -63,7 +62,7 @@ export default function middleware(request) {
     return;
   }
 
-  url.pathname = resolveTenantHtmlPath(url.pathname, url.searchParams);
+  url.pathname = resolveTenantHtmlPath(url.pathname);
   url.searchParams.set('subdomain', subdomain);
   return rewrite(url);
 }

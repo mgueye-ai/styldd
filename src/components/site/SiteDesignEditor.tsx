@@ -2,87 +2,11 @@ import HeroImagePicker from './HeroImagePicker';
 import ColorPicker from './ColorPicker';
 import { useSiteContent } from '../../context/SiteContentContext';
 import { useSiteTheme } from '../../context/SiteThemeContext';
-import { FontFamily, FONT_FAMILY_OPTIONS, StyleCardLayout, TemplateId } from '../../data/siteTheme';
+import { FontFamily, FONT_FAMILY_OPTIONS, StyleCardLayout } from '../../data/siteTheme';
 import { colors } from '../../theme';
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 
-type TemplateCardProps = {
-  id: TemplateId;
-  current: TemplateId;
-  onSelect: (id: TemplateId) => void;
-  label: string;
-  description: string;
-  children: React.ReactNode;
-};
-
-function TemplateCard({ id, current, onSelect, label, description, children }: TemplateCardProps) {
-  const active = id === current;
-  return (
-    <Pressable
-      style={[styles.templateCard, active && styles.templateCardActive]}
-      onPress={() => onSelect(id)}
-    >
-      <View style={[styles.templatePreview, active && styles.templatePreviewActive]}>
-        {children}
-      </View>
-      <View style={styles.templateMeta}>
-        <Text style={[styles.templateLabel, active && styles.templateLabelActive]}>{label}</Text>
-        <Text style={styles.templateDesc}>{description}</Text>
-      </View>
-      {active && (
-        <View style={styles.templateCheck}>
-          <Ionicons name="checkmark-circle" size={18} color={colors.accentPink} />
-        </View>
-      )}
-    </Pressable>
-  );
-}
-
-function ProfileTemplateThumbnail() {
-  return (
-    <View style={styles.thumb}>
-      <View style={styles.thumbNavBar}>
-        <View style={styles.thumbDot} />
-        <View style={[styles.thumbBar, { width: 28, height: 5 }]} />
-      </View>
-      <View style={styles.thumbRow}>
-        <View style={styles.thumbPhoto} />
-        <View style={{ flex: 1, gap: 3 }}>
-          <View style={[styles.thumbBar, { width: '80%', height: 5 }]} />
-          <View style={[styles.thumbBar, { width: '100%', height: 3 }]} />
-          <View style={[styles.thumbBar, { width: '90%', height: 3 }]} />
-          <View style={[styles.thumbBar, { width: '60%', height: 3 }]} />
-        </View>
-      </View>
-      <View style={[styles.thumbBar, { width: '50%', height: 5, marginTop: 6 }]} />
-      <View style={styles.thumbCardRow}>
-        <View style={styles.thumbCard} />
-        <View style={styles.thumbCard} />
-      </View>
-    </View>
-  );
-}
-
-function ClassicTemplateThumbnail() {
-  return (
-    <View style={styles.thumb}>
-      <View style={styles.thumbNavBar}>
-        <View style={styles.thumbDot} />
-        <View style={[styles.thumbBar, { width: 24, height: 5 }]} />
-      </View>
-      <View style={[styles.thumbHeroBlock]}>
-        <View style={[styles.thumbBar, { width: '45%', height: 4, alignSelf: 'center' }]} />
-        <View style={[styles.thumbBar, { width: '70%', height: 7, alignSelf: 'center', marginTop: 3 }]} />
-        <View style={[styles.thumbBar, { width: '55%', height: 7, alignSelf: 'center', marginTop: 2, backgroundColor: colors.accentPink }]} />
-      </View>
-      <View style={[styles.thumbCardRow, { marginTop: 6 }]}>
-        <View style={styles.thumbCard} />
-        <View style={styles.thumbCard} />
-      </View>
-    </View>
-  );
-}
 
 function Field({
   label,
@@ -137,38 +61,19 @@ function CardLayoutOption({ value, current, onSelect, icon, label, description }
   );
 }
 
-export default function SiteDesignEditor({ onEditHeroContent }: { onEditHeroContent?: () => void }) {
+export default function SiteDesignEditor({
+  onEditAbout,
+  onEditPolicy,
+}: {
+  onEditAbout?: () => void;
+  onEditPolicy?: () => void;
+}) {
   const { content, updateContent } = useSiteContent();
   const { theme, updateTheme, uploadHeroImage, uploadLogoImage, removeHeroImage, heroImageUrl, logoImageUrl, isSaving } =
     useSiteTheme();
-  const isProfileTemplate = !theme.templateId || theme.templateId === 'profile';
 
   return (
     <View>
-      {/* ── Template ── */}
-      <Text style={styles.groupTitle}>Template</Text>
-      <Text style={styles.helper}>Choose your site layout. This affects the overall page structure.</Text>
-      <View style={styles.templateRow}>
-        <TemplateCard
-          id="profile"
-          current={theme.templateId}
-          onSelect={(templateId) => updateTheme({ templateId })}
-          label="Profile"
-          description="Photo + bio, clean menu"
-        >
-          <ProfileTemplateThumbnail />
-        </TemplateCard>
-        <TemplateCard
-          id="classic"
-          current={theme.templateId}
-          onSelect={(templateId) => updateTheme({ templateId })}
-          label="Classic"
-          description="Bold hero + headline"
-        >
-          <ClassicTemplateThumbnail />
-        </TemplateCard>
-      </View>
-
       {/* ── Font ── */}
       <Text style={styles.groupTitle}>Font</Text>
       <Text style={styles.helper}>Choose a typeface for headings and brand text.</Text>
@@ -210,6 +115,12 @@ export default function SiteDesignEditor({ onEditHeroContent }: { onEditHeroCont
         value={theme.backgroundColor ?? '#fafafa'}
         presets="background"
         onChange={(backgroundColor) => updateTheme({ backgroundColor })}
+      />
+      <ColorPicker
+        label="Navbar color"
+        value={theme.navbarColor ?? '#ffffff'}
+        presets="background"
+        onChange={(navbarColor) => updateTheme({ navbarColor })}
       />
 
       <Text style={styles.groupTitle}>Logo</Text>
@@ -258,158 +169,36 @@ export default function SiteDesignEditor({ onEditHeroContent }: { onEditHeroCont
         large
       />
 
-      {!isProfileTemplate && (
-        <>
-          <Text style={styles.groupTitle}>Headline text</Text>
-          <Field
-            label="Left word"
-            value={content.taglineLeft}
-            onChangeText={(taglineLeft) => updateContent({ taglineLeft })}
-            placeholder="Book with"
-          />
-          <Field
-            label="Right word (top)"
-            value={content.taglineRightLine1}
-            onChangeText={(taglineRightLine1) => updateContent({ taglineRightLine1 })}
-          />
-          <Field
-            label="Right word (bottom)"
-            value={content.taglineRightLine2}
-            onChangeText={(taglineRightLine2) => updateContent({ taglineRightLine2 })}
-          />
-        </>
-      )}
-
-      {isProfileTemplate && (
-        <>
-          <Text style={styles.groupTitle}>Bio & policy</Text>
-          <Text style={styles.helper}>
-            Add a short bio and booking policy — shown on the right side of your hero.
+      <Text style={styles.groupTitle}>Bio & policy</Text>
+      <Pressable style={styles.navRow} onPress={onEditAbout}>
+        <View style={styles.navRowIcon}>
+          <Ionicons name="person-circle-outline" size={20} color={colors.accentPink} />
+        </View>
+        <View style={styles.navRowBody}>
+          <Text style={styles.navRowLabel}>About you</Text>
+          <Text style={styles.navRowValue} numberOfLines={1}>
+            {content.heroDescription ? content.heroDescription.slice(0, 48) + (content.heroDescription.length > 48 ? '…' : '') : 'Not set'}
           </Text>
-          <Pressable style={styles.navRow} onPress={onEditHeroContent}>
-            <View style={styles.navRowIcon}>
-              <Ionicons name="person-circle-outline" size={20} color={colors.accentPink} />
-            </View>
-            <View style={styles.navRowBody}>
-              <Text style={styles.navRowLabel}>Bio & booking policy</Text>
-              <Text style={styles.navRowValue} numberOfLines={1}>
-                {content.heroDescription ? content.heroDescription.slice(0, 40) + (content.heroDescription.length > 40 ? '…' : '') : 'Not set'}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
-          </Pressable>
-        </>
-      )}
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+      </Pressable>
+      <Pressable style={styles.navRow} onPress={onEditPolicy}>
+        <View style={styles.navRowIcon}>
+          <Ionicons name="document-text-outline" size={20} color={colors.accentPink} />
+        </View>
+        <View style={styles.navRowBody}>
+          <Text style={styles.navRowLabel}>Booking policy</Text>
+          <Text style={styles.navRowValue} numberOfLines={1}>
+            {content.bookingPolicy ? content.bookingPolicy.split('\n')[0].slice(0, 48) + '…' : 'Not set'}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={16} color={colors.textMuted} />
+      </Pressable>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  templateRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 6,
-  },
-  templateCard: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: colors.cardBorder,
-    overflow: 'hidden',
-    padding: 10,
-  },
-  templateCardActive: {
-    borderColor: colors.accentPink,
-    backgroundColor: colors.accentPinkMuted,
-  },
-  templatePreview: {
-    borderRadius: 8,
-    overflow: 'hidden',
-    backgroundColor: colors.background,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    marginBottom: 8,
-  },
-  templatePreviewActive: {
-    borderColor: colors.accentPinkBorder,
-  },
-  templateMeta: {
-    gap: 2,
-  },
-  templateLabel: {
-    color: colors.text,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  templateLabelActive: {
-    color: colors.accentPink,
-  },
-  templateDesc: {
-    color: colors.textMuted,
-    fontSize: 11,
-    lineHeight: 15,
-  },
-  templateCheck: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-  },
-  // Thumbnail
-  thumb: {
-    padding: 8,
-    gap: 4,
-  },
-  thumbNavBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 4,
-  },
-  thumbDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.accentPink,
-  },
-  thumbRow: {
-    flexDirection: 'row',
-    gap: 6,
-    alignItems: 'flex-start',
-  },
-  thumbPhoto: {
-    width: 28,
-    height: 38,
-    borderRadius: 5,
-    backgroundColor: colors.textMuted,
-    opacity: 0.25,
-  },
-  thumbBar: {
-    borderRadius: 3,
-    backgroundColor: colors.textMuted,
-    opacity: 0.25,
-  },
-  thumbHeroBlock: {
-    padding: 4,
-    gap: 2,
-    backgroundColor: colors.background,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    marginVertical: 2,
-  },
-  thumbCardRow: {
-    flexDirection: 'row',
-    gap: 4,
-    marginTop: 4,
-  },
-  thumbCard: {
-    flex: 1,
-    height: 20,
-    borderRadius: 4,
-    backgroundColor: colors.textMuted,
-    opacity: 0.15,
-  },
   // Font picker
   fontScroll: {
     marginBottom: 6,

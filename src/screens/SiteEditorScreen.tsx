@@ -467,7 +467,12 @@ export default function SiteEditorScreen({ navigation }: Props) {
 
       <ScrollView contentContainerStyle={styles.form} showsVerticalScrollIndicator={false}>
         <Animated.View style={{ opacity: tabAnim }}>
-        {tab === 'design' ? <SiteDesignEditor onEditHeroContent={() => navigation.navigate('HeroContent')} /> : null}
+        {tab === 'design' ? (
+          <SiteDesignEditor
+            onEditAbout={() => navigation.navigate('HeroAbout')}
+            onEditPolicy={() => navigation.navigate('HeroPolicy')}
+          />
+        ) : null}
 
         {tab === 'content' ? (
           <>
@@ -482,7 +487,7 @@ export default function SiteEditorScreen({ navigation }: Props) {
               Toggle sections on or off, and tap to edit their content.
             </Text>
 
-            {SITE_SECTIONS.map(({ id, label, icon }) => (
+            {SITE_SECTIONS.filter(({ id }) => id !== 'about' && id !== 'visit').map(({ id, label, icon }) => (
               <SectionCard
                 key={id}
                 sectionId={id}

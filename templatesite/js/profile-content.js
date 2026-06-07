@@ -262,14 +262,22 @@
       aboutEl.textContent = content.heroDescription || '';
     }
 
-    // Policy text
+    // Policy bullets — bookingPolicy is newline-separated; render as <ul><li> list
     var policyEl = document.getElementById('profile-policy-body');
     var policyBlock = document.getElementById('profile-policy-block');
     if (policyEl) {
-      var policyText = content.bookingPolicy || '';
-      policyEl.textContent = policyText;
+      var policyText = (content.bookingPolicy || '').trim();
+      var bullets = policyText
+        ? policyText.split('\n').map(function(l){ return l.trim(); }).filter(Boolean)
+        : [];
+      policyEl.innerHTML = '';
+      bullets.forEach(function(bullet) {
+        var li = document.createElement('li');
+        li.textContent = bullet;
+        policyEl.appendChild(li);
+      });
       if (policyBlock) {
-        policyBlock.hidden = !policyText;
+        policyBlock.hidden = bullets.length === 0;
       }
     }
 

@@ -130,33 +130,7 @@
         throw new Error('Site content not found.');
       }
 
-      var templateId = theme.templateId || 'profile';
-
-      // ── Template routing ──
-      var redirecting = (function routeTemplate() {
-        try {
-          if (subdomain) {
-            localStorage.setItem('styld_tpl_' + subdomain, templateId);
-          }
-          var currentTplParam = new URLSearchParams(window.location.search).get('tpl') || 'profile';
-          var needRedirect =
-            (templateId === 'classic' && currentTplParam !== 'classic') ||
-            (templateId !== 'classic' && currentTplParam === 'classic');
-          if (needRedirect) {
-            var rUrl = new URL(window.location.href);
-            if (templateId === 'classic') {
-              rUrl.searchParams.set('tpl', 'classic');
-            } else {
-              rUrl.searchParams.delete('tpl');
-            }
-            window.location.replace(rUrl.toString());
-            return true;
-          }
-        } catch (e) { /* ignore */ }
-        return false;
-      })();
-
-      if (redirecting) return;
+      var templateId = 'profile';
 
       window.__STYLD_SITE_CONTENT__ = content;
       window.__STYLD_SITE_THEME__ = {
@@ -165,6 +139,7 @@
         logoImageUrl: coverUrl(theme.logoImagePath),
         primaryColor: theme.primaryColor || null,
         secondaryColor: theme.secondaryColor || null,
+        navbarColor: theme.navbarColor || null,
         styleCardLayout: theme.styleCardLayout || 'card',
         fontFamily: theme.fontFamily || 'cormorant',
         templateId: templateId,
@@ -207,6 +182,12 @@
           // visually distinct from the page background.
           root.style.setProperty('--cream', bg);
           document.body.style.backgroundColor = bg;
+        }
+
+        var navBg = (theme.navbarColor || '').trim();
+        if (navBg && /^#[0-9a-fA-F]{6}$/.test(navBg)) {
+          root.style.setProperty('--nav-bg', navBg);
+          root.style.setProperty('--nav-bg-solid', navBg);
         }
 
         // Apply font family
@@ -260,6 +241,15 @@
       var logo = document.querySelector('.hero-brand__logo');
       if (logo && window.__STYLD_SITE_THEME__.logoImageUrl) {
         logo.src = window.__STYLD_SITE_THEME__.logoImageUrl;
+      }
+
+      // Use logo as favicon
+      var logoUrl = window.__STYLD_SITE_THEME__.logoImageUrl;
+      if (logoUrl) {
+        var favicon = document.querySelector("link[rel='icon']") || document.createElement('link');
+        favicon.rel = 'icon';
+        favicon.href = logoUrl;
+        if (!favicon.parentNode) document.head.appendChild(favicon);
       }
 
       document.title = (content.brandName || subdomain) + ' | Book online';

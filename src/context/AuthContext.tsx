@@ -17,6 +17,8 @@ type AuthContextValue = {
   user: User | null;
   profile: StyldProfile | null;
   isReady: boolean;
+  isNewSignUp: boolean;
+  clearNewSignUp: () => void;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
@@ -94,6 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<StyldProfile | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [isNewSignUp, setIsNewSignUp] = useState(false);
 
   const refreshProfile = async () => {
     if (!session?.user.id) {
@@ -138,6 +141,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error?.message ?? null };
   };
 
+  const clearNewSignUp = () => setIsNewSignUp(false);
+
   const signUp = async (email: string, password: string, fullName: string) => {
     const { error } = await supabase.auth.signUp({
       email,
@@ -149,6 +154,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       },
     });
 
+    if (!error) setIsNewSignUp(true);
     return { error: error?.message ?? null };
   };
 
@@ -184,13 +190,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       user: session?.user ?? null,
       profile,
       isReady,
+      isNewSignUp,
+      clearNewSignUp,
       signIn,
       signUp,
       signOut,
       refreshProfile,
       updateProfile,
     }),
-    [session, profile, isReady],
+    [session, profile, isReady, isNewSignUp],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

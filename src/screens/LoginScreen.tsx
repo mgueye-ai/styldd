@@ -1,7 +1,7 @@
-import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -11,9 +11,15 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import Svg, {
+  Defs,
+  LinearGradient,
+  RadialGradient,
+  Rect,
+  Stop,
+} from 'react-native-svg';
+import { Image as ExpoImage } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import ScreenGradient from '../components/ScreenGradient';
-import BrandLogo from '../components/BrandLogo';
 import { useAuth } from '../context/AuthContext';
 import { colors } from '../theme';
 
@@ -75,7 +81,41 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <ScreenGradient />
+      {/* Dark bg */}
+      <View style={StyleSheet.absoluteFill} pointerEvents="none">
+        {/* Vertical grid lines */}
+        <Svg style={StyleSheet.absoluteFillObject} width="100%" height="100%">
+          <Defs>
+            <LinearGradient id="gridFade" x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor="#ffffff" stopOpacity="1" />
+              <Stop offset="0.55" stopColor="#ffffff" stopOpacity="1" />
+              <Stop offset="0.92" stopColor="#ffffff" stopOpacity="0" />
+            </LinearGradient>
+          </Defs>
+          {/* 8 vertical lines at 12.5% intervals */}
+          {[0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875].map((x) => (
+            <Rect
+              key={x}
+              x={`${x * 100}%`}
+              y="0"
+              width="1"
+              height="100%"
+              fill="rgba(255,255,255,0.035)"
+            />
+          ))}
+        </Svg>
+
+        {/* Pink glow — bottom of hero area */}
+        <Svg style={StyleSheet.absoluteFillObject} width="100%" height="100%">
+          <Defs>
+            <RadialGradient id="heroGlow" cx="50%" cy="45%" r="55%">
+              <Stop offset="0" stopColor={colors.accentPink} stopOpacity="0.22" />
+              <Stop offset="1" stopColor={colors.accentPink} stopOpacity="0" />
+            </RadialGradient>
+          </Defs>
+          <Rect width="100%" height="60%" fill="url(#heroGlow)" />
+        </Svg>
+      </View>
 
       <KeyboardAvoidingView
         style={styles.flex}
@@ -86,17 +126,39 @@ export default function LoginScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.hero}>
-            <BrandLogo width={180} height={58} />
-            <Text style={styles.title}>Styld</Text>
-            <Text style={styles.subtitle}>
-              {mode === 'signIn'
-                ? 'Sign in to manage your business'
-                : 'Create your stylist account'}
+          {/* Brand lockup */}
+          <View style={styles.brandLockup}>
+            <Image
+              source={require('../../assets/icon.png')}
+              style={styles.brandIcon}
+              resizeMode="cover"
+            />
+            <Text style={styles.brandName}>Styld</Text>
+          </View>
+
+          {/* Hero headline */}
+          <View style={styles.heroCopy}>
+            <Text style={styles.heroTitle}>
+              {'Run your '}
+              <Text style={styles.heroTitleAccent}>business</Text>
+              {'\nfrom one place.'}
             </Text>
           </View>
 
-          <View style={styles.card}>
+          {/* App preview GIF */}
+          <ExpoImage
+            source={require('../../HeroVid.gif')}
+            style={styles.phoneGif}
+            contentFit="contain"
+            autoplay
+          />
+
+          {/* Auth fields */}
+          <View style={styles.formArea}>
+            <Text style={styles.cardHeading}>
+              {mode === 'signIn' ? 'Sign in to your account' : 'Create your account'}
+            </Text>
+
             {mode === 'signUp' ? (
               <View style={styles.field}>
                 <Text style={styles.label}>Full name</Text>
@@ -148,7 +210,7 @@ export default function LoginScreen() {
               disabled={loading}
             >
               {loading ? (
-                <ActivityIndicator color={colors.text} />
+                <ActivityIndicator color="#0a0a0a" />
               ) : (
                 <Text style={styles.primaryButtonText}>
                   {mode === 'signIn' ? 'Sign in' : 'Create account'}
@@ -163,6 +225,13 @@ export default function LoginScreen() {
                   : 'Already have an account? Sign in'}
               </Text>
             </Pressable>
+          </View>
+
+          {/* Marquee ticker */}
+          <View style={styles.marquee} pointerEvents="none">
+            <Text style={styles.marqueeText} numberOfLines={1}>
+              {'Salons & Braiders · Bookings · Client CRM · Online Payments · Your Booking Site · Salons & Braiders · Bookings · Client CRM · Online Payments · Your Booking Site'}
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -180,63 +249,83 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    paddingVertical: 32,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 16,
+    gap: 16,
   },
-  hero: {
+
+  /* Brand lockup: icon + "Styld" */
+  brandLockup: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 28,
+    gap: 10,
   },
-  logoWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: colors.accentPinkSoft,
-    borderWidth: 1,
-    borderColor: colors.accentPinkBorder,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
+  brandIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 9,
   },
-  title: {
+  brandName: {
     color: colors.text,
-    fontSize: 36,
+    fontSize: 22,
+    fontWeight: '800',
+    letterSpacing: -0.9,
+    fontFamily: 'SpaceGrotesk_700Bold',
+  },
+
+  /* Hero copy */
+  heroCopy: {
+    gap: 6,
+  },
+  heroTitle: {
+    color: colors.text,
+    fontSize: 26,
     fontWeight: '700',
     letterSpacing: -1,
-    marginBottom: 8,
+    lineHeight: 32,
+    fontFamily: 'SpaceGrotesk_700Bold',
   },
-  subtitle: {
-    color: colors.textMuted,
-    fontSize: 15,
-    fontWeight: '500',
-    textAlign: 'center',
+  heroTitleAccent: {
+    color: colors.accentPink,
   },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    padding: 20,
-    gap: 16,
+  phoneGif: {
+    width: 350,
+    height: 350,
+    alignSelf: 'center',
+  },
+
+  /* Auth fields sit directly on background */
+  formArea: {
+    gap: 12,
+  },
+  cardHeading: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: -0.3,
+    fontFamily: 'SpaceGrotesk_700Bold',
+    marginBottom: 2,
   },
   field: {
     gap: 8,
   },
   label: {
     color: colors.textMuted,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
   },
   input: {
-    backgroundColor: colors.background,
+    backgroundColor: colors.card,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
-    borderRadius: 14,
+    borderColor: 'rgba(255, 255, 255, 0.1)',
+    borderRadius: 12,
     paddingHorizontal: 14,
-    paddingVertical: 14,
+    paddingVertical: 13,
     color: colors.text,
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
   },
   errorText: {
@@ -251,7 +340,7 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     backgroundColor: colors.accentPink,
-    borderRadius: 14,
+    borderRadius: 999,
     paddingVertical: 15,
     alignItems: 'center',
     justifyContent: 'center',
@@ -261,9 +350,10 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   primaryButtonText: {
-    color: colors.text,
-    fontSize: 16,
+    color: '#0a0a0a',
+    fontSize: 15,
     fontWeight: '700',
+    letterSpacing: -0.2,
   },
   secondaryButton: {
     alignItems: 'center',
@@ -272,6 +362,21 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     color: colors.textMuted,
     fontSize: 14,
+    fontWeight: '500',
+  },
+
+  /* Marquee */
+  marquee: {
+    overflow: 'hidden',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255, 255, 255, 0.06)',
+    paddingTop: 16,
+  },
+  marqueeText: {
+    color: 'rgba(255, 255, 255, 0.2)',
+    fontSize: 11,
     fontWeight: '600',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
   },
 });
