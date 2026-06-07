@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import BusinessScreenLayout, { BusinessSection } from '../../components/business/BusinessScreenLayout';
+import { useServiceCatalog } from '../../context/ServiceCatalogContext';
 import { useSiteData } from '../../context/SiteDataContext';
 import {
   BookingPaymentMode,
@@ -28,7 +29,6 @@ import { colors } from '../../theme';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'BookingPayment'>;
 
-const SAMPLE_SERVICE_PRICE = 120;
 const APP_ICON = require('../../../assets/icon.png') as ImageSourcePropType;
 
 const PAYMENT_MODES: {
@@ -147,7 +147,21 @@ function PaymentModeCard({
 }
 
 function ClientPreview({ payment }: { payment: BookingPaymentSettings }) {
-  const preview = useMemo(() => computePreview(payment, SAMPLE_SERVICE_PRICE), [payment]);
+  const { catalogServices, getPrice, getStyleMeta } = useServiceCatalog();
+  const previewService = useMemo(() => {
+    const first = catalogServices[0];
+    if (!first) return { title: 'Your service', price: 0 };
+    const meta = getStyleMeta(first.id);
+    return {
+      title: meta?.title ?? first.name,
+      price: getPrice(first.id) || 0,
+    };
+  }, [catalogServices, getPrice, getStyleMeta]);
+
+  const preview = useMemo(
+    () => computePreview(payment, previewService.price),
+    [payment, previewService.price],
+  );
 
   return (
     <View style={styles.previewWrap}>
@@ -155,10 +169,10 @@ function ClientPreview({ payment }: { payment: BookingPaymentSettings }) {
       <View style={styles.styleCard}>
         <Image source={APP_ICON} style={styles.styleCardImage} resizeMode="cover" />
         <View style={styles.styleCardBody}>
-          <Text style={styles.styleCardTitle}>Sample service</Text>
+          <Text style={styles.styleCardTitle}>{previewService.title}</Text>
           <View style={styles.styleCardMid}>
-            <Text style={styles.styleCardMeta}>MEDIUM</Text>
-            <Text style={styles.styleCardPrice}>{formatMoney(SAMPLE_SERVICE_PRICE)}</Text>
+            <Text style={styles.styleCardMeta}>ESTIMATE</Text>
+            <Text style={styles.styleCardPrice}>{formatMoney(previewService.price)}</Text>
           </View>
           <View style={styles.styleCardPayment}>
             <View style={styles.styleCardPaymentRow}>

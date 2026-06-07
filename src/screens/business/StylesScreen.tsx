@@ -16,7 +16,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import ServiceImage from '../../components/ServiceImage';
 import { useServiceCatalog } from '../../context/ServiceCatalogContext';
 import { useSiteData } from '../../context/SiteDataContext';
 import { CatalogService, groupCatalogByCategory } from '../../data/serviceCatalog';
@@ -58,7 +57,7 @@ function StyleCard({
         <Image source={{ uri: coverUrl }} style={cardStyles.thumb} resizeMode="cover" />
       ) : (
         <View style={[cardStyles.thumb, cardStyles.thumbPlaceholder]}>
-          <ServiceImage styleId={service.id} size={40} radius={8} />
+          <Ionicons name="image-outline" size={22} color={colors.textMuted} />
         </View>
       )}
 
@@ -90,6 +89,7 @@ const cardStyles = StyleSheet.create({
     borderColor: colors.cardBorder,
     padding: 10,
     minHeight: 72,
+    marginBottom: 10,
   },
   cardPressed: { opacity: 0.7 },
   thumb: {
@@ -301,7 +301,7 @@ function EditModal({
   const [imageMimeType, setImageMimeType] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const coverUrl = service ? getCoverUrl(service.id) : null;
+  const coverUrl = service ? getCoverUrl(service.id, false) : null;
   const displayUri = localImageUri ?? coverUrl;
 
   const parsedPrice = Number(price.replace(/[^0-9.]/g, '')) || 0;

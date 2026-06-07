@@ -178,6 +178,24 @@ export async function uploadLogoImageFromUri(
   return uploadUserSiteImage(linkedSite.user_id, fileUri, 'logo', mimeType);
 }
 
+export async function uploadGalleryImageFromUri(
+  linkedSite: LinkedSite,
+  slot: number,
+  fileUri: string,
+  mimeType?: string | null,
+): Promise<string> {
+  return uploadUserSiteImage(linkedSite.user_id, fileUri, `gallery_${slot}`, mimeType);
+}
+
+export async function uploadStackImageFromUri(
+  linkedSite: LinkedSite,
+  slot: number,
+  fileUri: string,
+  mimeType?: string | null,
+): Promise<string> {
+  return uploadUserSiteImage(linkedSite.user_id, fileUri, `stack_${slot}`, mimeType);
+}
+
 export async function createManualBooking(
   linkedSite: LinkedSite,
   input: ManualBookingInput,

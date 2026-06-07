@@ -12,13 +12,40 @@ function json(body: unknown, status = 200) {
   });
 }
 
-async function stripeGet(path: string, stripeKey: string, accountId?: string) {
+type StripeResult<T> = { ok: true; data: T } | { ok: false; error: string };
+
+async function stripeGet<T = Record<string, unknown>>(
+  path: string,
+  stripeKey: string,
+  accountId?: string,
+): Promise<StripeResult<T>> {
   const headers: Record<string, string> = { Authorization: `Bearer ${stripeKey}` };
   if (accountId) headers['Stripe-Account'] = accountId;
   const res = await fetch(`https://api.stripe.com/v1${path}`, { headers });
-  if (!res.ok) return null;
-  return res.json();
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const message =
+      (body as { error?: { message?: string } })?.error?.message ??
+      `Stripe request failed (${res.status})`;
+    return { ok: false, error: message };
+  }
+  return { ok: true, data: body as T };
 }
+
+function sumUsdCents(buckets: { currency: string; amount: number }[] | undefined): number {
+  return (buckets ?? [])
+    .filter((b) => b.currency === 'usd')
+    .reduce((sum, b) => sum + b.amount, 0);
+}
+
+type StripePayout = {
+  id: string;
+  amount: number;
+  status: string;
+  arrival_date: number;
+  created: number;
+  description: string | null;
+};
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
@@ -52,62 +79,83 @@ Deno.serve(async (req) => {
       chargesEnabled: false,
       balanceAvailableCents: 0,
       balancePendingCents: 0,
+      balanceLive: false,
       bankAccount: null,
       recentPayouts: [],
     });
   }
 
   const acctId = row.stripe_account_id;
+  const checkedAt = new Date().toISOString();
 
-  // Fetch balance, bank accounts, and recent payouts in parallel.
-  // Always fetch balance if we have an account — don't gate on charges_enabled flag
-  // since the DB may be stale before the webhook fires.
-  const [balData, bankData, payoutData] = await Promise.all([
-    stripeGet('/balance', stripeKey, acctId),
-    stripeGet('/accounts/' + acctId + '/external_accounts?object=bank_account&limit=1', stripeKey),
-    stripeGet('/payouts?limit=10', stripeKey, acctId),
+  const [acctResult, balResult, bankResult, payoutResult] = await Promise.all([
+    stripeGet<{
+      payouts_enabled?: boolean;
+      charges_enabled?: boolean;
+      details_submitted?: boolean;
+    }>(`/accounts/${acctId}`, stripeKey),
+    stripeGet<{ available?: { currency: string; amount: number }[]; pending?: { currency: string; amount: number }[] }>(
+      '/balance',
+      stripeKey,
+      acctId,
+    ),
+    stripeGet<{ data?: Record<string, unknown>[] }>(
+      `/accounts/${acctId}/external_accounts?object=bank_account&limit=1`,
+      stripeKey,
+    ),
+    stripeGet<{ data?: StripePayout[] }>('/payouts?limit=10', stripeKey, acctId),
   ]);
+
+  let payoutsEnabled = row.payouts_enabled;
+  let chargesEnabled = row.charges_enabled;
+  let detailsSubmitted = row.details_submitted;
+
+  if (acctResult.ok) {
+    payoutsEnabled = acctResult.data.payouts_enabled === true;
+    chargesEnabled = acctResult.data.charges_enabled === true;
+    detailsSubmitted = acctResult.data.details_submitted === true;
+  }
 
   let availableCents = row.balance_available_cents ?? 0;
   let pendingCents = row.balance_pending_cents ?? 0;
+  let balanceLive = false;
+  let balanceError: string | undefined;
 
-  if (balData) {
-    availableCents = (balData.available || [])
-      .filter((b: { currency: string }) => b.currency === 'usd')
-      .reduce((sum: number, b: { amount: number }) => sum + b.amount, 0);
-    pendingCents = (balData.pending || [])
-      .filter((b: { currency: string }) => b.currency === 'usd')
-      .reduce((sum: number, b: { amount: number }) => sum + b.amount, 0);
-
-    await supabase.from('styld_stripe_accounts').update({
-      balance_available_cents: availableCents,
-      balance_pending_cents: pendingCents,
-      updated_at: new Date().toISOString(),
-    }).eq('user_id', user.id);
+  if (balResult.ok) {
+    availableCents = sumUsdCents(balResult.data.available);
+    pendingCents = sumUsdCents(balResult.data.pending);
+    balanceLive = true;
+  } else {
+    balanceError = balResult.error;
   }
 
-  // Extract the first linked bank account
-  const bankAccount = bankData?.data?.[0]
+  await supabase.from('styld_stripe_accounts').update({
+    onboarding_complete: detailsSubmitted,
+    payouts_enabled: payoutsEnabled,
+    charges_enabled: chargesEnabled,
+    details_submitted: detailsSubmitted,
+    ...(balanceLive
+      ? {
+          balance_available_cents: availableCents,
+          balance_pending_cents: pendingCents,
+        }
+      : {}),
+    updated_at: checkedAt,
+  }).eq('user_id', user.id);
+
+  const bankData = bankResult.ok ? bankResult.data.data?.[0] : null;
+  const bankAccount = bankData
     ? {
-        id: bankData.data[0].id as string,
-        bankName: (bankData.data[0].bank_name ?? 'Bank') as string,
-        last4: bankData.data[0].last4 as string,
-        routingNumber: bankData.data[0].routing_number as string,
-        accountHolderName: (bankData.data[0].account_holder_name ?? '') as string,
-        currency: (bankData.data[0].currency ?? 'usd') as string,
+        id: bankData.id as string,
+        bankName: (bankData.bank_name ?? 'Bank') as string,
+        last4: bankData.last4 as string,
+        routingNumber: bankData.routing_number as string,
+        accountHolderName: (bankData.account_holder_name ?? '') as string,
+        currency: (bankData.currency ?? 'usd') as string,
       }
     : null;
 
-  // Format recent payouts
-  type StripePayout = {
-    id: string;
-    amount: number;
-    status: string;
-    arrival_date: number;
-    created: number;
-    description: string | null;
-  };
-  const recentPayouts = (payoutData?.data ?? []).map((p: StripePayout) => ({
+  const recentPayouts = (payoutResult.ok ? payoutResult.data.data ?? [] : []).map((p: StripePayout) => ({
     id: p.id,
     amountCents: p.amount,
     status: p.status,
@@ -116,23 +164,24 @@ Deno.serve(async (req) => {
     description: p.description ?? 'Payout',
   }));
 
-  const status = row.payouts_enabled
+  const status = payoutsEnabled
     ? 'ready'
-    : row.details_submitted
+    : detailsSubmitted
       ? 'pending_review'
-      : row.stripe_account_id
-        ? 'onboarding'
-        : 'not_started';
+      : 'onboarding';
 
   return json({
     hasAccount: true,
     accountId: acctId,
     status,
-    payoutsEnabled: row.payouts_enabled,
-    chargesEnabled: row.charges_enabled,
-    detailsSubmitted: row.details_submitted,
+    payoutsEnabled,
+    chargesEnabled,
+    detailsSubmitted,
     balanceAvailableCents: availableCents,
     balancePendingCents: pendingCents,
+    balanceLive,
+    balanceCheckedAt: checkedAt,
+    balanceError,
     bankAccount,
     recentPayouts,
   });

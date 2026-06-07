@@ -234,7 +234,7 @@ export default function AccountOnboardingFlow({ onComplete }: Props) {
                 <Field
                   value={businessName}
                   onChangeText={setBusinessName}
-                  placeholder="Nadjae's Braids"
+                  placeholder="Your business name"
                   autoFocus
                 />
               </>

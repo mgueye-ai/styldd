@@ -41,15 +41,22 @@ export default function WalletBalanceSection({ onSummaryChange, showOnlyWhenActi
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [connectUrl, setConnectUrl] = useState<string | null>(null);
+  const [balanceError, setBalanceError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!hasLinkedSite) return;
     setLoading(true);
+    setBalanceError(null);
     try {
       const data = await fetchStripeConnectStatus();
       setSummary(data);
       onSummaryChange?.(data);
+      if (data.hasAccount && data.balanceLive === false) {
+        setBalanceError(data.balanceError ?? 'Could not verify balance with Stripe');
+      }
     } catch {
+      setSummary(null);
+      setBalanceError('Could not load payout account');
       onSummaryChange?.(null);
     } finally {
       setLoading(false);
@@ -65,7 +72,7 @@ export default function WalletBalanceSection({ onSummaryChange, showOnlyWhenActi
   const isReady = summary?.status === 'ready';
   const isPending = summary?.status === 'pending_review' || summary?.status === 'onboarding';
   const needsOnboarding = !summary?.hasAccount || summary?.status === 'not_started';
-  const canPayout = isReady && (summary?.balanceAvailableCents ?? 0) >= 100;
+  const canPayout = isReady && summary?.balanceLive !== false && (summary?.balanceAvailableCents ?? 0) >= 100;
   const masked = (cents: number) => (privacyMode ? '••••' : formatUsdFromCents(cents));
 
   async function handleSetupPayments() {
@@ -111,6 +118,10 @@ export default function WalletBalanceSection({ onSummaryChange, showOnlyWhenActi
 
   async function handlePayout() {
     const cents = summary?.balanceAvailableCents ?? 0;
+    if (summary?.balanceLive === false) {
+      Alert.alert('Balance unavailable', 'We could not verify your live balance with Stripe. Tap the amount to refresh and try again.');
+      return;
+    }
     if (cents < 100) {
       Alert.alert('Nothing to withdraw', 'Available balance must be at least $1.00.');
       return;
@@ -175,6 +186,7 @@ export default function WalletBalanceSection({ onSummaryChange, showOnlyWhenActi
             {(summary?.balancePendingCents ?? 0) > 0
               ? ` · ${masked(summary?.balancePendingCents ?? 0)} processing`
               : ''}
+            {balanceError ? ' · could not verify' : ''}
           </Text>
         )}
 

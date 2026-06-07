@@ -1,5 +1,7 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import ScreenGradient from '../components/ScreenGradient';
 import { Client } from '../data/clients';
@@ -68,6 +70,14 @@ function Divider() {
 export default function ClientListScreen({ navigation }: Props) {
   const { privacyMode } = usePrivacyMode();
   const { clients, hasLinkedSite, isLoading } = useSiteData();
+  const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+
+  const filtered = query.trim()
+    ? clients.filter((c) =>
+        c.name.toLowerCase().includes(query.toLowerCase()),
+      )
+    : clients;
 
   return (
     <View style={styles.container}>
@@ -75,12 +85,48 @@ export default function ClientListScreen({ navigation }: Props) {
 
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
-          <Text style={styles.title}>Clients</Text>
-          <Text style={styles.subtitle}>
-            {hasLinkedSite
-              ? `${clients.length} client${clients.length === 1 ? '' : 's'}`
-              : 'Link a site to load clients'}
-          </Text>
+          <View style={styles.headerTop}>
+            <View>
+              <Text style={styles.title}>Clients</Text>
+              <Text style={styles.subtitle}>
+                {hasLinkedSite
+                  ? `${filtered.length} client${filtered.length === 1 ? '' : 's'}`
+                  : 'Link a site to load clients'}
+              </Text>
+            </View>
+            <Pressable
+              hitSlop={10}
+              onPress={() => { setSearchOpen((o) => !o); if (searchOpen) setQuery(''); }}
+              style={styles.searchToggle}
+            >
+              <Ionicons
+                name={searchOpen ? 'close' : 'search'}
+                size={20}
+                color={searchOpen ? colors.accentPink : colors.textMuted}
+              />
+            </Pressable>
+          </View>
+
+          {searchOpen && (
+            <View style={styles.searchBar}>
+              <Ionicons name="search" size={15} color={colors.textMuted} />
+              <TextInput
+                style={styles.searchInput}
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search clients…"
+                placeholderTextColor={colors.textMuted}
+                autoFocus
+                autoCapitalize="words"
+                returnKeyType="search"
+              />
+              {query.length > 0 && (
+                <Pressable hitSlop={8} onPress={() => setQuery('')}>
+                  <Ionicons name="close-circle" size={15} color={colors.textMuted} />
+                </Pressable>
+              )}
+            </View>
+          )}
         </View>
 
         {!hasLinkedSite ? (
@@ -97,9 +143,14 @@ export default function ClientListScreen({ navigation }: Props) {
             <Text style={styles.emptyTitle}>No clients yet</Text>
             <Text style={styles.emptyText}>Bookings from your linked site will appear here.</Text>
           </View>
+        ) : filtered.length === 0 ? (
+          <View style={styles.emptyWrap}>
+            <Text style={styles.emptyTitle}>No results</Text>
+            <Text style={styles.emptyText}>No clients match "{query}"</Text>
+          </View>
         ) : (
           <FlatList
-            data={clients}
+            data={filtered}
             keyExtractor={(item) => item.id}
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listPad}
@@ -134,6 +185,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 16,
+    gap: 12,
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
   },
   title: {
     color: colors.text,
@@ -145,6 +202,28 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 14,
     fontWeight: '500',
+  },
+  searchToggle: {
+    marginTop: 6,
+    padding: 4,
+  },
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+  },
+  searchInput: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '500',
+    padding: 0,
   },
   listPad: {
     paddingHorizontal: 16,

@@ -34,6 +34,10 @@ export type StripeConnectSummary = {
   detailsSubmitted?: boolean;
   balanceAvailableCents: number;
   balancePendingCents: number;
+  /** True when available/pending were read live from Stripe on this request */
+  balanceLive?: boolean;
+  balanceCheckedAt?: string;
+  balanceError?: string;
   bankAccount?: StripeBankAccount | null;
   recentPayouts?: StripePayout[];
   error?: string;

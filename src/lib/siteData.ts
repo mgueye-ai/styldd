@@ -490,6 +490,57 @@ function getPaidAmount(booking: SiteBookingRecord): number {
   return booking.depositAmount > 0 ? booking.depositAmount : booking.price;
 }
 
+function getUnpaidAmount(booking: SiteBookingRecord): number {
+  const ps = booking.paymentStatus.toLowerCase().trim();
+  if (ps === 'in_person') return 0;
+  if (getPaidAmount(booking) > 0) return 0;
+  return booking.depositAmount > 0 ? booking.depositAmount : booking.price;
+}
+
+export type MoneyStats = {
+  collected: number;
+  pending: number;
+  paidBookings: number;
+  pendingBookings: number;
+};
+
+export function getMoneyStatsForLastDaysFromBookings(
+  snapshot: SiteDataSnapshot,
+  days: number,
+): MoneyStats {
+  const end = endOfDay(new Date());
+  const start = startOfDay(addDays(new Date(), -(days - 1)));
+
+  const inPeriod = snapshot.bookings.filter((booking) => {
+    if (booking.bookingStatus === 'cancelled' || booking.bookingStatus === 'canceled') {
+      return false;
+    }
+    const date = startOfDay(booking.createdAt);
+    return date >= start && date <= end;
+  });
+
+  let collected = 0;
+  let pending = 0;
+  let paidBookings = 0;
+  let pendingBookings = 0;
+
+  for (const booking of inPeriod) {
+    const paid = getPaidAmount(booking);
+    if (paid > 0) {
+      collected += paid;
+      paidBookings += 1;
+      continue;
+    }
+    const unpaid = getUnpaidAmount(booking);
+    if (unpaid > 0) {
+      pending += unpaid;
+      pendingBookings += 1;
+    }
+  }
+
+  return { collected, pending, paidBookings, pendingBookings };
+}
+
 export function getRevenueForPeriodFromBookings(
   snapshot: SiteDataSnapshot,
   period: Period,

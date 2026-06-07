@@ -79,7 +79,13 @@
     };
 
     function normalizeBookingPayment(raw) {
-      var defaults = { mode: 'deposit', depositKind: 'percent', depositValue: 10 };
+      var defaults = {
+        mode: 'deposit',
+        depositKind: 'percent',
+        depositValue: 10,
+        requireCurrentHairPhoto: true,
+        requireReferencePhoto: false,
+      };
       if (!raw || typeof raw !== 'object') return defaults;
       var mode = raw.mode === 'full' || raw.mode === 'deposit' || raw.mode === 'in_person' ? raw.mode : defaults.mode;
       var depositKind =
@@ -93,7 +99,21 @@
       } else {
         depositValue = Math.max(0, Math.round(depositValue * 100) / 100);
       }
-      return { mode: mode, depositKind: depositKind, depositValue: depositValue };
+      var requireCurrentHairPhoto =
+        typeof raw.requireCurrentHairPhoto === 'boolean'
+          ? raw.requireCurrentHairPhoto
+          : defaults.requireCurrentHairPhoto;
+      var requireReferencePhoto =
+        typeof raw.requireReferencePhoto === 'boolean'
+          ? raw.requireReferencePhoto
+          : defaults.requireReferencePhoto;
+      return {
+        mode: mode,
+        depositKind: depositKind,
+        depositValue: depositValue,
+        requireCurrentHairPhoto: requireCurrentHairPhoto,
+        requireReferencePhoto: requireReferencePhoto,
+      };
     }
 
     window.__SALON_SITE_BOOKING = Object.assign({}, window.__SALON_SITE_BOOKING || {}, {

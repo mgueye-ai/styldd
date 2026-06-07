@@ -196,7 +196,7 @@ export default function AccountSettingsScreen({ navigation }: Props) {
 
             {/* ── Profile (auto-saves) ── */}
             <Text style={styles.sectionLabel}>Profile</Text>
-            <LineField label="Business name" value={businessName} onChangeText={handleBusinessName} placeholder="e.g. Gaelle's Hair Studio" autoCapitalize="words" />
+            <LineField label="Business name" value={businessName} onChangeText={handleBusinessName} placeholder="Your business name" autoCapitalize="words" />
             <LineField label="Your name" value={fullName} onChangeText={handleFullName} placeholder="Your full name" autoCapitalize="words" />
 
             {/* ── Email ── */}

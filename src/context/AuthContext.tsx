@@ -1,5 +1,6 @@
 import { Session, User } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { supabase } from '../lib/supabase';
 
 export type StyldProfile = {
@@ -21,6 +22,7 @@ type AuthContextValue = {
   clearNewSignUp: () => void;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
+  signInWithApple: () => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   updateProfile: (patch: {
@@ -158,6 +160,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error?.message ?? null };
   };
 
+  const signInWithApple = async (): Promise<{ error: string | null }> => {
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+
+      if (!credential.identityToken) {
+        return { error: 'Apple sign-in failed. No identity token received.' };
+      }
+
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: 'apple',
+        token: credential.identityToken,
+      });
+
+      if (error) return { error: error.message };
+
+      // Detect new user: created_at within last 10 seconds
+      if (data.user) {
+        const createdMs = new Date(data.user.created_at).getTime();
+        if (Date.now() - createdMs < 10_000) {
+          // Patch full name from Apple if provided
+          const givenName = credential.fullName?.givenName ?? '';
+          const familyName = credential.fullName?.familyName ?? '';
+          const fullName = [givenName, familyName].filter(Boolean).join(' ');
+          if (fullName) {
+            await supabase.auth.updateUser({ data: { full_name: fullName } });
+          }
+          setIsNewSignUp(true);
+        }
+      }
+
+      return { error: null };
+    } catch (e: unknown) {
+      if (
+        e &&
+        typeof e === 'object' &&
+        'code' in e &&
+        (e as { code: string }).code === 'ERR_REQUEST_CANCELED'
+      ) {
+        return { error: null }; // user cancelled — not an error
+      }
+      const msg = e instanceof Error ? e.message : 'Apple sign-in failed.';
+      return { error: msg };
+    }
+  };
+
   const signOut = async () => {
     await supabase.auth.signOut();
     setProfile(null);
@@ -194,6 +246,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       clearNewSignUp,
       signIn,
       signUp,
+      signInWithApple,
       signOut,
       refreshProfile,
       updateProfile,

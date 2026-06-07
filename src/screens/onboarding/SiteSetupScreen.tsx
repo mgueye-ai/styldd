@@ -276,7 +276,7 @@ export default function SiteSetupScreen({ navigation }: Props) {
                 <CenteredField
                   value={businessName}
                   onChangeText={setBusinessName}
-                  placeholder="Nadjae's Braids"
+                  placeholder="Your business name"
                   autoFocus
                 />
               </>

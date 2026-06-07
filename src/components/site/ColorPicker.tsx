@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Modal,
   Pressable,
   ScrollView,
@@ -11,6 +12,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ColorPicker as WheelPicker, useColor } from 'react-native-color-picker-palette';
+import * as ImagePicker from 'expo-image-picker';
+import { WebView } from 'react-native-webview';
 import { colors } from '../../theme';
 
 // ─── Color palettes ───────────────────────────────────────────────────────────
@@ -186,6 +189,15 @@ export function getContrastColor(hex: string): string {
   return luminance > 0.5 ? '#000000' : '#ffffff';
 }
 
+function normalizeHex(raw: string): string | null {
+  const h = (raw ?? '').trim();
+  const full = h.startsWith('#') ? h : `#${h}`;
+  // Accept 6-digit or 8-digit (strip alpha)
+  if (/^#[0-9a-fA-F]{8}$/.test(full)) return full.slice(0, 7).toLowerCase();
+  if (/^#[0-9a-fA-F]{6}$/.test(full)) return full.toLowerCase();
+  return null;
+}
+
 function findColorName(hex: string, groups: ColorGroup[]): string | null {
   const normalized = hex.toLowerCase();
   for (const group of groups) {
@@ -194,6 +206,62 @@ function findColorName(hex: string, groups: ColorGroup[]): string | null {
     }
   }
   return null;
+}
+
+// ─── Image picker HTML ────────────────────────────────────────────────────────
+
+function buildImagePickerHtml(base64: string, mimeType: string): string {
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"/>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#111;display:flex;align-items:center;justify-content:center;height:100vh;overflow:hidden}
+canvas{display:block;max-width:100vw;max-height:85vh;cursor:crosshair;touch-action:none}
+#swatch{position:fixed;top:14px;right:14px;width:52px;height:52px;border-radius:50%;border:3px solid #fff;box-shadow:0 2px 12px rgba(0,0,0,0.55);transition:background 0.08s}
+#hexlabel{position:fixed;top:18px;right:76px;background:rgba(0,0,0,0.72);color:#fff;padding:9px 13px;border-radius:999px;font:700 13px/1 monospace;letter-spacing:.5px}
+#hint{position:fixed;bottom:20px;left:0;right:0;text-align:center;color:#fff;font:600 13px/1 system-ui;text-shadow:0 1px 5px rgba(0,0,0,0.8);opacity:.85}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="swatch" style="background:#888"></div>
+<div id="hexlabel">#888888</div>
+<div id="hint">Tap anywhere to pick a color</div>
+<script>
+var c=document.getElementById('c');
+var ctx=c.getContext('2d');
+var swatch=document.getElementById('swatch');
+var hexlabel=document.getElementById('hexlabel');
+var img=new Image();
+img.onload=function(){
+  c.width=img.naturalWidth;c.height=img.naturalHeight;
+  ctx.drawImage(img,0,0);
+};
+img.src='data:${mimeType};base64,${base64}';
+function getHex(cx,cy){
+  var px=ctx.getImageData(Math.round(Math.max(0,cx)),Math.round(Math.max(0,cy)),1,1).data;
+  return '#'+[px[0],px[1],px[2]].map(function(v){return v.toString(16).padStart(2,'0');}).join('');
+}
+function pick(clientX,clientY){
+  var r=c.getBoundingClientRect();
+  var x=(clientX-r.left)*(c.width/r.width);
+  var y=(clientY-r.top)*(c.height/r.height);
+  var hex=getHex(x,y);
+  swatch.style.background=hex;
+  hexlabel.textContent=hex.toUpperCase();
+  window.ReactNativeWebView.postMessage(JSON.stringify({type:'pick',hex:hex}));
+}
+c.addEventListener('click',function(e){pick(e.clientX,e.clientY);});
+c.addEventListener('touchend',function(e){
+  e.preventDefault();
+  var t=e.changedTouches[0];
+  if(t)pick(t.clientX,t.clientY);
+},{passive:false});
+</script>
+</body>
+</html>`;
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -205,66 +273,203 @@ type ColorPickerProps = {
   onChange: (color: string) => void;
 };
 
-// ─── Component ────────────────────────────────────────────────────────────────
+type CustomMode = 'hex' | 'wheel' | 'image';
 
-function WheelSection({ value, onApply }: { value: string; onApply: (hex: string) => void }) {
+// ─── Real-time wheel section ──────────────────────────────────────────────────
+
+function WheelSection({ value, onLiveChange }: { value: string; onLiveChange: (hex: string) => void }) {
   const [wheelColor, setWheelColor] = useColor(value);
+
+  const handleChange = useCallback(
+    (c: typeof wheelColor) => {
+      setWheelColor(c);
+      const hex = normalizeHex(c.hex);
+      if (hex) onLiveChange(hex);
+    },
+    [setWheelColor, onLiveChange],
+  );
+
   return (
     <View style={wheelStyles.wrap}>
       <WheelPicker
         color={wheelColor}
-        onColorChange={setWheelColor}
-        hideControls={false}
+        onColorChange={handleChange}
+        hideControls
         style={wheelStyles.picker}
       />
-      <Pressable
-        style={wheelStyles.applyBtn}
-        onPress={() => onApply(wheelColor.hex)}
-      >
-        <View style={[wheelStyles.applyPreview, { backgroundColor: wheelColor.hex }]} />
-        <Text style={wheelStyles.applyText}>Use this color</Text>
-      </Pressable>
+      <View style={[wheelStyles.livePreview, { backgroundColor: wheelColor.hex }]}>
+        <Text style={[wheelStyles.liveHex, { color: getContrastColor(wheelColor.hex) }]}>
+          {(normalizeHex(wheelColor.hex) ?? '').toUpperCase()}
+        </Text>
+      </View>
     </View>
   );
 }
 
 const wheelStyles = StyleSheet.create({
-  wrap: {
-    marginBottom: 8,
-  },
-  picker: {
-    height: 280,
-  },
-  applyBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: colors.card,
+  wrap: { marginBottom: 8 },
+  picker: { height: 280 },
+  livePreview: {
     borderRadius: 14,
     padding: 14,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    marginTop: 8,
+    marginTop: 10,
+    alignItems: 'center',
   },
-  applyPreview: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
-  },
-  applyText: {
-    color: colors.text,
+  liveHex: {
     fontSize: 14,
     fontWeight: '700',
-    flex: 1,
+    letterSpacing: 1,
   },
 });
+
+// ─── Image eyedropper section ─────────────────────────────────────────────────
+
+function ImageSection({ onPick }: { onPick: (hex: string) => void }) {
+  const [imageHtml, setImageHtml] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [picked, setPicked] = useState<string | null>(null);
+
+  const handlePickImage = async () => {
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) return;
+    setLoading(true);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false,
+        quality: 0.4,
+        base64: true,
+      });
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0];
+        const base64 = asset.base64 ?? '';
+        const mime = asset.mimeType ?? 'image/jpeg';
+        setImageHtml(buildImagePickerHtml(base64, mime));
+        setPicked(null);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMessage = useCallback(
+    (event: { nativeEvent: { data: string } }) => {
+      try {
+        const msg = JSON.parse(event.nativeEvent.data);
+        if (msg.type === 'pick' && msg.hex) {
+          const hex = normalizeHex(msg.hex);
+          if (hex) {
+            setPicked(hex);
+            onPick(hex);
+          }
+        }
+      } catch {}
+    },
+    [onPick],
+  );
+
+  if (imageHtml) {
+    return (
+      <View style={imgStyles.wrap}>
+        <View style={imgStyles.header}>
+          <Text style={imgStyles.headerText}>Tap any color in your photo</Text>
+          <Pressable onPress={() => setImageHtml(null)} style={imgStyles.changeBtn}>
+            <Text style={imgStyles.changeBtnText}>Change photo</Text>
+          </Pressable>
+        </View>
+        <View style={imgStyles.webviewWrap}>
+          <WebView
+            source={{ html: imageHtml }}
+            style={imgStyles.webview}
+            scrollEnabled={false}
+            onMessage={handleMessage}
+            originWhitelist={['*']}
+          />
+        </View>
+        {picked && (
+          <View style={[imgStyles.pickedRow, { backgroundColor: picked }]}>
+            <Text style={[imgStyles.pickedText, { color: getContrastColor(picked) }]}>
+              {picked.toUpperCase()} picked
+            </Text>
+          </View>
+        )}
+      </View>
+    );
+  }
+
+  return (
+    <Pressable style={imgStyles.uploadBtn} onPress={handlePickImage} disabled={loading}>
+      {loading ? (
+        <ActivityIndicator color={colors.accentPink} />
+      ) : (
+        <>
+          <Ionicons name="image-outline" size={22} color={colors.accentPink} />
+          <Text style={imgStyles.uploadText}>Pick a color from a photo</Text>
+          <Text style={imgStyles.uploadSub}>Tap any spot in your image to grab that exact color</Text>
+        </>
+      )}
+    </Pressable>
+  );
+}
+
+const imgStyles = StyleSheet.create({
+  wrap: { marginBottom: 8 },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  headerText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
+  changeBtn: {
+    backgroundColor: colors.card,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  changeBtnText: { color: colors.text, fontSize: 12, fontWeight: '600' },
+  webviewWrap: {
+    height: 260,
+    borderRadius: 18,
+    overflow: 'hidden',
+    backgroundColor: '#111',
+  },
+  webview: { flex: 1, backgroundColor: 'transparent' },
+  pickedRow: {
+    marginTop: 8,
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+  },
+  pickedText: { fontSize: 14, fontWeight: '700', letterSpacing: 0.8 },
+  uploadBtn: {
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.accentPinkBorder,
+    borderStyle: 'dashed',
+    padding: 20,
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  uploadText: { color: colors.text, fontSize: 14, fontWeight: '700' },
+  uploadSub: {
+    color: colors.textMuted,
+    fontSize: 12,
+    textAlign: 'center',
+    lineHeight: 17,
+  },
+});
+
+// ─── Main component ───────────────────────────────────────────────────────────
 
 export default function ColorPicker({ label, value, presets, onChange }: ColorPickerProps) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(value);
-  const [showWheel, setShowWheel] = useState(false);
+  const [customMode, setCustomMode] = useState<CustomMode>('hex');
 
   const groups =
     presets === 'primary' ? PRIMARY_GROUPS :
@@ -275,21 +480,36 @@ export default function ColorPicker({ label, value, presets, onChange }: ColorPi
   const contrastColor = getContrastColor(value);
 
   const handleSelect = (hex: string) => {
-    setDraft(hex);
-    onChange(hex);
+    const clean = normalizeHex(hex);
+    if (!clean) return;
+    setDraft(clean);
+    onChange(clean);
     setOpen(false);
-    setShowWheel(false);
+    setCustomMode('hex');
   };
 
+  const handleLiveChange = useCallback(
+    (hex: string) => {
+      const clean = normalizeHex(hex);
+      if (clean) { setDraft(clean); onChange(clean); }
+    },
+    [onChange],
+  );
+
   const handleHexSubmit = () => {
-    const clean = draft.trim();
-    const hex = clean.startsWith('#') ? clean : `#${clean}`;
-    if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
-      onChange(hex);
+    const clean = normalizeHex(draft);
+    if (clean) {
+      onChange(clean);
       setOpen(false);
-      setShowWheel(false);
+      setCustomMode('hex');
     }
   };
+
+  const MODE_BUTTONS: { id: CustomMode; icon: string; label: string }[] = [
+    { id: 'hex', icon: 'code-outline', label: 'Hex' },
+    { id: 'wheel', icon: 'color-filter-outline', label: 'Wheel' },
+    { id: 'image', icon: 'image-outline', label: 'Photo' },
+  ];
 
   return (
     <>
@@ -309,17 +529,23 @@ export default function ColorPicker({ label, value, presets, onChange }: ColorPi
       </Pressable>
 
       {/* Sheet modal */}
-      <Modal visible={open} animationType="slide" transparent onRequestClose={() => { setOpen(false); setShowWheel(false); }}>
+      <Modal
+        visible={open}
+        animationType="slide"
+        transparent
+        onRequestClose={() => { setOpen(false); setCustomMode('hex'); }}
+      >
         <SafeAreaView style={styles.modalBg} edges={['bottom']}>
           <View style={styles.sheet}>
-
-            {/* Handle */}
             <View style={styles.handle} />
 
-            {/* Header */}
             <View style={styles.sheetHeader}>
               <Text style={styles.sheetTitle}>{label}</Text>
-              <Pressable onPress={() => { setOpen(false); setShowWheel(false); }} hitSlop={10} style={styles.closeBtn}>
+              <Pressable
+                onPress={() => { setOpen(false); setCustomMode('hex'); }}
+                hitSlop={10}
+                style={styles.closeBtn}
+              >
                 <Ionicons name="close" size={20} color={colors.text} />
               </Pressable>
             </View>
@@ -336,7 +562,7 @@ export default function ColorPicker({ label, value, presets, onChange }: ColorPi
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
-              {/* Grouped swatches */}
+              {/* Palette swatches */}
               {groups.map((group) => (
                 <View key={group.label} style={styles.group}>
                   <Text style={styles.groupLabel}>{group.label}</Text>
@@ -357,11 +583,7 @@ export default function ColorPicker({ label, value, presets, onChange }: ColorPi
                             ]}
                           >
                             {active && (
-                              <Ionicons
-                                name="checkmark"
-                                size={18}
-                                color={getContrastColor(swatch.hex)}
-                              />
+                              <Ionicons name="checkmark" size={18} color={getContrastColor(swatch.hex)} />
                             )}
                           </View>
                           <Text
@@ -377,33 +599,48 @@ export default function ColorPicker({ label, value, presets, onChange }: ColorPi
                 </View>
               ))}
 
-              {/* Custom color */}
+              {/* Custom section */}
               <View style={styles.customHeader}>
                 <Text style={styles.groupLabel}>Custom</Text>
-                <Pressable
-                  style={[styles.toggleBtn, showWheel && styles.toggleBtnActive]}
-                  onPress={() => setShowWheel((v) => !v)}
-                >
-                  <Ionicons
-                    name="color-filter-outline"
-                    size={14}
-                    color={showWheel ? colors.accentPink : colors.textMuted}
-                  />
-                  <Text style={[styles.toggleBtnText, showWheel && styles.toggleBtnTextActive]}>
-                    Color wheel
-                  </Text>
-                </Pressable>
+                <View style={styles.modeBar}>
+                  {MODE_BUTTONS.map((btn) => (
+                    <Pressable
+                      key={btn.id}
+                      style={[styles.modeBtn, customMode === btn.id && styles.modeBtnActive]}
+                      onPress={() => setCustomMode(btn.id)}
+                    >
+                      <Ionicons
+                        name={btn.icon as any}
+                        size={14}
+                        color={customMode === btn.id ? colors.accentPink : colors.textMuted}
+                      />
+                      <Text style={[styles.modeBtnText, customMode === btn.id && styles.modeBtnTextActive]}>
+                        {btn.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
               </View>
 
-              {showWheel ? (
-                <WheelSection value={value} onApply={handleSelect} />
-              ) : (
+              {customMode === 'wheel' && (
+                <WheelSection value={value} onLiveChange={handleLiveChange} />
+              )}
+
+              {customMode === 'image' && (
+                <ImageSection onPick={handleLiveChange} />
+              )}
+
+              {customMode === 'hex' && (
                 <View style={styles.hexRow}>
                   <View style={[styles.hexPreview, { backgroundColor: draft }]} />
                   <TextInput
                     style={styles.hexInput}
                     value={draft}
-                    onChangeText={setDraft}
+                    onChangeText={(t) => {
+                      setDraft(t);
+                      const h = normalizeHex(t);
+                      if (h) onChange(h);
+                    }}
                     placeholder="#a855f7"
                     placeholderTextColor={colors.textMuted}
                     autoCapitalize="none"
@@ -429,7 +666,6 @@ export default function ColorPicker({ label, value, presets, onChange }: ColorPi
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  // Trigger row
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -448,31 +684,12 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.08)',
   },
-  rowText: {
-    flex: 1,
-    gap: 3,
-  },
-  rowLabel: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  rowSub: {
-    color: colors.textMuted,
-    fontSize: 13,
-  },
-  rowRight: {
-    alignItems: 'flex-end',
-    gap: 2,
-  },
-  rowHex: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
+  rowText: { flex: 1, gap: 3 },
+  rowLabel: { color: colors.text, fontSize: 14, fontWeight: '700' },
+  rowSub: { color: colors.textMuted, fontSize: 13 },
+  rowRight: { alignItems: 'flex-end', gap: 2 },
+  rowHex: { color: colors.textMuted, fontSize: 11, fontWeight: '600', letterSpacing: 0.5 },
 
-  // Modal
   modalBg: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -484,7 +701,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 28,
     paddingTop: 10,
     paddingBottom: 8,
-    maxHeight: '88%',
+    maxHeight: '92%',
   },
   handle: {
     width: 36,
@@ -501,12 +718,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 16,
   },
-  sheetTitle: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
+  sheetTitle: { color: colors.text, fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
   closeBtn: {
     width: 32,
     height: 32,
@@ -515,8 +727,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-
-  // Preview bar
   preview: {
     marginHorizontal: 20,
     borderRadius: 16,
@@ -526,25 +736,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  previewName: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  previewHex: {
-    fontSize: 13,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
+  previewName: { fontSize: 16, fontWeight: '800' },
+  previewHex: { fontSize: 13, fontWeight: '600', letterSpacing: 0.5 },
 
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 32,
-  },
+  scrollContent: { paddingHorizontal: 20, paddingBottom: 32 },
 
-  // Groups
-  group: {
-    marginBottom: 20,
-  },
+  group: { marginBottom: 20 },
   groupLabel: {
     color: colors.textMuted,
     fontSize: 11,
@@ -553,15 +750,8 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     marginBottom: 10,
   },
-  swatchRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  swatchWrap: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 5,
-  },
+  swatchRow: { flexDirection: 'row', gap: 8 },
+  swatchWrap: { flex: 1, alignItems: 'center', gap: 5 },
   swatch: {
     width: '100%',
     aspectRatio: 1,
@@ -571,10 +761,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  swatchActive: {
-    borderColor: colors.text,
-    borderWidth: 2.5,
-  },
+  swatchActive: { borderColor: colors.text, borderWidth: 2.5 },
   swatchName: {
     color: colors.textMuted,
     fontSize: 10,
@@ -582,43 +769,35 @@ const styles = StyleSheet.create({
     lineHeight: 13,
     fontWeight: '500',
   },
-  swatchNameActive: {
-    color: colors.text,
-    fontWeight: '700',
-  },
+  swatchNameActive: { color: colors.text, fontWeight: '700' },
 
-  // Custom section header
   customHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 12,
   },
-  toggleBtn: {
+  modeBar: {
+    flexDirection: 'row',
+    backgroundColor: colors.navbar,
+    borderRadius: 10,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: colors.navbarBorder,
+    gap: 2,
+  },
+  modeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: colors.card,
-    borderRadius: 999,
+    gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
+    borderRadius: 8,
   },
-  toggleBtnActive: {
-    borderColor: colors.accentPinkBorder,
-    backgroundColor: colors.accentPinkMuted,
-  },
-  toggleBtnText: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  toggleBtnTextActive: {
-    color: colors.accentPink,
-  },
+  modeBtnActive: { backgroundColor: colors.card },
+  modeBtnText: { color: colors.textMuted, fontSize: 12, fontWeight: '600' },
+  modeBtnTextActive: { color: colors.accentPink },
 
-  // Custom hex
   hexRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -650,9 +829,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 11,
   },
-  hexApplyText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '700',
-  },
+  hexApplyText: { color: '#fff', fontSize: 14, fontWeight: '700' },
 });

@@ -41,67 +41,9 @@ const TAB_WIDTH = SWITCHER_WIDTH / 2;
 
 type SiteTab = 'site' | 'analytics';
 
-function WeekBar({ value, label, maxVal }: { value: number; label: string; maxVal: number }) {
-  const BAR_MAX = 100;
-  const height = Math.round((value / maxVal) * BAR_MAX);
-  return (
-    <View style={chartStyles.barGroup}>
-      <Text style={chartStyles.barValue}>{value}</Text>
-      <View style={chartStyles.barTrack}>
-        <View style={[chartStyles.barFill, { height }]} />
-      </View>
-      <Text style={chartStyles.barLabel}>{label}</Text>
-    </View>
-  );
-}
-
-const chartStyles = StyleSheet.create({
-  barGroup: {
-    alignItems: 'center',
-    gap: 4,
-  },
-  barValue: {
-    color: colors.textMuted,
-    fontSize: 9,
-    fontWeight: '600',
-  },
-  barTrack: {
-    width: 22,
-    height: 100,
-    borderRadius: 6,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
-  },
-  barFill: {
-    width: '100%',
-    borderRadius: 6,
-    backgroundColor: colors.chartBlue,
-    opacity: 0.85,
-  },
-  barLabel: {
-    color: colors.textMuted,
-    fontSize: 10,
-    fontWeight: '600',
-  },
-});
-
-function StatTile({ icon, label, value, sub }: {
-  icon: keyof typeof Ionicons.glyphMap;
-  label: string;
-  value: string;
-  sub?: string;
-}) {
-  return (
-    <View style={styles.statTile}>
-      <View style={styles.statTileIcon}>
-        <Ionicons name={icon} size={16} color={colors.chartBlue} />
-      </View>
-      <Text style={styles.statTileValue}>{value}</Text>
-      <Text style={styles.statTileLabel}>{label}</Text>
-      {sub ? <Text style={styles.statTileSub}>{sub}</Text> : null}
-    </View>
-  );
+function formatMoney(amount: number): string {
+  if (!Number.isFinite(amount) || amount <= 0) return '$0';
+  return `$${Math.round(amount).toLocaleString()}`;
 }
 
 const WEBVIEW_HEIGHT = Math.round(Dimensions.get('window').height * 0.70);
@@ -209,7 +151,7 @@ function SitePreviewPanel({ loading }: { loading: boolean }) {
 type AnalyticsPeriod = '7d' | '30d';
 
 export default function SiteScreen({ navigation }: Props) {
-  const { isLoading } = useSiteData();
+  const { isLoading, hasLinkedSite, getMoneyStatsForLastDays } = useSiteData();
   const { needsSetup, isLoading: onboardingLoading, sitePublish } = useOnboarding();
   const [activeTab, setActiveTab] = useState<SiteTab>('site');
   const [analyticsPeriod, setAnalyticsPeriod] = useState<AnalyticsPeriod>('7d');
@@ -221,31 +163,22 @@ export default function SiteScreen({ navigation }: Props) {
     useCallback(() => {
       if (activeTab !== 'analytics') return;
       setAnalyticsLoading(true);
-      fetchAnalyticsSummary()
+      fetchAnalyticsSummary(analyticsPeriod === '7d' ? 7 : 30)
         .then((d) => setAnalyticsData(d))
         .catch(() => {})
         .finally(() => setAnalyticsLoading(false));
-    }, [activeTab]),
+    }, [activeTab, analyticsPeriod]),
   );
 
-  // Build chart data from dailyTrend
-  const chartPoints = useMemo(() => {
-    const trend = analyticsData?.dailyTrend ?? [];
-    if (analyticsPeriod === '7d') return trend.slice(-7);
-    // 30d: group into 6 blocks of 5 days for readability
-    const blocks: { label: string; views: number }[] = [];
-    for (let i = 0; i < 30; i += 5) {
-      const slice = trend.slice(i, i + 5);
-      const views = slice.reduce((s, d) => s + d.views, 0);
-      const label = slice[0]?.date.slice(5) ?? '';
-      blocks.push({ label, views });
-    }
-    return blocks;
-  }, [analyticsData, analyticsPeriod]);
+  const periodDays = analyticsPeriod === '7d' ? 7 : 30;
+  const moneyStats = useMemo(
+    () => getMoneyStatsForLastDays(periodDays),
+    [getMoneyStatsForLastDays, periodDays],
+  );
 
-  const maxChartValue = Math.max(1, ...chartPoints.map((p) => p.views));
-  const totalViews    = analyticsPeriod === '7d' ? (analyticsData?.views7d ?? 0)    : (analyticsData?.views30d ?? 0);
-  const totalSessions = analyticsPeriod === '7d' ? (analyticsData?.sessions7d ?? 0) : (analyticsData?.sessions30d ?? 0);
+  const totalViews    = analyticsData?.total_views ?? 0;
+  const profileViews  = analyticsData?.profile_views ?? 0;
+  const bookingViews  = analyticsData?.booking_views ?? 0;
 
   const switchTab = (tab: SiteTab) => {
     setActiveTab(tab);
@@ -257,7 +190,7 @@ export default function SiteScreen({ navigation }: Props) {
     }).start();
     if (tab === 'analytics' && !analyticsData) {
       setAnalyticsLoading(true);
-      fetchAnalyticsSummary()
+      fetchAnalyticsSummary(analyticsPeriod === '7d' ? 7 : 30)
         .then((d) => setAnalyticsData(d))
         .catch(() => {})
         .finally(() => setAnalyticsLoading(false));
@@ -346,161 +279,126 @@ export default function SiteScreen({ navigation }: Props) {
           </ScrollView>
         )
       ) : (
-        <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-          <View style={styles.analyticsHeader}>
-            <View>
-              <Text style={styles.title}>Analytics</Text>
-              <Text style={styles.subtitle}>Live data from your site</Text>
+        <ScrollView contentContainerStyle={styles.analyticsScroll} showsVerticalScrollIndicator={false}>
+
+          {/* ── Header row ── */}
+          <View style={styles.analyticsTopRow}>
+            <Text style={styles.analyticsHeading}>Analytics</Text>
+            <View style={styles.periodPills}>
+              {(['7d', '30d'] as AnalyticsPeriod[]).map((p) => (
+                <Pressable
+                  key={p}
+                  style={[styles.periodPill, analyticsPeriod === p && styles.periodPillActive]}
+                  onPress={() => {
+                    setAnalyticsPeriod(p);
+                    setAnalyticsLoading(true);
+                    fetchAnalyticsSummary(p === '7d' ? 7 : 30)
+                      .then((d) => setAnalyticsData(d))
+                      .catch(() => {})
+                      .finally(() => setAnalyticsLoading(false));
+                  }}
+                >
+                  <Text style={[styles.periodPillText, analyticsPeriod === p && styles.periodPillTextActive]}>
+                    {p === '7d' ? '7d' : '30d'}
+                  </Text>
+                </Pressable>
+              ))}
             </View>
-            <Pressable
-              style={styles.refreshBtn}
-              onPress={() => {
-                setAnalyticsLoading(true);
-                fetchAnalyticsSummary()
-                  .then((d) => setAnalyticsData(d))
-                  .catch(() => {})
-                  .finally(() => setAnalyticsLoading(false));
-              }}
-            >
-              <Ionicons name="refresh-outline" size={18} color={colors.textMuted} />
-            </Pressable>
           </View>
 
-          {/* Period toggle */}
-          <View style={styles.periodToggleRow}>
-            {(['7d', '30d'] as AnalyticsPeriod[]).map((p) => (
-              <Pressable
-                key={p}
-                style={[styles.periodToggleBtn, analyticsPeriod === p && styles.periodToggleBtnActive]}
-                onPress={() => setAnalyticsPeriod(p)}
-              >
-                <Text style={[styles.periodToggleText, analyticsPeriod === p && styles.periodToggleTextActive]}>
-                  {p === '7d' ? 'Last 7 days' : 'Last 30 days'}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          {analyticsLoading ? (
-            <ActivityIndicator color={colors.accentPink} style={{ marginTop: 48 }} />
-          ) : !analyticsData?.subdomain ? (
-            <View style={styles.emptyAnalytics}>
-              <Ionicons name="globe-outline" size={40} color={colors.textMuted} />
-              <Text style={styles.emptyAnalyticsTitle}>No data yet</Text>
-              <Text style={styles.emptyAnalyticsBody}>
-                Visitors to your published site will show up here automatically.
-              </Text>
+          {analyticsLoading && !analyticsData ? (
+            <View style={styles.analyticsLoadingWrap}>
+              <ActivityIndicator color={colors.accentPink} />
             </View>
           ) : (
             <>
-              {/* Stat tiles */}
-              <View style={styles.statTileRow}>
-                <StatTile
-                  icon="eye-outline"
-                  label="Page views"
-                  value={totalViews.toLocaleString()}
-                  sub={analyticsPeriod === '7d' ? 'last 7 days' : 'last 30 days'}
-                />
-                <StatTile
-                  icon="people-outline"
-                  label="Unique visitors"
-                  value={totalSessions.toLocaleString()}
-                  sub={analyticsPeriod === '7d' ? 'last 7 days' : 'last 30 days'}
-                />
-              </View>
-
-              {/* Views chart */}
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>
-                  Daily page views — {analyticsPeriod === '7d' ? 'last 7 days' : 'last 30 days'}
-                </Text>
-                {totalViews === 0 ? (
-                  <Text style={styles.emptyCardNote}>No views in this period yet.</Text>
-                ) : (
-                  <View style={styles.chartRow}>
-                    {chartPoints.map((point, index) => (
-                      <WeekBar
-                        key={`${point.label}-${index}`}
-                        value={point.views}
-                        label={analyticsPeriod === '7d'
-                          ? new Date(analyticsData.dailyTrend.slice(-7)[index]?.date ?? '').toLocaleDateString('en-US', { weekday: 'short' }).slice(0, 2)
-                          : point.label}
-                        maxVal={maxChartValue}
-                      />
-                    ))}
+              {analyticsData ? (
+                <>
+                  <View style={styles.heroStat}>
+                    <Text style={styles.heroStatNum}>{totalViews.toLocaleString()}</Text>
+                    <Text style={styles.heroStatLabel}>
+                      total views · last {periodDays} days
+                    </Text>
                   </View>
-                )}
-              </View>
 
-              {/* Traffic sources */}
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>Traffic sources — last 30 days</Text>
-                {analyticsData.referrers.length === 0 ? (
-                  <Text style={styles.emptyCardNote}>No external referrers tracked yet.</Text>
-                ) : (
-                  analyticsData.referrers.map((ref, i) => {
-                    const maxCount = Math.max(1, ...analyticsData.referrers.map((r) => r.count));
-                    const pct = Math.round((ref.count / maxCount) * 100);
-                    return (
-                      <View key={ref.source} style={[styles.sourceRow, i > 0 && { marginTop: 4 }]}>
-                        <View style={styles.sourceLeft}>
-                          <View style={[styles.sourceDot, { backgroundColor: colors.accentPink }]} />
-                          <Text style={styles.sourceLabel} numberOfLines={1}>{ref.source}</Text>
-                        </View>
-                        <View style={styles.sourceBarTrack}>
-                          <View style={[styles.sourceBarFill, { width: `${pct}%` as `${number}%`, backgroundColor: colors.accentPink }]} />
-                        </View>
-                        <Text style={styles.sourcePct}>{ref.count}</Text>
-                      </View>
-                    );
-                  })
-                )}
-              </View>
-
-              {/* Top pages */}
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>Top pages — last 30 days</Text>
-                {analyticsData.topPages.length === 0 ? (
-                  <Text style={styles.emptyCardNote}>No page data yet.</Text>
-                ) : (
-                  analyticsData.topPages.map((page) => (
-                    <View key={page.path} style={styles.serviceRow}>
-                      <Text style={styles.serviceRowName} numberOfLines={1}>{friendlyPath(page.path)}</Text>
-                      <View style={styles.serviceRowRight}>
-                        <Text style={styles.serviceRowCount}>{page.views}</Text>
-                        <Text style={styles.serviceRowCountLabel}> views</Text>
-                      </View>
+                  <View style={styles.splitRow}>
+                    <View style={styles.splitItem}>
+                      <Text style={styles.splitNum}>{profileViews.toLocaleString()}</Text>
+                      <Text style={styles.splitLabel}>home page</Text>
                     </View>
-                  ))
-                )}
-              </View>
+                    <View style={styles.splitDivider} />
+                    <View style={styles.splitItem}>
+                      <Text style={styles.splitNum}>{bookingViews.toLocaleString()}</Text>
+                      <Text style={styles.splitLabel}>booking page</Text>
+                    </View>
+                  </View>
+                </>
+              ) : (
+                <View style={styles.emptyAnalytics}>
+                  <Text style={styles.emptyAnalyticsNum}>—</Text>
+                  <Text style={styles.emptyAnalyticsTitle}>No view data yet</Text>
+                  <Text style={styles.emptyAnalyticsBody}>
+                    Share your site link and visitors will appear here automatically.
+                  </Text>
+                </View>
+              )}
 
-              {/* Devices */}
-              <View style={styles.card}>
-                <Text style={styles.cardTitle}>Visitor devices — last 30 days</Text>
-                {analyticsData.views30d === 0 ? (
-                  <Text style={styles.emptyCardNote}>No data yet.</Text>
+              <View style={styles.analyticsDivider} />
+
+              <View style={styles.moneySection}>
+                <Text style={styles.chartSectionLabel}>Money</Text>
+                {!hasLinkedSite ? (
+                  <Text style={styles.chartEmpty}>Link your site to track booking revenue.</Text>
                 ) : (
                   <>
-                    {[
-                      { label: 'Mobile',  pct: analyticsData.devices.mobile,  color: colors.accentPink },
-                      { label: 'Desktop', pct: analyticsData.devices.desktop, color: '#7c3aed' },
-                      { label: 'Tablet',  pct: analyticsData.devices.tablet,  color: '#0891b2' },
-                    ].filter((d) => d.pct > 0).map((d) => (
-                      <View key={d.label} style={styles.sourceRow}>
-                        <View style={styles.sourceLeft}>
-                          <View style={[styles.sourceDot, { backgroundColor: d.color }]} />
-                          <Text style={styles.sourceLabel}>{d.label}</Text>
-                        </View>
-                        <View style={styles.sourceBarTrack}>
-                          <View style={[styles.sourceBarFill, { width: `${d.pct}%` as `${number}%`, backgroundColor: d.color }]} />
-                        </View>
-                        <Text style={styles.sourcePct}>{d.pct}%</Text>
+                    <View style={styles.moneyHero}>
+                      <Text style={styles.moneyHeroNum}>{formatMoney(moneyStats.collected)}</Text>
+                      <Text style={styles.moneyHeroLabel}>
+                        collected · last {periodDays} days
+                      </Text>
+                    </View>
+                    <View style={styles.splitRow}>
+                      <View style={styles.splitItem}>
+                        <Text style={styles.splitNum}>{moneyStats.paidBookings}</Text>
+                        <Text style={styles.splitLabel}>paid bookings</Text>
                       </View>
-                    ))}
+                      <View style={styles.splitDivider} />
+                      <View style={styles.splitItem}>
+                        <Text style={styles.splitNum}>{formatMoney(moneyStats.pending)}</Text>
+                        <Text style={styles.splitLabel}>awaiting payment</Text>
+                      </View>
+                    </View>
                   </>
                 )}
               </View>
+
+              {analyticsData ? (
+                <>
+                  <View style={styles.analyticsDivider} />
+                  <View style={styles.topPagesSection}>
+                    <Text style={styles.chartSectionLabel}>Top pages</Text>
+                    {analyticsData.top_pages.length === 0 ? (
+                      <Text style={styles.chartEmpty}>No page data yet.</Text>
+                    ) : (
+                      analyticsData.top_pages.map((page, i) => {
+                        const maxViews = Math.max(1, ...analyticsData.top_pages.map((p) => p.views));
+                        const pct = page.views / maxViews;
+                        return (
+                          <View key={page.path} style={[styles.topPageRow, i > 0 && { marginTop: 18 }]}>
+                            <View style={styles.topPageMeta}>
+                              <Text style={styles.topPageName}>{friendlyPath(page.path)}</Text>
+                              <Text style={styles.topPageCount}>{page.views.toLocaleString()}</Text>
+                            </View>
+                            <View style={styles.topPageTrack}>
+                              <View style={[styles.topPageFill, { width: `${Math.round(pct * 100)}%` as `${number}%` }]} />
+                            </View>
+                          </View>
+                        );
+                      })
+                    )}
+                  </View>
+                </>
+              ) : null}
             </>
           )}
         </ScrollView>
@@ -669,210 +567,190 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
     zIndex: 1,
   },
-  content: {
-    paddingHorizontal: 20,
+  analyticsScroll: {
+    paddingHorizontal: 24,
     paddingBottom: 140,
+    paddingTop: 4,
   },
-  analyticsHeader: {
+  analyticsTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 32,
+  },
+  analyticsHeading: {
+    color: colors.text,
+    fontSize: 26,
+    fontWeight: '700',
+    letterSpacing: -0.5,
+  },
+  periodPills: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.06)',
+    borderRadius: 10,
+    padding: 3,
+    gap: 2,
+  },
+  periodPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  periodPillActive: {
+    backgroundColor: colors.accentPink,
+  },
+  periodPillText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: colors.textMuted,
+  },
+  periodPillTextActive: {
+    color: '#fff',
+  },
+  analyticsLoadingWrap: {
+    paddingTop: 80,
+    alignItems: 'center',
+  },
+  heroStat: {
+    marginBottom: 24,
+  },
+  heroStatNum: {
+    color: colors.text,
+    fontSize: 64,
+    fontWeight: '800',
+    letterSpacing: -3,
+    lineHeight: 68,
+  },
+  heroStatLabel: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '500',
+    marginTop: 4,
+    letterSpacing: 0.2,
+  },
+  splitRow: {
+    flexDirection: 'row',
+    marginBottom: 32,
+    gap: 0,
+  },
+  splitItem: {
+    flex: 1,
+  },
+  splitNum: {
+    color: colors.accentPink,
+    fontSize: 32,
+    fontWeight: '700',
+    letterSpacing: -1,
+  },
+  splitLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '500',
+    marginTop: 2,
+    letterSpacing: 0.2,
+  },
+  splitDivider: {
+    width: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    marginHorizontal: 20,
+    alignSelf: 'stretch',
+  },
+  analyticsDivider: {
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    marginBottom: 28,
+  },
+  moneySection: {
+    marginBottom: 8,
+  },
+  moneyHero: {
+    marginBottom: 20,
+  },
+  moneyHeroNum: {
+    color: colors.text,
+    fontSize: 48,
+    fontWeight: '800',
+    letterSpacing: -2,
+    lineHeight: 52,
+  },
+  moneyHeroLabel: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '500',
+    marginTop: 4,
+    letterSpacing: 0.2,
+  },
+  chartSectionLabel: {
+    color: colors.text,
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 20,
+    opacity: 0.5,
+  },
+  chartEmpty: {
+    color: colors.textMuted,
+    fontSize: 13,
+    paddingVertical: 12,
+  },
+  topPagesSection: {
+    marginBottom: 12,
+  },
+  topPageRow: {
+    gap: 8,
+  },
+  topPageMeta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 16,
+    alignItems: 'baseline',
   },
-  refreshBtn: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
-  },
-  title: {
+  topPageName: {
     color: colors.text,
-    fontSize: 28,
-    fontWeight: '700',
-    marginBottom: 4,
+    fontSize: 15,
+    fontWeight: '600',
   },
-  subtitle: {
+  topPageCount: {
     color: colors.textMuted,
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
   },
-  periodToggleRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 16,
+  topPageTrack: {
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    overflow: 'hidden',
   },
-  periodToggleBtn: {
-    flex: 1,
-    paddingVertical: 9,
-    borderRadius: 12,
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-  },
-  periodToggleBtnActive: {
-    backgroundColor: colors.accentPinkMuted,
-    borderColor: colors.accentPinkBorder,
-  },
-  periodToggleText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: colors.textMuted,
-  },
-  periodToggleTextActive: {
-    color: colors.accentPink,
+  topPageFill: {
+    height: '100%',
+    borderRadius: 2,
+    backgroundColor: colors.accentPink,
+    opacity: 0.75,
   },
   emptyAnalytics: {
-    alignItems: 'center',
-    paddingTop: 48,
-    gap: 10,
+    alignItems: 'flex-start',
+    paddingTop: 40,
+    gap: 8,
+  },
+  emptyAnalyticsNum: {
+    color: colors.accentPink,
+    fontSize: 64,
+    fontWeight: '800',
+    letterSpacing: -3,
+    lineHeight: 68,
+    opacity: 0.3,
   },
   emptyAnalyticsTitle: {
     color: colors.text,
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: '700',
+    marginTop: 8,
   },
   emptyAnalyticsBody: {
     color: colors.textMuted,
     fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 21,
     maxWidth: 260,
-  },
-  emptyCardNote: {
-    color: colors.textMuted,
-    fontSize: 13,
-    paddingVertical: 4,
-  },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 22,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    padding: 18,
-    marginBottom: 12,
-  },
-  cardTitle: {
-    color: colors.text,
-    fontSize: 15,
-    fontWeight: '700',
-    marginBottom: 16,
-  },
-  chartRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-end',
-    paddingTop: 4,
-  },
-  statTileRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 12,
-  },
-  statTile: {
-    flex: 1,
-    backgroundColor: colors.card,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    padding: 16,
-    alignItems: 'flex-start',
-    gap: 4,
-  },
-  statTileIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: colors.accentPinkSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  statTileValue: {
-    color: colors.text,
-    fontSize: 22,
-    fontWeight: '700',
-    letterSpacing: -0.5,
-  },
-  statTileLabel: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  statTileSub: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '400',
-    opacity: 0.7,
-  },
-  sourceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 10,
-  },
-  sourceLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    width: 110,
-  },
-  sourceDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  sourceLabel: {
-    color: colors.textMuted,
-    fontSize: 13,
-    fontWeight: '500',
-  },
-  sourceBarTrack: {
-    flex: 1,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    overflow: 'hidden',
-  },
-  sourceBarFill: {
-    height: '100%',
-    borderRadius: 3,
-    opacity: 0.8,
-  },
-  sourcePct: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '600',
-    width: 30,
-    textAlign: 'right',
-  },
-  serviceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.cardBorder,
-  },
-  serviceRowName: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  serviceRowRight: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  serviceRowCount: {
-    color: colors.chartBlue,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  serviceRowCountLabel: {
-    color: colors.textMuted,
-    fontSize: 12,
-    fontWeight: '400',
   },
   // Empty state / no site yet
   emptyStatePressable: {

@@ -154,8 +154,8 @@ export default function LinkSiteScreen({ navigation }: Props) {
           >
             <Text style={styles.title}>Connect your site table</Text>
             <Text style={styles.subtitle}>
-              Enter the Supabase table name that stores your site data. For Hair by Nadjae, use{' '}
-              <Text style={styles.example}>hairbynadjae_site</Text>.
+              Enter the Supabase table name that stores your site data, for example{' '}
+              <Text style={styles.example}>your_business_site</Text>.
             </Text>
 
             <View style={styles.card}>
@@ -164,7 +164,7 @@ export default function LinkSiteScreen({ navigation }: Props) {
                 <TextInput
                   value={tableName}
                   onChangeText={setTableName}
-                  placeholder="hairbynadjae_site"
+                  placeholder="your_business_site"
                   placeholderTextColor={colors.textMuted}
                   autoCapitalize="none"
                   autoCorrect={false}

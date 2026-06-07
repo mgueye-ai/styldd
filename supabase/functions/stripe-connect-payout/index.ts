@@ -12,6 +12,12 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function sumUsdCents(buckets: { currency: string; amount: number }[] | undefined): number {
+  return (buckets ?? [])
+    .filter((b) => b.currency === 'usd')
+    .reduce((sum, b) => sum + b.amount, 0);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
 
@@ -34,14 +40,27 @@ Deno.serve(async (req) => {
 
   const { data: row } = await supabase
     .from('styld_stripe_accounts')
-    .select('stripe_account_id, payouts_enabled, balance_available_cents')
+    .select('stripe_account_id, payouts_enabled')
     .eq('user_id', user.id)
     .maybeSingle();
 
   if (!row?.stripe_account_id) return json({ error: 'No Stripe account linked' }, 400);
   if (!row.payouts_enabled) return json({ error: 'Payouts not yet enabled on your account' }, 400);
 
-  const availableCents = row.balance_available_cents ?? 0;
+  const balRes = await fetch('https://api.stripe.com/v1/balance', {
+    headers: {
+      Authorization: `Bearer ${stripeKey}`,
+      'Stripe-Account': row.stripe_account_id,
+    },
+  });
+  const bal = await balRes.json();
+  if (!balRes.ok) {
+    return json({ error: bal.error?.message || 'Could not verify available balance' }, 400);
+  }
+
+  const availableCents = sumUsdCents(bal.available);
+  const pendingCents = sumUsdCents(bal.pending);
+
   const payoutCents = amountCents && typeof amountCents === 'number' && amountCents > 0
     ? Math.min(Math.round(amountCents), availableCents)
     : availableCents;
@@ -70,20 +89,23 @@ Deno.serve(async (req) => {
     return json({ error: payout.error?.message || 'Payout failed' }, 400);
   }
 
-  // Refresh balance in DB
-  const balRes = await fetch('https://api.stripe.com/v1/balance', {
+  const refreshRes = await fetch('https://api.stripe.com/v1/balance', {
     headers: {
       Authorization: `Bearer ${stripeKey}`,
       'Stripe-Account': row.stripe_account_id,
     },
   });
-  if (balRes.ok) {
-    const bal = await balRes.json();
-    const newAvailable = (bal.available || [])
-      .filter((b: { currency: string }) => b.currency === 'usd')
-      .reduce((sum: number, b: { amount: number }) => sum + b.amount, 0);
+  if (refreshRes.ok) {
+    const refreshed = await refreshRes.json();
     await supabase.from('styld_stripe_accounts').update({
-      balance_available_cents: newAvailable,
+      balance_available_cents: sumUsdCents(refreshed.available),
+      balance_pending_cents: sumUsdCents(refreshed.pending),
+      updated_at: new Date().toISOString(),
+    }).eq('user_id', user.id);
+  } else {
+    await supabase.from('styld_stripe_accounts').update({
+      balance_available_cents: Math.max(0, availableCents - payoutCents),
+      balance_pending_cents: pendingCents,
       updated_at: new Date().toISOString(),
     }).eq('user_id', user.id);
   }

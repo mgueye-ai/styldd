@@ -17,10 +17,12 @@ import {
   getClientById as findClientById,
   getCompletedAppointments,
   getLinkedBusinessLabel,
+  getMoneyStatsForLastDaysFromBookings,
   getRevenueForPeriodFromBookings,
   getTodayJobStats,
   getUpcomingAppointments,
   loadSiteData,
+  MoneyStats,
   SiteDataSnapshot,
 } from '../lib/siteData';
 import { useAuth } from './AuthContext';
@@ -47,6 +49,7 @@ type SiteDataContextValue = {
   getClientById: (id: string) => Client | undefined;
   getCalendarEventsForDateKey: (dateKey: string) => CalendarEvent[];
   getRevenueForPeriod: (period: Period) => number;
+  getMoneyStatsForLastDays: (days: number) => MoneyStats;
   getTodayJobStats: () => { completed: number; total: number; progress: number };
   getUpcomingAppointments: (limit?: number) => AppointmentDetail[];
   getCompletedAppointments: () => AppointmentDetail[];
@@ -105,6 +108,7 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
       getCalendarEventsForDateKey: (dateKey: string) =>
         findCalendarEventsForDateKey(snapshot, dateKey),
       getRevenueForPeriod: (period: Period) => getRevenueForPeriodFromBookings(snapshot, period),
+      getMoneyStatsForLastDays: (days: number) => getMoneyStatsForLastDaysFromBookings(snapshot, days),
       getTodayJobStats: () => getTodayJobStats(snapshot),
       getUpcomingAppointments: (limit?: number) => getUpcomingAppointments(snapshot, limit ?? 5),
       getCompletedAppointments: () => getCompletedAppointments(snapshot),

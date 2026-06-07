@@ -1,5 +1,6 @@
 import { Image, ImageStyle, StyleSheet, View, ViewStyle } from 'react-native';
 import { useServiceCatalog } from '../context/ServiceCatalogContext';
+import { useSiteTheme } from '../context/SiteThemeContext';
 import { colors } from '../theme';
 
 const APP_ICON = require('../../assets/icon.png');
@@ -24,8 +25,9 @@ export default function ServiceImage({
   imageStyle,
 }: ServiceImageProps) {
   const { getCoverUrl, resolveStyleId } = useServiceCatalog();
+  const { logoImageUrl } = useSiteTheme();
   const resolvedStyleId = resolveStyleId(styleId, serviceName);
-  const uri = resolvedStyleId ? getCoverUrl(resolvedStyleId) : null;
+  const uri = resolvedStyleId ? getCoverUrl(resolvedStyleId) : logoImageUrl;
   const borderRadius = circular ? size / 2 : radius;
 
   const frameStyle = {

@@ -8,12 +8,18 @@ export type BookingPaymentSettings = {
   depositKind: DepositKind;
   /** Percent (1–100) or fixed dollar amount */
   depositValue: number;
+  /** Whether clients must upload a current hair photo */
+  requireCurrentHairPhoto: boolean;
+  /** Whether clients must upload a reference image */
+  requireReferencePhoto: boolean;
 };
 
 export const DEFAULT_BOOKING_PAYMENT: BookingPaymentSettings = {
   mode: 'deposit',
   depositKind: 'percent',
   depositValue: 10,
+  requireCurrentHairPhoto: true,
+  requireReferencePhoto: false,
 };
 
 const VALID_MODES: BookingPaymentMode[] = ['full', 'deposit', 'in_person'];
@@ -42,5 +48,15 @@ export function normalizeBookingPayment(value: unknown): BookingPaymentSettings 
     depositValue = Math.max(0, Math.round(depositValue * 100) / 100);
   }
 
-  return { mode, depositKind, depositValue };
+  const requireCurrentHairPhoto =
+    typeof source.requireCurrentHairPhoto === 'boolean'
+      ? source.requireCurrentHairPhoto
+      : DEFAULT_BOOKING_PAYMENT.requireCurrentHairPhoto;
+
+  const requireReferencePhoto =
+    typeof source.requireReferencePhoto === 'boolean'
+      ? source.requireReferencePhoto
+      : DEFAULT_BOOKING_PAYMENT.requireReferencePhoto;
+
+  return { mode, depositKind, depositValue, requireCurrentHairPhoto, requireReferencePhoto };
 }

@@ -90,9 +90,9 @@ function SettingField({
 }
 
 export default function SiteSettingsScreen({ navigation }: Props) {
-  const [businessName, setBusinessName] = useState('Hair by Nadjae');
-  const [tagline, setTagline] = useState('Expert hair braiding · Norwich, CT');
-  const [siteUrl, setSiteUrl] = useState('hairbynadjae.com');
+  const [businessName, setBusinessName] = useState('');
+  const [tagline, setTagline] = useState('');
+  const [siteUrl, setSiteUrl] = useState('');
   const [onlineBooking, setOnlineBooking] = useState(true);
   const [showPrices, setShowPrices] = useState(true);
   const [requireDeposit, setRequireDeposit] = useState(true);

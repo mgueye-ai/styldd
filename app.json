@@ -11,6 +11,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.crmstyld.app",
       "buildNumber": "2",
+      "usesAppleSignIn": true,
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false
       }
@@ -33,7 +34,7 @@
     },
     "plugins": [
       "expo-dev-client",
-      "react-native-purchases",
+      "expo-apple-authentication",
       [
         "expo-notifications",
         {

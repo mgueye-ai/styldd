@@ -99,7 +99,7 @@ function StylePhoto({
   placeholder?: boolean;
 }) {
   const { getCoverUrl } = useServiceCatalog();
-  const coverUrl = styleId ? getCoverUrl(styleId) : null;
+  const coverUrl = styleId ? getCoverUrl(styleId, false) : null;
   const uri = localUri ?? coverUrl;
 
   return (

@@ -9,7 +9,7 @@ import {
 import { FontFamily, FONT_FAMILY_OPTIONS, GOOGLE_FONTS_URL, HeroLayout, StyleCardLayout, TemplateId } from '../data/siteTheme';
 
 const SITE_PREVIEW_CSS = `
-:root{--pink:#db2777;--pink-dark:#9f1239;--ink:#0a0a0a;--cream:#fafafa;--muted:#525252;--muted-soft:#737373;--pink-heading:#ec4899;--hero-pink:#f472b6;--hero-pink-deep:#be185d;--white:#fff;--radius:12px;--shadow:0 8px 32px rgba(13,13,13,.08);--font-display:"Cormorant Garamond",Georgia,serif;--font-body:"Source Sans 3",system-ui,sans-serif}
+:root{--pink:#db2777;--pink-dark:#9f1239;--ink:#0a0a0a;--cream:#fafafa;--muted:#525252;--muted-soft:#737373;--pink-heading:#ec4899;--hero-pink:#f472b6;--hero-pink-deep:#be185d;--white:#fff;--radius:12px;--shadow:0 8px 32px rgba(13,13,13,.08);--font-display:"Cormorant Garamond",Georgia,serif;--font-body:"Source Sans 3",system-ui,sans-serif;--filter-active-text:#fff}
 *{box-sizing:border-box}body{margin:0;font-family:var(--font-body);font-size:1rem;line-height:1.6;color:var(--ink);background:var(--cream)}
 .container{width:min(1120px,calc(100% - 2rem));margin-inline:auto}
 .preview-banner{position:sticky;top:0;z-index:200;background:#0a0a0a;color:#fafafa;text-align:center;font:600 12px/1 var(--font-body);padding:8px 12px;letter-spacing:.04em}
@@ -82,12 +82,12 @@ const SITE_PREVIEW_CSS = `
 .style-pill__desc{font-size:.75rem;color:var(--muted);margin-top:.1rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .style-pill__price{font-weight:800;font-size:.9rem;color:var(--pink);flex-shrink:0;white-space:nowrap}
 @media (max-width:768px){.section{padding:2.4rem 0}.section-head{margin-bottom:1.65rem;text-align:center}.card-grid{display:flex;flex-wrap:nowrap;gap:1rem;overflow-x:auto;scroll-snap-type:x mandatory;padding:0 .25rem .85rem;margin-inline:-.25rem;-webkit-overflow-scrolling:touch}.card-grid>*{flex:0 0 min(18.25rem,calc(100vw - 3rem));scroll-snap-align:start;max-width:min(18.25rem,calc(100vw - 3rem))}.info-cards{display:grid;grid-template-columns:1fr;gap:1rem}.location-map{height:220px}.hero-ctas--scale{flex-direction:column;align-items:stretch;width:100%;max-width:360px;margin-inline:auto}.hero-ctas--scale .hero-btn--lg{width:100%;justify-content:center}}
-.profile-nav{background:#fff;border-bottom:1px solid rgba(0,0,0,.06);padding:.875rem 0;position:sticky;top:0;z-index:100}
+.profile-nav{background:var(--nav-bg,var(--pink));border-bottom:1px solid rgba(0,0,0,.06);padding:.875rem 0;position:sticky;top:0;z-index:100}
 .profile-nav__inner{display:flex;align-items:center;justify-content:space-between;gap:1rem}
-.profile-brand{font-family:var(--font-display);font-size:1.15rem;font-weight:700;color:var(--ink);display:flex;align-items:center;gap:.6rem;text-decoration:none}
-.profile-brand__logo{width:38px;height:38px;border-radius:10px;background:linear-gradient(135deg,#fce7f3,#fbcfe8);flex-shrink:0}
+.profile-brand{font-family:var(--font-display);font-size:1.15rem;font-weight:700;color:var(--nav-text,#fff);display:flex;align-items:center;gap:.6rem;text-decoration:none}
+.profile-brand__logo{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.2);flex-shrink:0}
 .profile-brand__logo-img{width:38px;height:38px;border-radius:10px;object-fit:cover;flex-shrink:0}
-.profile-book-btn{display:inline-flex;align-items:center;padding:.6rem 1.25rem;background:var(--pink);color:#fff;border-radius:999px;font-weight:700;font-size:.9rem;text-decoration:none;box-shadow:0 4px 14px rgba(219,39,119,.28);white-space:nowrap}
+.profile-book-btn{display:inline-flex;align-items:center;padding:.6rem 1.25rem;background:var(--ink);color:var(--pink);border-radius:999px;font-weight:700;font-size:.9rem;text-decoration:none;white-space:nowrap}
 .profile-hero{padding:2.5rem 0 2rem;background:var(--cream)}
 .profile-hero__grid{display:grid;grid-template-columns:2fr 3fr;gap:2.5rem;align-items:start}
 .profile-photo{border-radius:20px;overflow:hidden;aspect-ratio:3/4;background:linear-gradient(180deg,#f0ece5 0%,#e4dfd7 100%);box-shadow:0 12px 40px rgba(0,0,0,.10)}
@@ -96,15 +96,19 @@ const SITE_PREVIEW_CSS = `
 .profile-section-block{display:flex;flex-direction:column;gap:.5rem}
 .profile-about-head,.profile-policy-head{font-family:var(--font-display);color:var(--ink);margin:0}
 .profile-about-head{font-size:1.5rem;font-weight:700;border-bottom:2px solid var(--pink);display:inline-block;padding-bottom:.2rem}
-.profile-policy-head{font-size:1.1rem;font-weight:600}
+.profile-policy-head{font-size:1.5rem;font-weight:700;border-bottom:2px solid var(--pink);display:inline-block;padding-bottom:.2rem}
 .profile-about-body,.profile-policy-body{color:var(--muted);font-size:.95rem;line-height:1.7;margin:0}
-.profile-menu-section{padding:2.5rem 0;background:#fff;border-top:1px solid rgba(0,0,0,.06)}
+.profile-menu-section{padding:2.5rem 0;background:var(--cream,#fff);border-top:1px solid rgba(0,0,0,.06)}
 .profile-menu-head{margin-bottom:1.25rem}
 .profile-menu-head h2{font-family:var(--font-display);font-size:clamp(1.5rem,3vw,2.1rem);font-weight:700;color:var(--ink);margin:0 0 .3rem;border-bottom:2px solid var(--pink);display:inline-block;padding-bottom:.2rem}
 .profile-menu-blurb{color:var(--muted);font-size:.9rem;margin:0}
+.profile-menu-filters{display:flex;flex-wrap:wrap;gap:0;border-bottom:1px solid rgba(0,0,0,.08);margin-bottom:1.25rem}
+.profile-menu-filter{padding:.45rem .9rem;border:none;border-bottom:2px solid transparent;margin-bottom:-1px;background:transparent;font-family:var(--font-body);font-size:.875rem;font-weight:600;color:var(--muted);cursor:pointer;transition:color .15s,border-color .15s;white-space:nowrap}
+.profile-menu-filter:hover{color:var(--pink)}
+.profile-menu-filter--active{color:var(--pink);border-bottom-color:var(--pink)}
 .profile-service-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.875rem}
-.profile-service-card{display:flex;align-items:center;gap:.85rem;padding:.75rem;border-radius:14px;background:var(--white);border:1px solid rgba(0,0,0,.07);text-decoration:none;color:inherit;transition:box-shadow .15s}
-.profile-service-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.08);border-color:rgba(219,39,119,.2)}.profile-service-card--outlined{background:var(--cream);border:1.5px solid var(--ink)}.profile-service-card--outlined:hover{box-shadow:0 4px 16px rgba(0,0,0,.1);border-color:var(--ink)}
+.profile-service-card{display:flex;align-items:center;gap:.85rem;padding:.75rem;border-radius:14px;background:var(--cream,#fff);border:1px solid rgba(0,0,0,.07);text-decoration:none;color:inherit;transition:box-shadow .15s}
+.profile-service-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.08);border-color:rgba(219,39,119,.2)}.profile-service-card--outlined{background:var(--cream);border:1.5px solid var(--card-outline,var(--ink))}.profile-service-card--outlined:hover{box-shadow:0 4px 16px rgba(0,0,0,.1);border-color:var(--ink)}
 .profile-service-card__img{width:64px;height:64px;border-radius:12px;flex-shrink:0;background:linear-gradient(145deg,#e8e3db,#d6d0c7);background-size:cover;background-position:center}
 .profile-service-card__body{flex:1;min-width:0}
 .profile-service-card__name{font-weight:700;font-size:.88rem;color:var(--ink);line-height:1.3}
@@ -113,14 +117,36 @@ const SITE_PREVIEW_CSS = `
 .profile-location-section{padding:2.5rem 0;background:var(--cream);border-top:1px solid rgba(0,0,0,.06)}
 .profile-location-head{margin-bottom:1.25rem}
 .profile-location-head h2{font-family:var(--font-display);font-size:clamp(1.4rem,2.5vw,2rem);font-weight:700;color:var(--ink);margin:0;border-bottom:2px solid var(--pink);display:inline-block;padding-bottom:.2rem}
-.profile-location-card{background:#fff;border-radius:20px;border:1px solid rgba(0,0,0,.07);overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.06)}
+.profile-location-card{background:var(--cream,#fff);border-radius:20px;border:1px solid rgba(0,0,0,.07);overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,.06)}
 .profile-location-info{padding:1.25rem 1.5rem;display:flex;flex-wrap:wrap;gap:1.25rem 2.5rem}
 .profile-location-col h3{font-family:var(--font-display);font-size:.75rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);margin:0 0 .4rem}
 .profile-location-col p{margin:.2rem 0;color:var(--ink);font-size:.9rem}
 .profile-location-col a{color:var(--pink);text-decoration:none}
 .profile-location-col a:hover{text-decoration:underline}
+.profile-ig-link a{display:inline-flex;align-items:center;gap:.35rem}
+.profile-ig-icon{width:15px;height:15px;flex-shrink:0;vertical-align:middle;color:var(--pink)}
 .profile-location-map{width:100%;height:240px;border:0;border-top:1px solid rgba(0,0,0,.06);display:block}
-@media(max-width:680px){.profile-hero__grid{grid-template-columns:1fr}.profile-photo{aspect-ratio:4/3;max-height:260px}.profile-service-grid{grid-template-columns:1fr}}
+.profile-service-card-wrap{display:flex;flex-direction:column}
+.profile-service-card-wrap .profile-service-card{flex:1}
+.profile-service-card__expand-btn{display:flex;align-items:center;justify-content:space-between;width:100%;padding:.45rem .75rem;background:transparent;border:none;border-top:1px solid rgba(0,0,0,.07);cursor:pointer;font-family:var(--font-body);font-size:.78rem;font-weight:600;color:var(--muted);text-align:left;gap:.5rem}
+.profile-service-card__expand-btn:hover{color:var(--pink)}
+.profile-service-card__expand-chevron{flex-shrink:0;transition:transform .2s}
+.profile-service-card__expand-btn.is-open .profile-service-card__expand-chevron{transform:rotate(180deg)}
+.profile-service-card__desc{padding:.65rem .75rem .75rem;font-size:.85rem;line-height:1.6;color:var(--muted);border-top:1px solid rgba(0,0,0,.06);background:rgba(0,0,0,.02);border-radius:0 0 14px 14px}
+[hidden]{display:none!important}
+@media(max-width:680px){.profile-hero__grid{grid-template-columns:1fr}.profile-photo{aspect-ratio:4/3;max-height:260px;width:100%;margin:0 auto;justify-self:center}.profile-service-grid{grid-template-columns:1fr}}
+.profile-hero--stack{overflow:hidden}
+.profile-hero--cover{padding:0}
+.profile-hero--cover .profile-hero__grid{display:block;width:100%;max-width:100%;margin:0;padding:0}
+.profile-hero--cover .profile-photo{width:100%;aspect-ratio:unset;height:clamp(420px,72vh,760px);border-radius:0;box-shadow:none}
+.profile-hero--cover .profile-photo__bg{background-position:center;background-size:cover;min-height:unset;height:100%;position:relative}
+.profile-cover-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(0,0,0,.08) 0%,rgba(0,0,0,.52) 100%);display:flex;flex-direction:column;justify-content:flex-end;padding:2rem 2rem 1.75rem}
+.profile-cover-overlay .profile-brand{font-size:1.6rem;font-weight:700;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.35);text-decoration:none;font-family:var(--font-display);display:block;margin-bottom:.85rem}
+.profile-cover-overlay .profile-book-btn{align-self:flex-start}
+.profile-hero-stack{display:block;width:100%}
+.profile-hero-stack__img{display:block;width:100%;max-width:100%;aspect-ratio:3/1;object-fit:cover;object-position:center}
+.profile-hero--stack .profile-hero__grid{grid-template-columns:1fr;padding-top:1.5rem}
+.profile-hero--stack .profile-photo{display:none}
 `;
 
 function escapeHtml(value: string): string {
@@ -140,19 +166,24 @@ export type SitePreviewStyle = {
   sizeLabel?: string;
   durationLabel?: string;
   imageUrl?: string | null;
+  category?: string;
 };
 
 export type SitePreviewTheme = {
   heroLayout: HeroLayout;
   heroImageUrl?: string | null;
   logoImageUrl?: string | null;
+  heroStackImageUrls?: string[];
   primaryColor?: string | null;
   secondaryColor?: string | null;
   backgroundColor?: string | null;
+  navbarColor?: string | null;
+  cardOutlineColor?: string | null;
   zoomedOut?: boolean;
   styleCardLayout?: StyleCardLayout;
   fontFamily?: FontFamily | null;
   templateId?: TemplateId | null;
+  hideBookNowButton?: boolean;
 };
 
 export const DEFAULT_PREVIEW_THEME: SitePreviewTheme = {
@@ -207,14 +238,32 @@ function buildColorOverrideCss(theme: SitePreviewTheme): string {
   const primaryHeading = lightenHex(primary, 0.1);
   const fontOpt = FONT_FAMILY_OPTIONS.find((f) => f.id === theme.fontFamily);
   const fontDisplay = fontOpt ? fontOpt.css : '"Cormorant Garamond", Georgia, serif';
+  const fontBody = fontOpt ? fontOpt.bodyCss : '"Source Sans 3", system-ui, sans-serif';
   const bgColor = theme.backgroundColor && /^#[0-9a-fA-F]{6}$/.test(theme.backgroundColor)
     ? theme.backgroundColor
     : null;
   // Only set --cream (body/section background) to the user's chosen color.
   // --white is intentionally NOT overridden so service cards remain visually
   // distinct from the page background.
-  const bgPart = bgColor ? `--cream:${bgColor};` : '';
-  return `:root{--pink:${primary};--pink-dark:${primaryDark};--pink-heading:${primaryHeading};--hero-pink:${primaryLight};--hero-pink-deep:${primaryDark};--pink-light:${primaryLight};--ink:${secondary};--font-display:${fontDisplay};${bgPart}}`;
+  const bgPart = bgColor ? `--cream:${bgColor};--white:${bgColor};` : '';
+  const navbarColor = theme.navbarColor && /^#[0-9a-fA-F]{6}$/.test(theme.navbarColor)
+    ? theme.navbarColor
+    : null;
+  const navBgPart = navbarColor ? `--nav-bg:${navbarColor};` : '';
+  const cardOutlineColor = theme.cardOutlineColor && /^#[0-9a-fA-F]{6}$/.test(theme.cardOutlineColor)
+    ? theme.cardOutlineColor : null;
+  const cardOutlinePart = cardOutlineColor ? `--card-outline:${cardOutlineColor};` : '';
+  const secRgb = hexToRgb(secondary);
+  const mutedPart = secRgb
+    ? `--muted:rgba(${secRgb[0]},${secRgb[1]},${secRgb[2]},0.62);--muted-soft:rgba(${secRgb[0]},${secRgb[1]},${secRgb[2]},0.46);`
+    : '';
+  const primaryRgb = hexToRgb(primary);
+  const primaryLuminance = primaryRgb
+    ? (0.299 * primaryRgb[0] + 0.587 * primaryRgb[1] + 0.114 * primaryRgb[2]) / 255
+    : 0;
+  const filterActiveText = primaryLuminance > 0.5 ? '#000000' : '#ffffff';
+  const hideBookNowPart = theme.hideBookNowButton ? '.profile-book-btn{display:none!important}' : '';
+  return `:root{--pink:${primary};--pink-dark:${primaryDark};--pink-heading:${primaryHeading};--hero-pink:${primaryLight};--hero-pink-deep:${primaryDark};--pink-light:${primaryLight};--ink:${secondary};--font-display:${fontDisplay};--font-body:${fontBody};--filter-active-text:${filterActiveText};${bgPart}${navBgPart}${mutedPart}${cardOutlinePart}}${hideBookNowPart}`;
 }
 
 export function getSitePreviewPageUrl(): string | null {
@@ -357,14 +406,34 @@ function buildProfileServiceCardHtml(style: SitePreviewStyle, outlined = false):
     ? ` style="background-image:url('${style.imageUrl.replace(/'/g, '%27')}');background-size:cover;background-position:center;"`
     : '';
   const bookHref = style.id ? `/booking?style=${encodeURIComponent(style.id)}` : '/booking';
-  return `<a class="${cls}" href="${bookHref}"><div class="profile-service-card__img" aria-hidden="true"${imgStyle}></div><div class="profile-service-card__body"><div class="profile-service-card__name">${escapeHtml(style.title)}</div>${style.priceLabel ? `<div class="profile-service-card__price">${escapeHtml(style.priceLabel)}</div>` : ''}${style.durationLabel ? `<div class="profile-service-card__duration">${escapeHtml(style.durationLabel)}</div>` : ''}</div></a>`;
+  const cat = style.category?.trim() || '';
+  const desc = style.description?.trim() || '';
+
+  const cardLink = `<a class="${cls}" href="${bookHref}"><div class="profile-service-card__img" aria-hidden="true"${imgStyle}></div><div class="profile-service-card__body"><div class="profile-service-card__name">${escapeHtml(style.title)}</div>${style.priceLabel ? `<div class="profile-service-card__price">${escapeHtml(style.priceLabel)}</div>` : ''}${style.durationLabel ? `<div class="profile-service-card__duration">${escapeHtml(style.durationLabel)}</div>` : ''}</div></a>`;
+
+  const expandHtml = desc
+    ? `<button class="profile-service-card__expand-btn" type="button" aria-expanded="false" onclick="(function(btn){var w=btn.closest('.profile-service-card-wrap');var d=w&&w.querySelector('.profile-service-card__desc');if(!d)return;var open=d.hidden;d.hidden=!open;btn.classList.toggle('is-open',open);btn.setAttribute('aria-expanded',open?'true':'false');})(this)"><span>About this service</span><svg class="profile-service-card__expand-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></button><div class="profile-service-card__desc" hidden>${escapeHtml(desc)}</div>`
+    : '';
+
+  return `<div class="profile-service-card-wrap"${cat ? ` data-category="${escapeHtml(cat)}"` : ''}>${cardLink}${expandHtml}</div>`;
 }
 
 function buildProfileServiceGridHtml(styles: SitePreviewStyle[], outlined = false): string {
   if (!styles.length) {
     return `<div class="profile-service-grid">${buildProfileServiceCardHtml({ title: 'Add styles in your app', description: '', priceLabel: '', sizeLabel: '' }, outlined)}</div>`;
   }
-  return `<div class="profile-service-grid">${styles.slice(0, 12).map((s) => buildProfileServiceCardHtml(s, outlined)).join('')}</div>`;
+
+  const cards = styles.map((s) => buildProfileServiceCardHtml(s, outlined)).join('');
+
+  // Build category filter tabs if any style has a category
+  const categories = Array.from(new Set(styles.map((s) => (s.category || '').trim()).filter(Boolean)));
+  const filtersHtml = categories.length > 0
+    ? `<div class="profile-menu-filters" id="preview-menu-filters">
+<button class="profile-menu-filter profile-menu-filter--active" data-filter="__all__" onclick="(function(btn){var filters=btn.closest('.profile-menu-filters');filters.querySelectorAll('.profile-menu-filter').forEach(function(b){b.classList.toggle('profile-menu-filter--active',b===btn)});var grid=document.getElementById('preview-service-grid');if(!grid)return;grid.querySelectorAll('.profile-service-card-wrap').forEach(function(w){w.hidden=false});})(this)">All</button>${categories.map((c) => `<button class="profile-menu-filter" data-filter="${escapeHtml(c)}" onclick="(function(btn){var filters=btn.closest('.profile-menu-filters');filters.querySelectorAll('.profile-menu-filter').forEach(function(b){b.classList.toggle('profile-menu-filter--active',b===btn)});var grid=document.getElementById('preview-service-grid');if(!grid)return;var filter=btn.dataset.filter;grid.querySelectorAll('.profile-service-card-wrap').forEach(function(w){w.hidden=(w.dataset.category||'')!==filter});})(this)">${escapeHtml(c)}</button>`).join('')}
+</div>`
+    : '';
+
+  return `${filtersHtml}<div class="profile-service-grid" id="preview-service-grid">${cards}</div>`;
 }
 
 export function buildProfileSitePreviewHtml(
@@ -381,6 +450,9 @@ export function buildProfileSitePreviewHtml(
     ? `<img class="profile-brand__logo-img" src="${theme.logoImageUrl.replace(/"/g, '%22')}" alt="" width="38" height="38" decoding="async"/>`
     : `<div class="profile-brand__logo" aria-hidden="true"></div>`;
 
+  const isStack = theme.heroLayout === 'stack';
+  const stackUrls = theme.heroStackImageUrls ?? [];
+
   const photoStyle = theme.heroImageUrl
     ? ` style="background-image:url('${theme.heroImageUrl.replace(/'/g, '%27')}');"`
     : '';
@@ -390,9 +462,12 @@ export function buildProfileSitePreviewHtml(
     ? `<p class="profile-about-body">${escapeHtml(content.heroDescription)}</p>`
     : `<p class="profile-about-body" style="color:#bbb;font-style:italic">Add your bio in the editor…</p>`;
 
-  const policyHtml = content.bookingPolicy
-    ? `<p class="profile-policy-body">${escapeHtml(content.bookingPolicy)}</p>`
-    : `<p class="profile-policy-body" style="color:#bbb;font-style:italic">Add your booking policy…</p>`;
+  const policyBullets = content.bookingPolicy
+    ? content.bookingPolicy.split('\n').map((l) => l.trim()).filter(Boolean)
+    : [];
+  const policyHtml = policyBullets.length > 0
+    ? `<ul class="profile-policy-body">${policyBullets.map((b) => `<li>${escapeHtml(b)}</li>`).join('')}</ul>`
+    : `<ul class="profile-policy-body"><li style="color:#bbb;font-style:italic;list-style:none">Add your booking policy…</li></ul>`;
 
   const isOutlined = theme.styleCardLayout === 'outlined';
   const menuSection = isSectionHidden(content, 'menu')
@@ -403,22 +478,50 @@ export function buildProfileSitePreviewHtml(
   const mapsSearchUrl = buildGoogleMapsSearchUrl(address);
   const mapSrc = buildGoogleMapsEmbedUrl(content);
 
-  const addressColHtml = !isLocationPartHidden(content, 'address') && address.trim()
+  const hasAddress = !isLocationPartHidden(content, 'address') && address.trim().length > 0;
+  const addressColHtml = hasAddress
     ? `<div class="profile-location-col"><h3>Address</h3><p><a href="${escapeHtml(mapsSearchUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(address)}</a></p></div>`
     : '';
 
-  const instagram = content.instagramHandle.replace(/^@/, '');
-  const contactColHtml = !isLocationPartHidden(content, 'contact') && (content.phoneDisplay || content.email || instagram)
-    ? `<div class="profile-location-col"><h3>Contact</h3>${content.phoneDisplay ? `<p>${escapeHtml(content.phoneDisplay)}</p>` : ''}${content.email ? `<p>${escapeHtml(content.email)}</p>` : ''}${instagram ? `<p><a href="https://instagram.com/${encodeURIComponent(instagram)}" target="_blank" rel="noopener noreferrer">@${escapeHtml(instagram)}</a></p>` : ''}</div>`
+  const instagram = content.instagramHandle.replace(/^@/, '').trim();
+  const hasContact = !isLocationPartHidden(content, 'contact') && !!(content.phoneDisplay || content.email);
+  const contactColHtml = hasContact
+    ? `<div class="profile-location-col"><h3>Contact</h3>${content.phoneDisplay ? `<p>${escapeHtml(content.phoneDisplay)}</p>` : ''}${content.email ? `<p>${escapeHtml(content.email)}</p>` : ''}</div>`
+    : '';
+
+  const hasSocial = !isLocationPartHidden(content, 'social') && instagram.length > 0;
+  const igUrl = hasSocial ? `https://www.instagram.com/${encodeURIComponent(instagram)}/` : '';
+  const socialColHtml = hasSocial
+    ? `<div class="profile-location-col"><h3>Social</h3><p class="profile-ig-link"><a href="${escapeHtml(igUrl)}" target="_blank" rel="noopener noreferrer"><svg class="profile-ig-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"/></svg>@${escapeHtml(instagram)}</a></p></div>`
     : '';
 
   const mapHtml = !isLocationPartHidden(content, 'map') && mapSrc
     ? `<iframe class="profile-location-map" title="Map" loading="lazy" src="${escapeHtml(mapSrc)}"></iframe>`
     : '';
 
-  const visitSection = isSectionHidden(content, 'visit')
+  const visitTitle = !hasAddress
+    ? 'Connect'
+    : !hasContact && !hasSocial
+      ? 'Visit'
+      : escapeHtml(content.visitTitle || 'Visit & Connect');
+
+  const visitSection = isSectionHidden(content, 'visit') || (!hasAddress && !hasContact && !hasSocial)
     ? ''
-    : `<section class="profile-location-section" id="preview-visit-section"><div class="container"><div class="profile-location-head"><h2>${escapeHtml(content.visitTitle || 'Location')}</h2></div><div class="profile-location-card"><div class="profile-location-info">${addressColHtml}${contactColHtml}</div>${mapHtml}</div></div></section>`;
+    : `<section class="profile-location-section" id="preview-visit-section" data-site-section="visit"><div class="container"><div class="profile-location-head"><h2>${visitTitle}</h2></div><div class="profile-location-card"><div class="profile-location-info">${addressColHtml}${contactColHtml}${socialColHtml}</div>${mapHtml}</div></div></section>`;
+
+  const stackImagesHtml = isStack && stackUrls.length > 0
+    ? `<div class="profile-hero-stack">${stackUrls.map((u) => `<img class="profile-hero-stack__img" src="${u.replace(/"/g, '%22')}" alt="" loading="lazy"/>`).join('')}</div>`
+    : '';
+
+  const isSplit = theme.heroLayout === 'split';
+  const infoHtml = isSplit
+    ? `<div class="profile-info">
+<div class="profile-section-block"><h2 class="profile-about-head">About Me</h2>${aboutHtml}</div>
+<div class="profile-section-block" id="profile-policy-block"><h3 class="profile-policy-head">Policies</h3>${policyHtml}</div>
+</div>`
+    : '';
+
+  const heroSectionClass = isStack ? 'profile-hero profile-hero--stack' : 'profile-hero';
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -437,12 +540,9 @@ export function buildProfileSitePreviewHtml(
 <a class="profile-brand" href="#">${logoHtml}<span>${escapeHtml(content.brandName)}</span></a>
 <a class="profile-book-btn" href="#">Book Now</a>
 </div></nav>
-<section class="profile-hero"><div class="container profile-hero__grid">
+<section class="${heroSectionClass}">${stackImagesHtml}<div class="container profile-hero__grid">
 <div class="profile-photo">${photoHtml}</div>
-<div class="profile-info">
-<div class="profile-section-block"><h2 class="profile-about-head">About Me</h2>${aboutHtml}</div>
-<div class="profile-section-block"><h3 class="profile-policy-head">Policies</h3>${policyHtml}</div>
-</div>
+${infoHtml}
 </div></section>
 <main>
 ${menuSection}

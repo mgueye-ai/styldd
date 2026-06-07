@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
@@ -20,35 +20,44 @@ import { colors } from '../theme';
 type Props = NativeStackScreenProps<SiteStackParamList, 'HeroPolicy'>;
 
 function policyStringToItems(raw: string): string[] {
-  const lines = raw.split('\n').map((l) => l.trim()).filter(Boolean);
+  const lines = (raw || '').split('\n').map((l) => l.trim()).filter(Boolean);
   return lines.length > 0 ? lines : [''];
-}
-
-function itemsToPolicyString(items: string[]): string {
-  return items.filter((l) => l.trim()).join('\n');
 }
 
 export default function HeroPolicyScreen({ navigation }: Props) {
   const { content, updateContent } = useSiteContent();
   const inputRefs = useRef<(TextInput | null)[]>([]);
 
-  const policyItems = policyStringToItems(content.bookingPolicy || '');
+  // Local state so empty items persist while editing
+  const [items, setItems] = useState<string[]>(() => policyStringToItems(content.bookingPolicy || ''));
 
-  function updatePolicyItem(index: number, value: string) {
-    const next = [...policyItems];
-    next[index] = value;
-    updateContent({ bookingPolicy: itemsToPolicyString(next) });
+  // Flush non-empty items to context whenever items change
+  useEffect(() => {
+    const cleaned = items.filter((l) => l.trim());
+    updateContent({ bookingPolicy: cleaned.join('\n') });
+  }, [items]);
+
+  function updateItem(index: number, value: string) {
+    setItems((prev) => {
+      const next = [...prev];
+      next[index] = value;
+      return next;
+    });
   }
 
-  function addPolicyItem() {
-    const next = [...policyItems, ''];
-    updateContent({ bookingPolicy: itemsToPolicyString(next) });
-    setTimeout(() => inputRefs.current[next.length - 1]?.focus(), 80);
+  function addItem() {
+    setItems((prev) => {
+      const next = [...prev, ''];
+      setTimeout(() => inputRefs.current[next.length - 1]?.focus(), 80);
+      return next;
+    });
   }
 
-  function removePolicyItem(index: number) {
-    const next = policyItems.filter((_, i) => i !== index);
-    updateContent({ bookingPolicy: itemsToPolicyString(next.length > 0 ? next : []) });
+  function removeItem(index: number) {
+    setItems((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      return next.length > 0 ? next : [''];
+    });
   }
 
   return (
@@ -77,34 +86,34 @@ export default function HeroPolicyScreen({ navigation }: Props) {
               Each point shows as a bullet on your site. Be clear — clients read this before booking.
             </Text>
 
-            {policyItems.map((item, index) => (
+            {items.map((item, index) => (
               <View key={index} style={styles.bulletRow}>
                 <View style={styles.bulletDot} />
                 <TextInput
                   ref={(r) => { inputRefs.current[index] = r; }}
                   style={styles.lineInput}
                   value={item}
-                  onChangeText={(v) => updatePolicyItem(index, v)}
+                  onChangeText={(v) => updateItem(index, v)}
                   placeholder={index === 0 ? 'e.g. A deposit is required to book' : 'Add another point…'}
                   placeholderTextColor={colors.textMuted}
                   returnKeyType="next"
                   onSubmitEditing={() => {
-                    if (index === policyItems.length - 1) addPolicyItem();
+                    if (index === items.length - 1) addItem();
                     else inputRefs.current[index + 1]?.focus();
                   }}
                   blurOnSubmit={false}
                   autoCorrect={false}
                   autoFocus={index === 0}
                 />
-                {policyItems.length > 1 && (
-                  <Pressable onPress={() => removePolicyItem(index)} hitSlop={8}>
+                {items.length > 1 && (
+                  <Pressable onPress={() => removeItem(index)} hitSlop={8}>
                     <Ionicons name="close-circle" size={18} color={colors.textMuted} />
                   </Pressable>
                 )}
               </View>
             ))}
 
-            <Pressable style={styles.addBtn} onPress={addPolicyItem}>
+            <Pressable style={styles.addBtn} onPress={addItem}>
               <Ionicons name="add-circle-outline" size={16} color={colors.accentPink} />
               <Text style={styles.addBtnText}>Add point</Text>
             </Pressable>

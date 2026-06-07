@@ -1,7 +1,9 @@
-export type HeroLayout = 'split' | 'image-below' | 'minimal';
-export type StyleCardLayout = 'card' | 'pill' | 'outlined';
-export type FontFamily = 'cormorant' | 'inter' | 'playfair' | 'dm-sans' | 'montserrat';
+export type HeroLayout = 'split' | 'stack' | 'image-below' | 'minimal';
+export type StyleCardLayout = 'card' | 'outlined';
+export type FontFamily = 'cormorant' | 'inter' | 'playfair' | 'dm-sans' | 'montserrat' | 'poppins' | 'lora' | 'nunito';
 export type TemplateId = 'profile';
+
+export type HeroImagePosition = 'center top' | 'center center' | 'center bottom';
 
 export type SiteTheme = {
   heroLayout: HeroLayout;
@@ -11,9 +13,13 @@ export type SiteTheme = {
   secondaryColor: string;
   backgroundColor: string | null;
   navbarColor: string | null;
+  heroImagePosition: HeroImagePosition;
+  heroStackImagePaths: string[];
   styleCardLayout: StyleCardLayout;
+  cardOutlineColor: string | null;
   fontFamily: FontFamily;
   templateId: TemplateId;
+  hideBookNowButton: boolean;
 };
 
 export const DEFAULT_SITE_THEME: SiteTheme = {
@@ -24,32 +30,44 @@ export const DEFAULT_SITE_THEME: SiteTheme = {
   secondaryColor: '#0a0a0a',
   backgroundColor: null,
   navbarColor: null,
+  heroImagePosition: 'center top',
+  heroStackImagePaths: [],
   styleCardLayout: 'card',
+  cardOutlineColor: null,
   fontFamily: 'cormorant',
   templateId: 'profile',
+  hideBookNowButton: false,
 };
 
 export type FontFamilyOption = {
   id: FontFamily;
   label: string;
   css: string;
+  bodyCss: string;
+  style: 'serif' | 'sans-serif';
   sampleText: string;
 };
 
 export const FONT_FAMILY_OPTIONS: FontFamilyOption[] = [
-  { id: 'cormorant', label: 'Cormorant', css: '"Cormorant Garamond", Georgia, serif', sampleText: 'Aa' },
-  { id: 'playfair', label: 'Playfair', css: '"Playfair Display", Georgia, serif', sampleText: 'Aa' },
-  { id: 'inter', label: 'Inter', css: 'Inter, system-ui, sans-serif', sampleText: 'Aa' },
-  { id: 'dm-sans', label: 'DM Sans', css: '"DM Sans", system-ui, sans-serif', sampleText: 'Aa' },
-  { id: 'montserrat', label: 'Montserrat', css: 'Montserrat, system-ui, sans-serif', sampleText: 'Aa' },
+  { id: 'cormorant', label: 'Cormorant', css: '"Cormorant Garamond", Georgia, serif', bodyCss: '"Source Sans 3", system-ui, sans-serif', style: 'serif', sampleText: 'Elegant & refined' },
+  { id: 'playfair', label: 'Playfair', css: '"Playfair Display", Georgia, serif', bodyCss: '"Source Sans 3", system-ui, sans-serif', style: 'serif', sampleText: 'Bold & sophisticated' },
+  { id: 'lora', label: 'Lora', css: '"Lora", Georgia, serif', bodyCss: '"Source Sans 3", system-ui, sans-serif', style: 'serif', sampleText: 'Warm & editorial' },
+  { id: 'inter', label: 'Inter', css: 'Inter, system-ui, sans-serif', bodyCss: 'Inter, system-ui, sans-serif', style: 'sans-serif', sampleText: 'Clean & modern' },
+  { id: 'dm-sans', label: 'DM Sans', css: '"DM Sans", system-ui, sans-serif', bodyCss: '"DM Sans", system-ui, sans-serif', style: 'sans-serif', sampleText: 'Friendly & readable' },
+  { id: 'poppins', label: 'Poppins', css: 'Poppins, system-ui, sans-serif', bodyCss: 'Poppins, system-ui, sans-serif', style: 'sans-serif', sampleText: 'Geometric & stylish' },
+  { id: 'nunito', label: 'Nunito', css: '"Nunito", system-ui, sans-serif', bodyCss: '"Nunito", system-ui, sans-serif', style: 'sans-serif', sampleText: 'Rounded & approachable' },
+  { id: 'montserrat', label: 'Montserrat', css: 'Montserrat, system-ui, sans-serif', bodyCss: 'Montserrat, system-ui, sans-serif', style: 'sans-serif', sampleText: 'Sharp & professional' },
 ];
 
 export const GOOGLE_FONTS_URL =
   'https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500' +
   '&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700' +
   '&family=Inter:wght@400;500;600;700' +
+  '&family=Lora:ital,wght@0,500;0,600;0,700;1,500' +
   '&family=Montserrat:wght@400;500;600;700' +
+  '&family=Nunito:wght@400;500;600;700' +
   '&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500' +
+  '&family=Poppins:wght@400;500;600;700' +
   '&family=Source+Sans+3:wght@400;600;700' +
   '&display=swap';
 
@@ -87,11 +105,11 @@ export function normalizeSiteTheme(value: unknown): SiteTheme {
 
   const layout = source.heroLayout;
   const heroLayout: HeroLayout =
-    layout === 'split' || layout === 'image-below' || layout === 'minimal'
+    layout === 'split' || layout === 'stack' || layout === 'image-below' || layout === 'minimal'
       ? layout
       : DEFAULT_SITE_THEME.heroLayout;
 
-  const validFontIds: FontFamily[] = ['cormorant', 'inter', 'playfair', 'dm-sans', 'montserrat'];
+  const validFontIds: FontFamily[] = ['cormorant', 'inter', 'playfair', 'dm-sans', 'montserrat', 'poppins', 'lora', 'nunito'];
 
   return {
     heroLayout,
@@ -116,14 +134,23 @@ export function normalizeSiteTheme(value: unknown): SiteTheme {
       ? (source.navbarColor as string).trim()
       : null,
     styleCardLayout:
-      source.styleCardLayout === 'pill'
-        ? 'pill'
-        : source.styleCardLayout === 'outlined'
-          ? 'outlined'
-          : DEFAULT_SITE_THEME.styleCardLayout,
+      source.styleCardLayout === 'outlined'
+        ? 'outlined'
+        : DEFAULT_SITE_THEME.styleCardLayout,
+    cardOutlineColor: isValidHexColor(source.cardOutlineColor)
+      ? (source.cardOutlineColor as string).trim()
+      : null,
     fontFamily: validFontIds.includes(source.fontFamily as FontFamily)
       ? (source.fontFamily as FontFamily)
       : DEFAULT_SITE_THEME.fontFamily,
+    heroImagePosition:
+      source.heroImagePosition === 'center center' || source.heroImagePosition === 'center bottom'
+        ? (source.heroImagePosition as HeroImagePosition)
+        : DEFAULT_SITE_THEME.heroImagePosition,
+    heroStackImagePaths: Array.isArray(source.heroStackImagePaths)
+      ? (source.heroStackImagePaths as unknown[]).filter((p): p is string => typeof p === 'string' && p.trim().length > 0)
+      : [],
     templateId: 'profile',
+    hideBookNowButton: source.hideBookNowButton === true,
   };
 }

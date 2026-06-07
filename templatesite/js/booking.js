@@ -54,7 +54,13 @@
   const TENANT_BOOKING = window.__STYLD_TENANT_BOOKING__ || null;
 
   const PAYMENT = Object.assign(
-    { mode: "deposit", depositKind: "percent", depositValue: 10 },
+    {
+      mode: "deposit",
+      depositKind: "percent",
+      depositValue: 10,
+      requireCurrentHairPhoto: true,
+      requireReferencePhoto: false,
+    },
     CFG.payment || {},
   );
 
@@ -1083,16 +1089,50 @@
     }
   }
 
+  function applyBookingFormOptions() {
+    const requireHair = PAYMENT.requireCurrentHairPhoto !== false;
+    const requireRef = PAYMENT.requireReferencePhoto === true;
+    const hairLabel = document.querySelector('label[for="photo-hair"]');
+    const refLabel = document.querySelector('label[for="photo-ref"]');
+
+    if (els.photoHair) {
+      if (requireHair) els.photoHair.setAttribute("required", "");
+      else els.photoHair.removeAttribute("required");
+    }
+    if (hairLabel) {
+      hairLabel.textContent = requireHair ? "Current hair photo *" : "Current hair photo (optional)";
+    }
+
+    if (els.photoRef) {
+      if (requireRef) els.photoRef.setAttribute("required", "");
+      else els.photoRef.removeAttribute("required");
+    }
+    if (refLabel) {
+      refLabel.textContent = requireRef ? "Reference image *" : "Reference image (optional)";
+    }
+  }
+
   function isFormCompleteForBooking() {
     const style = getSelectedStyle();
     const name = document.getElementById("full-name")?.value?.trim();
     const phone = document.getElementById("phone")?.value?.trim();
     const email = document.getElementById("email")?.value?.trim();
-    const photoOk = els.photoHair?.files?.length > 0;
+    const photoHairOk = PAYMENT.requireCurrentHairPhoto === false || els.photoHair?.files?.length > 0;
+    const photoRefOk = !PAYMENT.requireReferencePhoto || els.photoRef?.files?.length > 0;
     const slotOk = !!(els.hiddenAppt?.value && style && style.id !== "other");
     const needHouseAddr = !!(style && isHouseStyleId(style.id));
     const addrOk = !needHouseAddr || isHouseAddressComplete();
-    return !!(style && style.id !== "other" && name && phone && email && photoOk && slotOk && addrOk);
+    return !!(
+      style &&
+      style.id !== "other" &&
+      name &&
+      phone &&
+      email &&
+      photoHairOk &&
+      photoRefOk &&
+      slotOk &&
+      addrOk
+    );
   }
 
   function initStripeCardElement() {
@@ -1467,7 +1507,7 @@
             );
             return;
           }
-          alert("Please complete all required fields, choose a style, upload your hair photo, and select an available time slot.");
+          alert("Please complete all required fields, choose a style, upload any required photos, and select an available time slot.");
           return;
         }
 
@@ -1639,6 +1679,7 @@
     if (hasOption) els.styleSelect.value = preset;
   }
 
+  applyBookingFormOptions();
   bindFilePreview(els.photoHair, els.photoHairPreview);
   bindFilePreview(els.photoRef, els.photoRefPreview);
   bindForm();

@@ -29,6 +29,7 @@ import {
   saveStyleCatalogMeta,
 } from '../lib/siteServices';
 import { useLinkedSite } from '../hooks/useLinkedSite';
+import { useSiteTheme } from './SiteThemeContext';
 
 export type StyleUpsertInput = {
   id?: string;
@@ -46,7 +47,7 @@ type ServiceCatalogContextValue = {
   catalogServices: CatalogService[];
   styleMeta: StyleCatalogMeta;
   priceOverrides: Record<string, number>;
-  getCoverUrl: (styleId: string | null | undefined) => string | null;
+  getCoverUrl: (styleId: string | null | undefined, fallbackToLogo?: boolean) => string | null;
   resolveStyleId: (styleId?: string | null, serviceName?: string) => string | null;
   getPrice: (styleId: string) => number;
   getStyleMeta: (styleId: string) => StyleMetaEntry | null;
@@ -66,6 +67,7 @@ const ServiceCatalogContext = createContext<ServiceCatalogContextValue | undefin
 
 export function ServiceCatalogProvider({ children }: { children: React.ReactNode }) {
   const linkedSite = useLinkedSite();
+  const { logoImageUrl } = useSiteTheme();
   const [priceOverrides, setPriceOverrides] = useState<Record<string, number>>({});
   const [styleMeta, setStyleMeta] = useState<StyleCatalogMeta>({});
   const [coverImages, setCoverImages] = useState<Record<string, string>>({});
@@ -117,13 +119,13 @@ export function ServiceCatalogProvider({ children }: { children: React.ReactNode
   }, [refresh]);
 
   const getCoverUrl = useCallback(
-    (styleId: string | null | undefined) => {
-      if (!styleId) return null;
+    (styleId: string | null | undefined, fallbackToLogo = true) => {
+      if (!styleId) return fallbackToLogo ? logoImageUrl : null;
       const storagePath = coverImages[styleId];
-      if (!storagePath) return null;
+      if (!storagePath) return fallbackToLogo ? logoImageUrl : null;
       return getStyleCoverImageUrl(storagePath, linkedSite);
     },
-    [coverImages, linkedSite],
+    [coverImages, linkedSite, logoImageUrl],
   );
 
   const resolveStyleId = useCallback(

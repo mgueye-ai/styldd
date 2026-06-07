@@ -133,15 +133,20 @@
       var templateId = 'profile';
 
       window.__STYLD_SITE_CONTENT__ = content;
+      var heroStackImagePaths = Array.isArray(theme.heroStackImagePaths) ? theme.heroStackImagePaths : [];
       window.__STYLD_SITE_THEME__ = {
         heroLayout: theme.heroLayout || 'split',
+        heroImagePosition: theme.heroImagePosition || 'center top',
         heroImageUrl: coverUrl(theme.heroImagePath),
         logoImageUrl: coverUrl(theme.logoImagePath),
+        heroStackImageUrls: heroStackImagePaths.map(function(p) { return coverUrl(p); }).filter(Boolean),
         primaryColor: theme.primaryColor || null,
         secondaryColor: theme.secondaryColor || null,
         navbarColor: theme.navbarColor || null,
         styleCardLayout: theme.styleCardLayout || 'card',
+        cardOutlineColor: theme.cardOutlineColor || null,
         fontFamily: theme.fontFamily || 'cormorant',
+        hideBookNowButton: theme.hideBookNowButton === true,
         templateId: templateId,
       };
 
@@ -175,13 +180,26 @@
         root.style.setProperty('--pink-light', lighten(primary, 0.22));
         root.style.setProperty('--ink', secondary);
 
+        // Derive --muted and --muted-soft from --ink so all body text changes with the text color
+        var secRgb = hexToRgb(secondary);
+        if (secRgb) {
+          var r = secRgb[0], g = secRgb[1], b = secRgb[2];
+          root.style.setProperty('--muted', 'rgba(' + r + ',' + g + ',' + b + ',0.62)');
+          root.style.setProperty('--muted-soft', 'rgba(' + r + ',' + g + ',' + b + ',0.46)');
+        }
+
         var bg = (theme.backgroundColor || '').trim();
         if (bg && /^#[0-9a-fA-F]{6}$/.test(bg)) {
-          // Set --cream (section/body backgrounds) to the user's chosen background color.
-          // Do NOT set --white — service cards and modals use --white and must remain
-          // visually distinct from the page background.
           root.style.setProperty('--cream', bg);
+          root.style.setProperty('--white', bg);
           document.body.style.backgroundColor = bg;
+        }
+
+        // Set active filter tab text color based on primary color luminance
+        var primRgb = hexToRgb(primary);
+        if (primRgb) {
+          var lum = (0.299 * primRgb[0] + 0.587 * primRgb[1] + 0.114 * primRgb[2]) / 255;
+          root.style.setProperty('--filter-active-text', lum > 0.5 ? '#000000' : '#ffffff');
         }
 
         var navBg = (theme.navbarColor || '').trim();
@@ -190,17 +208,41 @@
           root.style.setProperty('--nav-bg-solid', navBg);
         }
 
-        // Apply font family
-        var fontFamilyMap = {
+        var cardOutline = (theme.cardOutlineColor || '').trim();
+        if (cardOutline && /^#[0-9a-fA-F]{6}$/.test(cardOutline)) {
+          root.style.setProperty('--card-outline', cardOutline);
+        }
+
+        var validPositions = ['center top', 'center center', 'center bottom'];
+        var heroPos = (theme.heroImagePosition || '').trim();
+        if (validPositions.indexOf(heroPos) !== -1) {
+          root.style.setProperty('--hero-img-position', heroPos);
+        }
+
+        // Apply font family — update both display (headings) and body (all other text)
+        var fontDisplayMap = {
           'cormorant': '"Cormorant Garamond", Georgia, serif',
           'playfair': '"Playfair Display", Georgia, serif',
+          'lora': '"Lora", Georgia, serif',
           'inter': 'Inter, system-ui, sans-serif',
           'dm-sans': '"DM Sans", system-ui, sans-serif',
+          'poppins': 'Poppins, system-ui, sans-serif',
+          'nunito': '"Nunito", system-ui, sans-serif',
+          'montserrat': 'Montserrat, system-ui, sans-serif',
+        };
+        var fontBodyMap = {
+          'cormorant': '"Source Sans 3", system-ui, sans-serif',
+          'playfair': '"Source Sans 3", system-ui, sans-serif',
+          'lora': '"Source Sans 3", system-ui, sans-serif',
+          'inter': 'Inter, system-ui, sans-serif',
+          'dm-sans': '"DM Sans", system-ui, sans-serif',
+          'poppins': 'Poppins, system-ui, sans-serif',
+          'nunito': '"Nunito", system-ui, sans-serif',
           'montserrat': 'Montserrat, system-ui, sans-serif',
         };
         var fontId = theme.fontFamily || 'cormorant';
-        var fontCss = fontFamilyMap[fontId] || fontFamilyMap['cormorant'];
-        root.style.setProperty('--font-display', fontCss);
+        root.style.setProperty('--font-display', fontDisplayMap[fontId] || fontDisplayMap['cormorant']);
+        root.style.setProperty('--font-body', fontBodyMap[fontId] || fontBodyMap['cormorant']);
       })();
 
       var styleIds = {};
@@ -214,24 +256,30 @@
         styleIds[id] = true;
       });
 
+      var logoFallbackUrl = coverUrl(theme.logoImagePath);
       var styles = Object.keys(styleIds)
-        .slice(0, 12)
         .map(function (styleId) {
           var item = meta[styleId] || {};
           var sizeLabel = item.sizeLabel || item.variant || sizeLabelFromStyleId(styleId);
-        return {
-          id: styleId,
-          title: item.title || styleId,
-          description: item.description || '',
-          priceLabel: formatPrice(prices[styleId]),
-          sizeLabel: sizeLabel || undefined,
-          durationLabel: formatStyleDuration(item.durationMinutes),
-          imageUrl: coverUrl(covers[styleId]),
-          category: item.category || '',
-        };
+          return {
+            id: styleId,
+            title: item.title || styleId,
+            description: item.description || '',
+            priceLabel: formatPrice(prices[styleId]),
+            sizeLabel: sizeLabel || undefined,
+            durationLabel: formatStyleDuration(item.durationMinutes),
+            imageUrl: coverUrl(covers[styleId]) || logoFallbackUrl,
+            category: item.category || '',
+          };
         });
 
       window.__STYLD_SITE_STYLES__ = styles;
+
+      // Hide "Book Now" button if the owner opted out
+      if (theme.hideBookNowButton) {
+        var bookBtns = document.querySelectorAll('.profile-book-btn');
+        bookBtns.forEach(function(btn) { btn.style.display = 'none'; });
+      }
 
       if (statusEl) statusEl.hidden = true;
       if (window.applyStyldPreviewContent) {

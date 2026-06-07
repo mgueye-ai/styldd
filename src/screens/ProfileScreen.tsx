@@ -29,7 +29,7 @@ type ManageItem = {
 };
 
 const MANAGE_MENU: ManageItem[] = [
-  { label: 'Payments', image: MANAGE_PAY_IMG, route: 'Payments', paymentsTab: 'booking' },
+  { label: 'Form & Payments', image: MANAGE_PAY_IMG, route: 'Payments', paymentsTab: 'booking' },
   { label: 'Styles & Services', image: MANAGE_STYLES_IMG, route: 'Styles' },
   { label: 'Schedule', image: MANAGE_CAL_IMG, route: 'ScheduleManage', scheduleTab: 'schedule' },
 ];
@@ -107,6 +107,11 @@ export default function ProfileScreen({ navigation }: Props) {
     user?.email?.split('@')[0] ||
     'Stylist';
 
+  const businessName =
+    profile?.full_name?.trim() && profile?.business_name?.trim()
+      ? profile.business_name.trim()
+      : null;
+
   const initials =
     displayName
       .split(' ')
@@ -136,6 +141,9 @@ export default function ProfileScreen({ navigation }: Props) {
           </View>
           <View style={styles.profileInfo}>
             <Text style={styles.profileName}>{displayName}</Text>
+            {businessName ? (
+              <Text style={styles.profileBusiness}>{businessName}</Text>
+            ) : null}
           </View>
         </View>
 
@@ -214,6 +222,18 @@ export default function ProfileScreen({ navigation }: Props) {
         {/* ── Account ── */}
         <SectionLabel title="Account" />
         <View style={styles.menuCard}>
+          {__DEV__ ? (
+            <Pressable
+              style={[styles.menuRow, styles.menuRowBorder]}
+              onPress={() => navigation.navigate('Paywall')}
+            >
+              <View style={styles.menuIconWrap}>
+                <Ionicons name="card-outline" size={18} color={colors.accentPink} />
+              </View>
+              <Text style={styles.menuLabel}>Preview paywall</Text>
+              <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+            </Pressable>
+          ) : null}
           <Pressable
             style={[styles.menuRow, styles.menuRowBorder]}
             onPress={() => navigation.navigate('AccountSettings')}
@@ -276,6 +296,12 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 22,
     fontWeight: '700',
+    marginBottom: 2,
+  },
+  profileBusiness: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '500',
     marginBottom: 3,
   },
   profileEmail: {

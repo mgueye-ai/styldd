@@ -172,7 +172,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
                       <Text style={styles.balanceAmount}>
                         {formatUsdFromCents(summary?.balancePendingCents ?? 0)}
                       </Text>
-                      <Text style={styles.balanceLabel}>Pending</Text>
+                      <Text style={styles.balanceLabel}>Processing</Text>
                     </View>
                   </View>
                 )}

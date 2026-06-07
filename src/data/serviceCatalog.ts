@@ -224,6 +224,5 @@ export function groupCatalogByCategory(services: CatalogService[]): { title: str
     });
 }
 
-export const HAIRBY_NADJAE_LOGO_URL = 'https://www.hairbynadjae.com/logo.png';
 
 export const STYLE_COVER_BUCKET = 'style-covers';

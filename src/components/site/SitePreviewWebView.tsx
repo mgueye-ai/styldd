@@ -21,6 +21,25 @@ type SitePreviewWebViewProps = {
 const APPLY_PREVIEW_SCRIPT =
   'if(window.applyStyldPreviewContent){window.applyStyldPreviewContent();}true;';
 
+// Injected after load — intercepts all clicks on links/buttons so nothing navigates away
+const BLOCK_INTERACTIONS_SCRIPT = `
+(function(){
+  document.addEventListener('click', function(e){
+    var el = e.target;
+    while(el && el !== document.body){
+      if(el.tagName === 'A' || el.tagName === 'BUTTON' || el.tagName === 'FORM'){
+        e.preventDefault();
+        e.stopPropagation();
+        return false;
+      }
+      el = el.parentElement;
+    }
+  }, true);
+  document.addEventListener('submit', function(e){ e.preventDefault(); }, true);
+})();
+true;
+`;
+
 export default function SitePreviewWebView({
   content,
   styles: previewStyles = [],
@@ -49,12 +68,17 @@ export default function SitePreviewWebView({
         ref={webRef}
         source={hostedUrl ? { uri: hostedUrl } : { html }}
         injectedJavaScriptBeforeContentLoaded={hostedUrl ? injection : undefined}
+        injectedJavaScript={BLOCK_INTERACTIONS_SCRIPT}
         style={sheetStyles.webview}
         scrollEnabled
         showsVerticalScrollIndicator={!compact}
         originWhitelist={['*']}
         setSupportMultipleWindows={false}
         startInLoadingState
+        onShouldStartLoadWithRequest={(req) => {
+          // Only allow the initial page load — block all navigations triggered by taps
+          return req.navigationType === 'other' || req.url === req.mainDocumentURL;
+        }}
         renderLoading={() => (
           <View style={sheetStyles.loading}>
             <ActivityIndicator color="#db2777" />

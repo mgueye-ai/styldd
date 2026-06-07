@@ -1,5 +1,5 @@
 export type SiteSection = 'menu' | 'about' | 'visit';
-export type LocationPart = 'address' | 'map' | 'contact';
+export type LocationPart = 'address' | 'map' | 'contact' | 'social';
 
 export type SiteContent = {
   brandName: string;
@@ -37,6 +37,7 @@ export const LOCATION_PARTS: { id: LocationPart; label: string; icon: string }[]
   { id: 'address', label: 'Address', icon: 'home-outline' },
   { id: 'map', label: 'Map', icon: 'map-outline' },
   { id: 'contact', label: 'Contact info', icon: 'call-outline' },
+  { id: 'social', label: 'Social', icon: 'logo-instagram' },
 ];
 
 export const SITE_SECTIONS: { id: SiteSection; label: string; icon: string }[] = [
@@ -59,20 +60,20 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
     'Replace this blurb with how you show work — link to your Instagram or any profile you use.',
   menuTitle: 'Menu',
   menuBlurb: 'Browse our services & prices — book online.',
-  aboutTitle: 'About your salon',
+  aboutTitle: 'About Me',
   aboutBody:
     'Tell clients who you are, what you specialize in, and why they should book with you.',
   visitTitle: 'Visit & connect',
   visitBody: 'Share your studio address, house-call area, or how clients can find you.',
-  phoneDisplay: '(555) 010-0199',
-  phoneTel: '+15550100199',
+  phoneDisplay: '',
+  phoneTel: '',
   email: '',
-  instagramHandle: 'yourhandle',
-  addressLine1: '123 Main Street',
-  addressLine2: 'Suite 100',
-  city: 'Your City',
-  state: 'ST',
-  zip: '00000',
+  instagramHandle: '',
+  addressLine1: '',
+  addressLine2: '',
+  city: '',
+  state: '',
+  zip: '',
   mapEmbedUrl: '',
   footerText: 'Add footer credit here',
   timezone: 'America/New_York',
@@ -81,7 +82,7 @@ export const DEFAULT_SITE_CONTENT: SiteContent = {
 };
 
 const VALID_SECTIONS: SiteSection[] = ['menu', 'about', 'visit'];
-const VALID_LOCATION_PARTS: LocationPart[] = ['address', 'map', 'contact'];
+const VALID_LOCATION_PARTS: LocationPart[] = ['address', 'map', 'contact', 'social'];
 
 export function normalizeSiteContent(value: unknown): SiteContent {
   const source =

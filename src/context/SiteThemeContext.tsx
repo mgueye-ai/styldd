@@ -13,7 +13,7 @@ import {
   normalizeSiteTheme,
   SiteTheme,
 } from '../data/siteTheme';
-import { uploadHeroImageFromUri, uploadLogoImageFromUri } from '../lib/siteAdmin';
+import { uploadGalleryImageFromUri, uploadHeroImageFromUri, uploadLogoImageFromUri, uploadStackImageFromUri } from '../lib/siteAdmin';
 import { getStyleCoverImageUrl } from '../lib/siteServices';
 import { loadSiteSetting, saveSiteSetting } from '../lib/siteRecords';
 import { useAuth } from './AuthContext';
@@ -26,10 +26,16 @@ type SiteThemeContextValue = {
   error: string | null;
   heroImageUrl: string | null;
   logoImageUrl: string | null;
+  galleryImageUrls: string[];
+  stackImageUrls: string[];
+  uploadStackImage: (fileUri: string) => Promise<void>;
+  removeStackImage: (slot: number) => void;
   updateTheme: (patch: Partial<SiteTheme>) => void;
   setHeroLayout: (layout: HeroLayout) => void;
   uploadHeroImage: (fileUri: string) => Promise<void>;
   uploadLogoImage: (fileUri: string) => Promise<void>;
+  uploadGalleryImage: (slot: number, fileUri: string) => Promise<void>;
+  removeGalleryImage: (slot: number) => void;
   removeHeroImage: () => void;
   saveThemeNow: () => Promise<void>;
   refresh: () => Promise<void>;
@@ -187,6 +193,76 @@ export function SiteThemeProvider({ children }: { children: React.ReactNode }) {
     return getStyleCoverImageUrl(theme.logoImagePath, linkedSite);
   }, [linkedSite, theme.logoImagePath]);
 
+  const galleryImageUrls = useMemo(() => {
+    return (theme.galleryImagePaths ?? []).map((p) => getStyleCoverImageUrl(p, linkedSite) ?? '').filter(Boolean);
+  }, [linkedSite, theme.galleryImagePaths]);
+
+  const uploadGalleryImage = useCallback(
+    async (slot: number, fileUri: string) => {
+      if (!linkedSite || !user?.id) throw new Error('Sign in again to upload images.');
+      setIsSaving(true);
+      setError(null);
+      try {
+        const storagePath = await uploadGalleryImageFromUri(linkedSite, slot, fileUri);
+        const paths = [...(theme.galleryImagePaths ?? [])];
+        paths[slot] = storagePath;
+        const next = { ...theme, galleryImagePaths: paths };
+        setTheme(next);
+        await saveSiteSetting(user.id, 'site_theme', next);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Could not upload gallery image.';
+        setError(message);
+        throw err;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [linkedSite, theme, user],
+  );
+
+  const removeGalleryImage = useCallback(
+    (slot: number) => {
+      const paths = (theme.galleryImagePaths ?? []).filter((_, i) => i !== slot);
+      updateTheme({ galleryImagePaths: paths });
+    },
+    [theme, updateTheme],
+  );
+
+  const stackImageUrls = useMemo(() => {
+    return (theme.heroStackImagePaths ?? []).map((p) => getStyleCoverImageUrl(p, linkedSite) ?? '').filter(Boolean);
+  }, [linkedSite, theme.heroStackImagePaths]);
+
+  const uploadStackImage = useCallback(
+    async (fileUri: string) => {
+      if (!linkedSite || !user?.id) throw new Error('Sign in again to upload images.');
+      setIsSaving(true);
+      setError(null);
+      try {
+        const currentPaths = theme.heroStackImagePaths ?? [];
+        const slot = currentPaths.length;
+        const storagePath = await uploadStackImageFromUri(linkedSite, slot, fileUri);
+        const next = { ...theme, heroStackImagePaths: [...currentPaths, storagePath] };
+        setTheme(next);
+        await saveSiteSetting(user.id, 'site_theme', next);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Could not upload image.';
+        setError(message);
+        throw err;
+      } finally {
+        setIsSaving(false);
+      }
+    },
+    [linkedSite, theme, user],
+  );
+
+  const removeStackImage = useCallback(
+    (slot: number) => {
+      const paths = (theme.heroStackImagePaths ?? []).filter((_, i) => i !== slot);
+      updateTheme({ heroStackImagePaths: paths });
+    },
+    [theme, updateTheme],
+  );
+
   useEffect(
     () => () => {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -202,10 +278,16 @@ export function SiteThemeProvider({ children }: { children: React.ReactNode }) {
       error,
       heroImageUrl,
       logoImageUrl,
+      galleryImageUrls,
+      stackImageUrls,
+      uploadStackImage,
+      removeStackImage,
       updateTheme,
       setHeroLayout,
       uploadHeroImage,
       uploadLogoImage,
+      uploadGalleryImage,
+      removeGalleryImage,
       removeHeroImage,
       saveThemeNow,
       refresh,
@@ -217,10 +299,16 @@ export function SiteThemeProvider({ children }: { children: React.ReactNode }) {
       error,
       heroImageUrl,
       logoImageUrl,
+      galleryImageUrls,
+      stackImageUrls,
+      uploadStackImage,
+      removeStackImage,
       updateTheme,
       setHeroLayout,
       uploadHeroImage,
       uploadLogoImage,
+      uploadGalleryImage,
+      removeGalleryImage,
       removeHeroImage,
       saveThemeNow,
       refresh,
@@ -237,10 +325,16 @@ const SITE_THEME_FALLBACK: SiteThemeContextValue = {
   error: null,
   heroImageUrl: null,
   logoImageUrl: null,
+  galleryImageUrls: [],
+  stackImageUrls: [],
   updateTheme: () => {},
   setHeroLayout: () => {},
   uploadHeroImage: async () => {},
   uploadLogoImage: async () => {},
+  uploadGalleryImage: async () => {},
+  removeGalleryImage: () => {},
+  uploadStackImage: async () => {},
+  removeStackImage: () => {},
   removeHeroImage: () => {},
   saveThemeNow: async () => {},
   refresh: async () => {},

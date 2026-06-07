@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import Svg, {
   Defs,
   LinearGradient,
@@ -20,13 +21,14 @@ import Svg, {
 } from 'react-native-svg';
 import { Image as ExpoImage } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as AppleAuthentication from 'expo-apple-authentication';
 import { useAuth } from '../context/AuthContext';
 import { colors } from '../theme';
 
 type AuthMode = 'signIn' | 'signUp';
 
 export default function LoginScreen() {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, signInWithApple } = useAuth();
   const [mode, setMode] = useState<AuthMode>('signIn');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -34,6 +36,13 @@ export default function LoginScreen() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [appleLoading, setAppleLoading] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS !== 'ios') return;
+    void AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
+  }, []);
 
   const toggleMode = () => {
     setMode((current) => (current === 'signIn' ? 'signUp' : 'signIn'));
@@ -61,22 +70,28 @@ export default function LoginScreen() {
     setError(null);
     setMessage(null);
 
-    const result =
-      mode === 'signIn'
-        ? await signIn(trimmedEmail, trimmedPassword)
-        : await signUp(trimmedEmail, trimmedPassword, fullName);
-
-    setLoading(false);
-
-    if (result.error) {
-      setError(result.error);
+    if (mode === 'signIn') {
+      const result = await signIn(trimmedEmail, trimmedPassword);
+      setLoading(false);
+      if (result.error) setError(result.error);
       return;
     }
 
-    if (mode === 'signUp') {
-      setMessage('Account created. Check your email if confirmation is required, then sign in.');
+    // Sign up — then immediately sign in so no email confirmation step is needed
+    const signUpResult = await signUp(trimmedEmail, trimmedPassword, fullName);
+    if (signUpResult.error) {
+      setLoading(false);
+      setError(signUpResult.error);
+      return;
+    }
+
+    const signInResult = await signIn(trimmedEmail, trimmedPassword);
+    setLoading(false);
+    if (signInResult.error) {
+      setError('Account created but could not sign in automatically. Please sign in below.');
       setMode('signIn');
     }
+    // On success the auth state change triggers automatically — no action needed
   };
 
   return (
@@ -165,7 +180,7 @@ export default function LoginScreen() {
                 <TextInput
                   value={fullName}
                   onChangeText={setFullName}
-                  placeholder="Nadjae Smith"
+                  placeholder="Your name"
                   placeholderTextColor={colors.textMuted}
                   autoCapitalize="words"
                   style={styles.input}
@@ -217,6 +232,36 @@ export default function LoginScreen() {
                 </Text>
               )}
             </Pressable>
+
+            {appleAvailable ? (
+              <>
+                <View style={styles.dividerRow}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>or</Text>
+                  <View style={styles.dividerLine} />
+                </View>
+                <Pressable
+                  style={[styles.appleButton, (loading || appleLoading) && styles.primaryButtonDisabled]}
+                  disabled={loading || appleLoading}
+                  onPress={async () => {
+                    setError(null);
+                    setAppleLoading(true);
+                    const result = await signInWithApple();
+                    setAppleLoading(false);
+                    if (result.error) setError(result.error);
+                  }}
+                >
+                  {appleLoading ? (
+                    <ActivityIndicator color="#0a0a0a" />
+                  ) : (
+                    <>
+                      <Ionicons name="logo-apple" size={18} color="#0a0a0a" />
+                      <Text style={styles.appleButtonText}>Sign in with Apple</Text>
+                    </>
+                  )}
+                </Pressable>
+              </>
+            ) : null}
 
             <Pressable style={styles.secondaryButton} onPress={toggleMode}>
               <Text style={styles.secondaryButtonText}>
@@ -363,6 +408,38 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 14,
     fontWeight: '500',
+  },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginVertical: 2,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+  },
+  dividerText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  appleButton: {
+    width: '100%',
+    height: 50,
+    borderRadius: 999,
+    backgroundColor: '#fff',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  appleButtonText: {
+    color: '#0a0a0a',
+    fontSize: 15,
+    fontWeight: '700',
+    letterSpacing: -0.2,
   },
 
   /* Marquee */

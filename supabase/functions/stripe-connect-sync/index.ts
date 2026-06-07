@@ -12,6 +12,12 @@ function json(body: unknown, status = 200) {
   });
 }
 
+function sumUsdCents(buckets: { currency: string; amount: number }[] | undefined): number {
+  return (buckets ?? [])
+    .filter((b) => b.currency === 'usd')
+    .reduce((sum, b) => sum + b.amount, 0);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
 
@@ -32,17 +38,25 @@ Deno.serve(async (req) => {
 
   const { data: row } = await supabase
     .from('styld_stripe_accounts')
-    .select('stripe_account_id')
+    .select('stripe_account_id, balance_available_cents, balance_pending_cents')
     .eq('user_id', user.id)
     .maybeSingle();
 
   if (!row?.stripe_account_id) {
-    return json({ status: 'not_started', payoutsEnabled: false, chargesEnabled: false });
+    return json({
+      hasAccount: false,
+      status: 'not_started',
+      payoutsEnabled: false,
+      chargesEnabled: false,
+      balanceAvailableCents: 0,
+      balancePendingCents: 0,
+      balanceLive: false,
+    });
   }
 
   const accountId = row.stripe_account_id;
+  const checkedAt = new Date().toISOString();
 
-  // Fetch account from Stripe
   const acctRes = await fetch(`https://api.stripe.com/v1/accounts/${accountId}`, {
     headers: { Authorization: `Bearer ${stripeKey}` },
   });
@@ -53,39 +67,43 @@ Deno.serve(async (req) => {
   const chargesEnabled = acct.charges_enabled === true;
   const detailsSubmitted = acct.details_submitted === true;
 
-  // Fetch balance if charges/payouts enabled
-  let availableCents = 0;
-  let pendingCents = 0;
-  if (chargesEnabled) {
-    const balRes = await fetch('https://api.stripe.com/v1/balance', {
-      headers: {
-        Authorization: `Bearer ${stripeKey}`,
-        'Stripe-Account': accountId,
-      },
-    });
-    if (balRes.ok) {
-      const bal = await balRes.json();
-      availableCents = (bal.available || [])
-        .filter((b: { currency: string }) => b.currency === 'usd')
-        .reduce((sum: number, b: { amount: number }) => sum + b.amount, 0);
-      pendingCents = (bal.pending || [])
-        .filter((b: { currency: string }) => b.currency === 'usd')
-        .reduce((sum: number, b: { amount: number }) => sum + b.amount, 0);
-    }
+  let availableCents = row.balance_available_cents ?? 0;
+  let pendingCents = row.balance_pending_cents ?? 0;
+  let balanceLive = false;
+  let balanceError: string | undefined;
+
+  const balRes = await fetch('https://api.stripe.com/v1/balance', {
+    headers: {
+      Authorization: `Bearer ${stripeKey}`,
+      'Stripe-Account': accountId,
+    },
+  });
+  if (balRes.ok) {
+    const bal = await balRes.json();
+    availableCents = sumUsdCents(bal.available);
+    pendingCents = sumUsdCents(bal.pending);
+    balanceLive = true;
+  } else {
+    const balErr = await balRes.json().catch(() => ({}));
+    balanceError = balErr?.error?.message ?? 'Could not fetch balance from Stripe';
   }
 
-  // Update DB
   await supabase.from('styld_stripe_accounts').update({
     onboarding_complete: detailsSubmitted,
     payouts_enabled: payoutsEnabled,
     charges_enabled: chargesEnabled,
     details_submitted: detailsSubmitted,
-    balance_available_cents: availableCents,
-    balance_pending_cents: pendingCents,
-    updated_at: new Date().toISOString(),
+    ...(balanceLive
+      ? {
+          balance_available_cents: availableCents,
+          balance_pending_cents: pendingCents,
+        }
+      : {}),
+    updated_at: checkedAt,
   }).eq('user_id', user.id);
 
   return json({
+    hasAccount: true,
     status: payoutsEnabled ? 'ready' : detailsSubmitted ? 'pending_review' : 'onboarding',
     accountId,
     payoutsEnabled,
@@ -93,5 +111,8 @@ Deno.serve(async (req) => {
     detailsSubmitted,
     balanceAvailableCents: availableCents,
     balancePendingCents: pendingCents,
+    balanceLive,
+    balanceCheckedAt: checkedAt,
+    balanceError,
   });
 });

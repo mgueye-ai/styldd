@@ -9,6 +9,7 @@ import {
   ImageSourcePropType,
   Modal,
   Pressable,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -18,6 +19,7 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import BusinessScreenLayout, { BusinessSection } from '../../components/business/BusinessScreenLayout';
+import { useServiceCatalog } from '../../context/ServiceCatalogContext';
 import { useSiteData } from '../../context/SiteDataContext';
 import {
   BookingPaymentMode,
@@ -30,6 +32,7 @@ import { loadBookingPayment, saveBookingPayment } from '../../lib/siteServices';
 import {
   fetchStripeConnectStatus,
   formatUsdFromCents,
+  requestStripeConnectPayout,
   startStripeConnectOnboarding,
   syncStripeConnect,
   type StripeConnectSummary,
@@ -53,7 +56,6 @@ type Props = NativeStackScreenProps<ProfileStackParamList, 'Payments'>;
 
 // ─── Shared helpers ───────────────────────────────────────────────────────────
 
-const SAMPLE_SERVICE_PRICE = 120;
 const APP_ICON = require('../../../assets/icon.png') as ImageSourcePropType;
 const RETURN_URL = 'styldd.com/connect/return';
 const REFRESH_URL = 'styldd.com/connect/refresh';
@@ -65,7 +67,7 @@ function formatMoney(amount: number) {
 // ─── Tab pill bar ─────────────────────────────────────────────────────────────
 
 const TABS: { id: PaymentsTab; label: string; icon: string }[] = [
-  { id: 'booking', label: 'Booking', icon: 'card-outline' },
+  { id: 'booking', label: 'Form', icon: 'document-text-outline' },
   { id: 'payouts', label: 'Payouts', icon: 'wallet-outline' },
 ];
 
@@ -142,6 +144,7 @@ function computePreview(payment: BookingPaymentSettings, total: number) {
 
 function BookingTab({ onGoToPayouts }: { onGoToPayouts: () => void }) {
   const { linkedSite, hasLinkedSite } = useSiteData();
+  const { catalogServices, getPrice, getStyleMeta } = useServiceCatalog();
   const [payment, setPayment] = useState<BookingPaymentSettings>(DEFAULT_BOOKING_PAYMENT);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -214,7 +217,20 @@ function BookingTab({ onGoToPayouts }: { onGoToPayouts: () => void }) {
     }
   };
 
-  const preview = useMemo(() => computePreview(payment, SAMPLE_SERVICE_PRICE), [payment]);
+  const previewService = useMemo(() => {
+    const first = catalogServices[0];
+    if (!first) return { title: 'Your service', price: 0 };
+    const meta = getStyleMeta(first.id);
+    return {
+      title: meta?.title ?? first.name,
+      price: getPrice(first.id) || 0,
+    };
+  }, [catalogServices, getPrice, getStyleMeta]);
+
+  const preview = useMemo(
+    () => computePreview(payment, previewService.price),
+    [payment, previewService.price],
+  );
 
   if (!hasLinkedSite) {
     return (
@@ -229,6 +245,34 @@ function BookingTab({ onGoToPayouts }: { onGoToPayouts: () => void }) {
 
   return (
     <ScrollView contentContainerStyle={bStyles.content} showsVerticalScrollIndicator={false}>
+      <BusinessSection title="Booking form">
+        <Text style={bStyles.lead}>Choose what clients must upload when booking online.</Text>
+        <Pressable
+          style={bStyles.toggleRow}
+          onPress={() => updatePayment({ ...payment, requireCurrentHairPhoto: !payment.requireCurrentHairPhoto })}
+        >
+          <View style={bStyles.toggleBody}>
+            <Text style={bStyles.toggleLabel}>Require current hair photo</Text>
+            <Text style={bStyles.toggleSub}>Clients upload a photo of their hair before booking</Text>
+          </View>
+          <View style={[bStyles.toggleBox, payment.requireCurrentHairPhoto && bStyles.toggleBoxOn]}>
+            {payment.requireCurrentHairPhoto ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
+          </View>
+        </Pressable>
+        <Pressable
+          style={bStyles.toggleRow}
+          onPress={() => updatePayment({ ...payment, requireReferencePhoto: !payment.requireReferencePhoto })}
+        >
+          <View style={bStyles.toggleBody}>
+            <Text style={bStyles.toggleLabel}>Require reference photo</Text>
+            <Text style={bStyles.toggleSub}>Clients must upload an inspiration or reference image</Text>
+          </View>
+          <View style={[bStyles.toggleBox, payment.requireReferencePhoto && bStyles.toggleBoxOn]}>
+            {payment.requireReferencePhoto ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
+          </View>
+        </Pressable>
+      </BusinessSection>
+
       <BusinessSection title="Payment option">
         <Text style={bStyles.lead}>Pick one — you can change this anytime.</Text>
         {!stripeReady && (
@@ -280,10 +324,10 @@ function BookingTab({ onGoToPayouts }: { onGoToPayouts: () => void }) {
       <View style={bStyles.previewCard}>
         <Image source={APP_ICON} style={bStyles.previewImg} resizeMode="cover" />
         <View style={bStyles.previewBody}>
-          <Text style={bStyles.previewTitle}>Sample service</Text>
+          <Text style={bStyles.previewTitle}>{previewService.title}</Text>
           <View style={bStyles.previewMid}>
-            <Text style={bStyles.previewMeta}>MEDIUM</Text>
-            <Text style={bStyles.previewPrice}>{formatMoney(SAMPLE_SERVICE_PRICE)}</Text>
+            <Text style={bStyles.previewMeta}>ESTIMATE</Text>
+            <Text style={bStyles.previewPrice}>{formatMoney(previewService.price)}</Text>
           </View>
           <View style={bStyles.previewPayRow}>
             <Text style={bStyles.previewPayLabel}>{preview.dueNowLabel}</Text>
@@ -351,7 +395,7 @@ function BookingTab({ onGoToPayouts }: { onGoToPayouts: () => void }) {
 
       <Pressable style={[bStyles.saveBtn, saving && { opacity: 0.65 }]} onPress={save} disabled={saving}>
         <Text style={bStyles.saveBtnText}>
-          {saving ? 'Saving…' : saved ? 'Saved!' : `Save ${PAYMENT_MODES.find(m => m.id === payment.mode)?.label.toLowerCase() ?? 'settings'}`}
+          {saving ? 'Saving…' : saved ? 'Saved!' : 'Save settings'}
         </Text>
       </Pressable>
     </ScrollView>
@@ -409,6 +453,34 @@ const bStyles = StyleSheet.create({
   amountSuffix: { color: colors.textMuted, fontSize: 22, fontWeight: '600', fontFamily: fonts.numberMedium, marginLeft: 4 },
   saveBtn: { alignItems: 'center', backgroundColor: colors.accentPink, borderRadius: 16, paddingVertical: 16, marginTop: 4, shadowColor: colors.accentPink, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 },
   saveBtnText: { color: colors.background, fontSize: 16, fontWeight: '700' },
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  toggleBody: { flex: 1, gap: 2 },
+  toggleLabel: { color: colors.text, fontSize: 14, fontWeight: '600' },
+  toggleSub: { color: colors.textMuted, fontSize: 12, lineHeight: 17 },
+  toggleBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: colors.textMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleBoxOn: {
+    backgroundColor: colors.accentPink,
+    borderColor: colors.accentPink,
+  },
 });
 
 // ─── Payouts tab ──────────────────────────────────────────────────────────────
@@ -418,12 +490,23 @@ function PayoutsTab() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [connectUrl, setConnectUrl] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    try { setSummary(await fetchStripeConnectStatus()); }
-    catch { setSummary(null); }
-    finally { setLoading(false); }
+    setRefreshError(null);
+    try {
+      const data = await fetchStripeConnectStatus();
+      setSummary(data);
+      if (data.hasAccount && data.balanceLive === false) {
+        setRefreshError(data.balanceError ?? 'Could not verify balance with Stripe. Showing last known amounts.');
+      }
+    } catch (err) {
+      setSummary(null);
+      setRefreshError(err instanceof Error ? err.message : 'Could not load payout account');
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
@@ -457,8 +540,12 @@ function PayoutsTab() {
 
   function handlePayout() {
     const avail = summary?.balanceAvailableCents ?? 0;
-    if (avail <= 0) {
-      Alert.alert('Nothing to pay out', 'You have no available balance yet.');
+    if (summary?.balanceLive === false) {
+      Alert.alert('Balance unavailable', 'We could not verify your live balance with Stripe. Pull to refresh and try again.');
+      return;
+    }
+    if (avail < 100) {
+      Alert.alert('Nothing to pay out', 'Available balance must be at least $1.00.');
       return;
     }
     Alert.alert(
@@ -466,7 +553,25 @@ function PayoutsTab() {
       `Pay out ${formatUsdFromCents(avail)} to your linked bank account?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Pay out', onPress: () => Alert.alert('Payout initiated', 'Funds will arrive in 1–2 business days.') },
+        {
+          text: 'Pay out',
+          onPress: () =>
+            void (async () => {
+              setBusy(true);
+              try {
+                const result = await requestStripeConnectPayout();
+                await refresh();
+                Alert.alert(
+                  'Payout started',
+                  `${formatUsdFromCents(result.amountCents)} is on its way to your bank. Usually arrives within 1–2 business days.`,
+                );
+              } catch (err) {
+                Alert.alert('Payout failed', err instanceof Error ? err.message : 'Try again');
+              } finally {
+                setBusy(false);
+              }
+            })(),
+        },
       ],
     );
   }
@@ -478,15 +583,36 @@ function PayoutsTab() {
 
   return (
     <>
-      <ScrollView contentContainerStyle={pStyles.content} showsVerticalScrollIndicator={false}>
-        {loading ? (
+      <ScrollView
+        contentContainerStyle={pStyles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={loading}
+            onRefresh={() => void refresh()}
+            tintColor={colors.accentPink}
+          />
+        }
+      >
+        {loading && !summary ? (
           <ActivityIndicator color={colors.accentPink} style={{ marginTop: 60 }} />
         ) : isReady ? (
           <>
             {/* ── Unpaid balance hero ── */}
             <View style={pStyles.heroCard}>
-              <Text style={pStyles.heroLabel}>Unpaid balance</Text>
+              <View style={pStyles.heroTopRow}>
+                <Text style={pStyles.heroLabel}>Unpaid balance</Text>
+                <Pressable onPress={() => void refresh()} hitSlop={10} disabled={loading}>
+                  <Ionicons name="refresh" size={16} color={colors.textMuted} />
+                </Pressable>
+              </View>
               <Text style={pStyles.heroAmount}>{formatUsdFromCents(totalUnpaid)}</Text>
+
+              {refreshError ? (
+                <Text style={pStyles.balanceWarn}>{refreshError}</Text>
+              ) : summary?.balanceLive ? (
+                <Text style={pStyles.balanceOk}>Verified with Stripe</Text>
+              ) : null}
 
               {/* Available / Processing row */}
               <View style={pStyles.splitRow}>
@@ -517,9 +643,9 @@ function PayoutsTab() {
 
               {/* Payout button */}
               <Pressable
-                style={[pStyles.payoutBtn, (busy || (summary?.balanceAvailableCents ?? 0) <= 0) && { opacity: 0.45 }]}
+                style={[pStyles.payoutBtn, (busy || summary?.balanceLive === false || (summary?.balanceAvailableCents ?? 0) < 100) && { opacity: 0.45 }]}
                 onPress={handlePayout}
-                disabled={busy || (summary?.balanceAvailableCents ?? 0) <= 0}
+                disabled={busy || summary?.balanceLive === false || (summary?.balanceAvailableCents ?? 0) < 100}
               >
                 {busy
                   ? <ActivityIndicator color="#fff" size="small" />
@@ -613,8 +739,11 @@ const pStyles = StyleSheet.create({
     marginBottom: 28,
     gap: 16,
   },
+  heroTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   heroLabel: { fontSize: 12, fontWeight: '600', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.7 },
   heroAmount: { fontSize: 42, fontWeight: '700', fontFamily: fonts.number, color: colors.text, letterSpacing: -1.5, marginTop: -4 },
+  balanceOk: { fontSize: 12, color: '#15803d', fontWeight: '500', marginTop: -8 },
+  balanceWarn: { fontSize: 12, color: '#b45309', fontWeight: '500', marginTop: -8, lineHeight: 17 },
 
   splitRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, borderRadius: 12, paddingVertical: 12 },
   splitItem: { flex: 1, alignItems: 'center' },
@@ -676,7 +805,7 @@ export default function PaymentsScreen({ navigation, route }: Props) {
   const [activeTab, setActiveTab] = useState<PaymentsTab>(route.params?.tab ?? 'booking');
 
   const titleMap: Record<PaymentsTab, string> = {
-    booking: 'Booking payments',
+    booking: 'Form & payments',
     payouts: 'Payments & payouts',
   };
 
