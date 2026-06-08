@@ -22,13 +22,29 @@ import BusinessScreenLayout, { BusinessSection } from '../../components/business
 import { useServiceCatalog } from '../../context/ServiceCatalogContext';
 import { useSiteData } from '../../context/SiteDataContext';
 import {
+  CancellationPolicyPreset,
+  CancellationPolicySettings,
+  CANCELLATION_POLICY_PRESETS,
+  DEFAULT_CANCELLATION_POLICY,
+  REFUND_APPLIES_TO_OPTIONS,
+  RefundAppliesTo,
+  buildPolicySummary,
+} from '../../data/cancellationPolicy';
+import {
   BookingPaymentMode,
   BookingPaymentSettings,
   DEFAULT_BOOKING_PAYMENT,
   DepositKind,
+  computeBalanceDue,
+  computeDepositAmount,
 } from '../../data/bookingPayment';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
-import { loadBookingPayment, saveBookingPayment } from '../../lib/siteServices';
+import {
+  loadBookingPayment,
+  loadCancellationPolicy,
+  saveBookingPayment,
+  saveCancellationPolicy,
+} from '../../lib/siteServices';
 import {
   fetchStripeConnectStatus,
   formatUsdFromCents,
@@ -133,19 +149,30 @@ const DEPOSIT_PRESETS_PERCENT = [10, 20, 25, 50];
 
 function computePreview(payment: BookingPaymentSettings, total: number) {
   const t = Math.max(0, total);
-  if (payment.mode === 'in_person') return { dueNow: 0, dueLater: t, dueNowLabel: 'Due when booking', dueLaterLabel: 'Due at appointment' };
-  if (payment.mode === 'full') return { dueNow: t, dueLater: 0, dueNowLabel: 'Due when booking', dueLaterLabel: 'At appointment' };
-  let deposit = payment.depositKind === 'fixed'
-    ? payment.depositValue
-    : Math.round(t * (payment.depositValue / 100) * 100) / 100;
-  deposit = Math.min(t, Math.max(0, deposit));
-  return { dueNow: deposit, dueLater: Math.max(0, t - deposit), dueNowLabel: 'Deposit today', dueLaterLabel: 'Balance in person' };
+  if (payment.mode === 'in_person') {
+    return { dueNow: 0, dueLater: t, dueNowLabel: 'Due when booking', dueLaterLabel: 'Due at appointment' };
+  }
+  if (payment.mode === 'full') {
+    return { dueNow: t, dueLater: 0, dueNowLabel: 'Due when booking', dueLaterLabel: 'At appointment' };
+  }
+  const deposit = computeDepositAmount(t, payment);
+  const dueLater = computeBalanceDue(t, payment);
+  const included = payment.depositIncludedInPrice !== false;
+  return {
+    dueNow: deposit,
+    dueLater,
+    dueNowLabel: 'Deposit today',
+    dueLaterLabel: included ? 'Balance in person' : 'Full price in person',
+  };
 }
 
 function BookingTab({ onGoToPayouts }: { onGoToPayouts: () => void }) {
   const { linkedSite, hasLinkedSite } = useSiteData();
   const { catalogServices, getPrice, getStyleMeta } = useServiceCatalog();
   const [payment, setPayment] = useState<BookingPaymentSettings>(DEFAULT_BOOKING_PAYMENT);
+  const [cancellationPolicy, setCancellationPolicy] = useState<CancellationPolicySettings>(
+    DEFAULT_CANCELLATION_POLICY,
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -157,11 +184,13 @@ function BookingTab({ onGoToPayouts }: { onGoToPayouts: () => void }) {
     if (!linkedSite) return;
     setIsLoading(true); setError(null);
     try {
-      const [pd, ss] = await Promise.all([
+      const [pd, policyData, ss] = await Promise.all([
         loadBookingPayment(linkedSite),
+        loadCancellationPolicy(linkedSite),
         fetchStripeConnectStatus().catch(() => null),
       ]);
       setPayment(pd);
+      setCancellationPolicy(policyData);
       setStripeReady(ss?.status === 'ready' || ss?.status === 'pending_review');
       setIsDirty(false);
     } catch (err) {
@@ -174,6 +203,33 @@ function BookingTab({ onGoToPayouts }: { onGoToPayouts: () => void }) {
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
 
   const updatePayment = (next: BookingPaymentSettings) => { setPayment(next); setSaved(false); setIsDirty(true); };
+
+  const updateCancellationPolicy = (next: CancellationPolicySettings) => {
+    setCancellationPolicy(next);
+    setSaved(false);
+    setIsDirty(true);
+  };
+
+  const handlePresetPress = (presetId: CancellationPolicyPreset) => {
+    const preset = CANCELLATION_POLICY_PRESETS.find((item) => item.id === presetId);
+    if (!preset) return;
+    updateCancellationPolicy({
+      preset: preset.id,
+      cancelNoticeHours: 0,
+      fullRefundNoticeHours: preset.fullRefundNoticeHours,
+      refundAppliesTo: preset.refundAppliesTo,
+      policySummary: preset.policySummary,
+    });
+  };
+
+  const handleRefundScopePress = (scope: RefundAppliesTo) => {
+    updateCancellationPolicy({
+      ...cancellationPolicy,
+      preset: 'custom',
+      refundAppliesTo: scope,
+      policySummary: buildPolicySummary(cancellationPolicy.fullRefundNoticeHours, scope),
+    });
+  };
 
   const handleModePress = (modeId: BookingPaymentMode) => {
     if ((modeId === 'deposit' || modeId === 'full') && !stripeReady) {
@@ -205,7 +261,10 @@ function BookingTab({ onGoToPayouts }: { onGoToPayouts: () => void }) {
     }
     setSaving(true);
     try {
-      await saveBookingPayment(linkedSite, payment);
+      await Promise.all([
+        saveBookingPayment(linkedSite, payment),
+        saveCancellationPolicy(linkedSite, cancellationPolicy),
+      ]);
       setSaved(true); setIsDirty(false);
       setTimeout(() => setSaved(false), 2500);
       return true;
@@ -245,36 +304,12 @@ function BookingTab({ onGoToPayouts }: { onGoToPayouts: () => void }) {
 
   return (
     <ScrollView contentContainerStyle={bStyles.content} showsVerticalScrollIndicator={false}>
-      <BusinessSection title="Booking form">
-        <Text style={bStyles.lead}>Choose what clients must upload when booking online.</Text>
-        <Pressable
-          style={bStyles.toggleRow}
-          onPress={() => updatePayment({ ...payment, requireCurrentHairPhoto: !payment.requireCurrentHairPhoto })}
-        >
-          <View style={bStyles.toggleBody}>
-            <Text style={bStyles.toggleLabel}>Require current hair photo</Text>
-            <Text style={bStyles.toggleSub}>Clients upload a photo of their hair before booking</Text>
-          </View>
-          <View style={[bStyles.toggleBox, payment.requireCurrentHairPhoto && bStyles.toggleBoxOn]}>
-            {payment.requireCurrentHairPhoto ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
-          </View>
-        </Pressable>
-        <Pressable
-          style={bStyles.toggleRow}
-          onPress={() => updatePayment({ ...payment, requireReferencePhoto: !payment.requireReferencePhoto })}
-        >
-          <View style={bStyles.toggleBody}>
-            <Text style={bStyles.toggleLabel}>Require reference photo</Text>
-            <Text style={bStyles.toggleSub}>Clients must upload an inspiration or reference image</Text>
-          </View>
-          <View style={[bStyles.toggleBox, payment.requireReferencePhoto && bStyles.toggleBoxOn]}>
-            {payment.requireReferencePhoto ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
-          </View>
-        </Pressable>
-      </BusinessSection>
+      <Text style={bStyles.screenIntro}>
+        Set up how clients pay, your cancellation rules, and what they upload when booking.
+      </Text>
 
-      <BusinessSection title="Payment option">
-        <Text style={bStyles.lead}>Pick one — you can change this anytime.</Text>
+      <BusinessSection title="How clients pay">
+        <Text style={bStyles.lead}>Choose when clients pay — you can change this anytime.</Text>
         {!stripeReady && (
           <View style={bStyles.gateBanner}>
             <Ionicons name="card-outline" size={16} color={colors.accentPink} />
@@ -319,32 +354,31 @@ function BookingTab({ onGoToPayouts }: { onGoToPayouts: () => void }) {
         })}
       </BusinessSection>
 
-      {/* Client preview */}
-      <Text style={bStyles.previewLabel}>What clients see</Text>
-      <View style={bStyles.previewCard}>
-        <Image source={APP_ICON} style={bStyles.previewImg} resizeMode="cover" />
-        <View style={bStyles.previewBody}>
-          <Text style={bStyles.previewTitle}>{previewService.title}</Text>
-          <View style={bStyles.previewMid}>
-            <Text style={bStyles.previewMeta}>ESTIMATE</Text>
-            <Text style={bStyles.previewPrice}>{formatMoney(previewService.price)}</Text>
-          </View>
-          <View style={bStyles.previewPayRow}>
-            <Text style={bStyles.previewPayLabel}>{preview.dueNowLabel}</Text>
-            <Text style={bStyles.previewPayAccent}>{formatMoney(preview.dueNow)}</Text>
-          </View>
-          {preview.dueLater > 0 && (
-            <View style={bStyles.previewPayRow}>
-              <Text style={bStyles.previewPayLabel}>{preview.dueLaterLabel}</Text>
-              <Text style={bStyles.previewPayValue}>{formatMoney(preview.dueLater)}</Text>
-            </View>
-          )}
-        </View>
-      </View>
-
-      {/* Deposit editor */}
       {payment.mode === 'deposit' && (
-        <BusinessSection title="Deposit details">
+        <BusinessSection title="Deposit amount">
+          <Text style={bStyles.depositKindLead}>How does the deposit work?</Text>
+          <View style={bStyles.segmented}>
+            {(
+              [
+                { included: true, label: 'Part of price', subtitle: 'Counts toward the service total' },
+                { included: false, label: 'Additional hold', subtitle: 'On top of the full service price' },
+              ] as const
+            ).map((option) => {
+              const active = payment.depositIncludedInPrice === option.included;
+              return (
+                <Pressable
+                  key={option.label}
+                  style={[bStyles.segment, bStyles.segmentTall, active && bStyles.segmentActive]}
+                  onPress={() => updatePayment({ ...payment, depositIncludedInPrice: option.included })}
+                >
+                  <Text style={[bStyles.segmentText, active && bStyles.segmentTextActive]}>{option.label}</Text>
+                  <Text style={[bStyles.segmentSubtext, active && bStyles.segmentSubtextActive]}>
+                    {option.subtitle}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
           <View style={bStyles.segmented}>
             {(['percent', 'fixed'] as DepositKind[]).map((kind) => {
               const active = payment.depositKind === kind;
@@ -393,6 +427,117 @@ function BookingTab({ onGoToPayouts }: { onGoToPayouts: () => void }) {
         </BusinessSection>
       )}
 
+      <BusinessSection title="What clients see">
+        <Text style={bStyles.lead}>Preview of pricing on your booking page for a sample service.</Text>
+        <View style={bStyles.previewCard}>
+          <Image source={APP_ICON} style={bStyles.previewImg} resizeMode="cover" />
+          <View style={bStyles.previewBody}>
+            <Text style={bStyles.previewTitle}>{previewService.title}</Text>
+            <View style={bStyles.previewMid}>
+              <Text style={bStyles.previewMeta}>ESTIMATE</Text>
+              <Text style={bStyles.previewPrice}>{formatMoney(previewService.price)}</Text>
+            </View>
+            <View style={bStyles.previewPayRow}>
+              <Text style={bStyles.previewPayLabel}>{preview.dueNowLabel}</Text>
+              <Text style={bStyles.previewPayAccent}>{formatMoney(preview.dueNow)}</Text>
+            </View>
+            {preview.dueLater > 0 && (
+              <View style={bStyles.previewPayRow}>
+                <Text style={bStyles.previewPayLabel}>{preview.dueLaterLabel}</Text>
+                <Text style={bStyles.previewPayValue}>{formatMoney(preview.dueLater)}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </BusinessSection>
+
+      <BusinessSection title="Cancellation & refunds">
+        <Text style={bStyles.lead}>
+          Clients can cancel online anytime before the appointment. Refunds depend on your notice
+          window and whether they paid a deposit, full price, or both.
+        </Text>
+        {CANCELLATION_POLICY_PRESETS.map((preset) => {
+          const selected = cancellationPolicy.preset === preset.id;
+          return (
+            <Pressable
+              key={preset.id}
+              style={bStyles.modeCard}
+              onPress={() => handlePresetPress(preset.id)}
+            >
+              <View style={bStyles.modeBody}>
+                <Text style={bStyles.modeTitle}>{preset.label}</Text>
+                <Text style={bStyles.modeSub}>{preset.description}</Text>
+              </View>
+              <View style={[bStyles.check, selected && bStyles.checkSelected]}>
+                {selected ? <Ionicons name="checkmark" size={16} color={colors.background} /> : null}
+              </View>
+            </Pressable>
+          );
+        })}
+        <Text style={bStyles.policyFieldLabel}>Refunds apply to</Text>
+        {REFUND_APPLIES_TO_OPTIONS.map((option) => {
+          const selected = cancellationPolicy.refundAppliesTo === option.id;
+          return (
+            <Pressable
+              key={option.id}
+              style={bStyles.modeCard}
+              onPress={() => handleRefundScopePress(option.id)}
+            >
+              <View style={bStyles.modeBody}>
+                <Text style={bStyles.modeTitle}>{option.label}</Text>
+                <Text style={bStyles.modeSub}>{option.description}</Text>
+              </View>
+              <View style={[bStyles.check, selected && bStyles.checkSelected]}>
+                {selected ? <Ionicons name="checkmark" size={16} color={colors.background} /> : null}
+              </View>
+            </Pressable>
+          );
+        })}
+        <Text style={bStyles.policyFieldLabel}>Policy text (shown at checkout)</Text>
+        <TextInput
+          style={bStyles.policySummaryInput}
+          multiline
+          value={cancellationPolicy.policySummary}
+          onChangeText={(text) =>
+            updateCancellationPolicy({
+              ...cancellationPolicy,
+              preset: 'custom',
+              policySummary: text,
+            })
+          }
+          placeholder="Describe your cancellation and refund rules…"
+          placeholderTextColor={colors.textMuted}
+        />
+      </BusinessSection>
+
+      <BusinessSection title="What clients upload">
+        <Text style={bStyles.lead}>Choose which photos clients must add on the booking form.</Text>
+        <Pressable
+          style={bStyles.toggleRow}
+          onPress={() => updatePayment({ ...payment, requireCurrentHairPhoto: !payment.requireCurrentHairPhoto })}
+        >
+          <View style={bStyles.toggleBody}>
+            <Text style={bStyles.toggleLabel}>Require current hair photo</Text>
+            <Text style={bStyles.toggleSub}>Clients upload a photo of their hair before booking</Text>
+          </View>
+          <View style={[bStyles.toggleBox, payment.requireCurrentHairPhoto && bStyles.toggleBoxOn]}>
+            {payment.requireCurrentHairPhoto ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
+          </View>
+        </Pressable>
+        <Pressable
+          style={bStyles.toggleRow}
+          onPress={() => updatePayment({ ...payment, requireReferencePhoto: !payment.requireReferencePhoto })}
+        >
+          <View style={bStyles.toggleBody}>
+            <Text style={bStyles.toggleLabel}>Require reference photo</Text>
+            <Text style={bStyles.toggleSub}>Clients must upload an inspiration or reference image</Text>
+          </View>
+          <View style={[bStyles.toggleBox, payment.requireReferencePhoto && bStyles.toggleBoxOn]}>
+            {payment.requireReferencePhoto ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
+          </View>
+        </Pressable>
+      </BusinessSection>
+
       <Pressable style={[bStyles.saveBtn, saving && { opacity: 0.65 }]} onPress={save} disabled={saving}>
         <Text style={bStyles.saveBtnText}>
           {saving ? 'Saving…' : saved ? 'Saved!' : 'Save settings'}
@@ -407,6 +552,13 @@ const bStyles = StyleSheet.create({
   emptyWrap: { padding: 24, alignItems: 'center' },
   emptyText: { color: colors.textMuted, fontSize: 14, textAlign: 'center' },
   errorText: { color: '#f87171', fontSize: 14, padding: 20 },
+  screenIntro: {
+    color: colors.textMuted,
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 4,
+    paddingHorizontal: 4,
+  },
   lead: { color: colors.textMuted, fontSize: 14, lineHeight: 20, marginBottom: 14 },
   gateBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.accentPinkMuted, borderRadius: 12, padding: 12, marginBottom: 12 },
   gateBannerText: { flex: 1, fontSize: 13, color: colors.text, lineHeight: 18 },
@@ -425,8 +577,7 @@ const bStyles = StyleSheet.create({
   popularText: { color: colors.accentPink, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.3 },
   check: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: colors.cardBorder, alignItems: 'center', justifyContent: 'center' },
   checkSelected: { borderColor: colors.accentPink, backgroundColor: colors.accentPink },
-  previewLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '600', letterSpacing: 0.6, textTransform: 'uppercase', marginBottom: 10 },
-  previewCard: { flexDirection: 'row', alignItems: 'stretch', gap: 14, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.cardBorder, backgroundColor: colors.card, marginBottom: 20 },
+  previewCard: { flexDirection: 'row', alignItems: 'stretch', gap: 14, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.cardBorder, backgroundColor: colors.card },
   previewImg: { width: 88, height: 88, borderRadius: 12, backgroundColor: colors.background },
   previewBody: { flex: 1, minWidth: 0, justifyContent: 'center', gap: 6 },
   previewTitle: { color: colors.text, fontSize: 17, fontWeight: '700' },
@@ -437,11 +588,15 @@ const bStyles = StyleSheet.create({
   previewPayLabel: { color: colors.textMuted, fontSize: 12, fontWeight: '500' },
   previewPayAccent: { color: colors.accentPink, fontSize: 13, fontWeight: '700' },
   previewPayValue: { color: colors.text, fontSize: 13, fontWeight: '600' },
+  depositKindLead: { color: colors.textMuted, fontSize: 13, fontWeight: '600', marginBottom: 10 },
   segmented: { flexDirection: 'row', gap: 8, marginBottom: 16 },
   segment: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.cardBorder, backgroundColor: colors.background },
+  segmentTall: { paddingVertical: 10, gap: 2 },
   segmentActive: { borderColor: colors.textMuted, backgroundColor: colors.card },
   segmentText: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
   segmentTextActive: { color: colors.text },
+  segmentSubtext: { color: colors.textMuted, fontSize: 11, lineHeight: 14, textAlign: 'center', opacity: 0.85 },
+  segmentSubtextActive: { color: colors.text, opacity: 0.75 },
   presetRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   presetChip: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 999, borderWidth: 1, borderColor: colors.cardBorder, backgroundColor: colors.background },
   presetChipActive: { borderColor: colors.accentPink, backgroundColor: colors.accentPink },
@@ -453,6 +608,20 @@ const bStyles = StyleSheet.create({
   amountSuffix: { color: colors.textMuted, fontSize: 22, fontWeight: '600', fontFamily: fonts.numberMedium, marginLeft: 4 },
   saveBtn: { alignItems: 'center', backgroundColor: colors.accentPink, borderRadius: 16, paddingVertical: 16, marginTop: 4, shadowColor: colors.accentPink, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 },
   saveBtnText: { color: colors.background, fontSize: 16, fontWeight: '700' },
+  policyFieldLabel: { color: colors.textMuted, fontSize: 13, fontWeight: '600', marginTop: 8, marginBottom: 8 },
+  policySummaryInput: {
+    minHeight: 96,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    borderRadius: 14,
+    padding: 12,
+    color: colors.text,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlignVertical: 'top',
+    backgroundColor: colors.card,
+    marginBottom: 8,
+  },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',

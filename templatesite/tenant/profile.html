@@ -10,7 +10,7 @@
       href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700&family=Inter:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="/css/styles.css?v=42" />
+    <link rel="stylesheet" href="/css/styles.css?v=45" />
     <style>
       #tenant-status {
         position: fixed;
@@ -66,6 +66,26 @@
     </section>
 
     <main>
+      <!-- Reviews carousel (above menu) -->
+      <section class="profile-reviews-section" id="profile-reviews-section" data-site-section="reviews" hidden>
+        <div class="container">
+          <div class="profile-reviews-head profile-menu-head">
+            <h2 id="profile-reviews-title">Client Reviews</h2>
+          </div>
+        </div>
+        <div class="profile-reviews-marquee" id="profile-reviews-marquee" aria-label="Client reviews"></div>
+      </section>
+
+      <div class="profile-review-modal" id="profile-review-modal" hidden>
+        <div class="profile-review-modal__backdrop" data-review-modal-close></div>
+        <div class="profile-review-modal__card" role="dialog" aria-modal="true" aria-labelledby="profile-review-modal-name">
+          <button class="profile-review-modal__close" type="button" data-review-modal-close aria-label="Close review">&times;</button>
+          <p class="profile-review-modal__stars" id="profile-review-modal-stars"></p>
+          <h3 class="profile-review-modal__name" id="profile-review-modal-name"></h3>
+          <p class="profile-review-modal__message" id="profile-review-modal-message"></p>
+        </div>
+      </div>
+
       <!-- Menu -->
       <section class="profile-menu-section" id="profile-menu-section" data-site-section="menu">
         <div class="container">
@@ -130,9 +150,9 @@
 
     <script src="/js/styld-tenant-config.js?v=35"></script>
     <script src="/js/styld-tenant-config.local.js?v=35"></script>
-    <script src="/js/styld-tenant-shared.js?v=39"></script>
+    <script src="/js/styld-tenant-shared.js?v=40"></script>
     <script src="/js/styld-analytics.js?v=1"></script>
-    <script src="/js/profile-content.js?v=2"></script>
-    <script src="/js/tenant-site.js?v=37"></script>
+    <script src="/js/profile-content.js?v=4"></script>
+    <script src="/js/tenant-site.js?v=39"></script>
   </body>
 </html>

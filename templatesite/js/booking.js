@@ -27,7 +27,7 @@
       slotStepMinutes: 30,
       saturdayLastStartHour: 14,
       saturdayLastStartMinute: 0,
-      sameDayLeadMinutes: 30,
+      sameDayLeadMinutes: 4320,
       concurrentAppointmentCapacity: 2,
       closedWeekdays: [],
       blackoutRanges: [],
@@ -52,17 +52,34 @@
   };
 
   const TENANT_BOOKING = window.__STYLD_TENANT_BOOKING__ || null;
+  /** Styld tenant sites use catalog price + duration only — no legacy hair-length add-ons. */
+  const USE_HAIR_LENGTH_ADDONS = !TENANT_BOOKING;
 
   const PAYMENT = Object.assign(
     {
       mode: "deposit",
       depositKind: "percent",
       depositValue: 10,
+      depositIncludedInPrice: true,
       requireCurrentHairPhoto: true,
       requireReferencePhoto: false,
     },
     CFG.payment || {},
   );
+
+  function depositIncludedInPrice() {
+    return PAYMENT.depositIncludedInPrice !== false;
+  }
+
+  const CANCELLATION_POLICY =
+    CFG.cancellationPolicy && typeof CFG.cancellationPolicy === "object"
+      ? CFG.cancellationPolicy
+      : {
+          fullRefundNoticeHours: 24,
+          refundAppliesTo: "both",
+          policySummary:
+            "You may cancel online anytime before your appointment. Online deposits and full payments are fully refunded when you cancel at least 24 hours before your appointment. Cancellations after that deadline are non-refundable.",
+        };
 
   const USE_LEGACY_DEPOSIT_RULES = !TENANT_BOOKING && !CFG.payment;
 
@@ -145,13 +162,16 @@
     { id: "other", name: "Other / custom quote (price TBD)", base: 0 },
   ];
 
-  /** Must match booking lookup / reschedule minimum (calendar days). */
-  const BOOKING_LEAD_DAYS = 3;
+  const availability =
+    window.BookingAvailability && DT
+      ? window.BookingAvailability.createEngine(CFG, DT)
+      : null;
 
   /** Minutes from first bookable slot start through scheduled closing (house calls block the full window). */
   function fullSalonDayMinutes() {
-    const start = CFG.slotDayStartHour * 60 + CFG.slotDayStartMinute;
-    const lastSlotStart = CFG.slotDayEndHour * 60 + CFG.slotDayEndMinute;
+    const hours = availability ? availability.hours : CFG;
+    const start = hours.slotDayStartHour * 60 + hours.slotDayStartMinute;
+    const lastSlotStart = hours.slotDayEndHour * 60 + hours.slotDayEndMinute;
     const longestScheduledStyleMin = 300;
     return Math.max(120, lastSlotStart - start + longestScheduledStyleMin);
   }
@@ -162,6 +182,7 @@
 
   /** Extra length add-ons: enabled when style id matches keywords in booking.js — adjust ids or logic when you rename services. */
   function styleSupportsExtraHairLength(styleId) {
+    if (!USE_HAIR_LENGTH_ADDONS) return false;
     if (!styleId || styleId === "other") return false;
     const s = String(styleId).toLowerCase();
     if (s.includes("knotless")) return true;
@@ -189,8 +210,9 @@
     return 180;
   }
 
-  /** @type {{ start: number, end: number, label: string }[]} */
+  /** @type {{ start: number, end: number, isBlock?: boolean }[]} */
   let cachedUnavailable = [];
+  let availabilityLoadFailed = false;
   /** Dates (YYYY-MM-DD) that already have at least one booking — used for house-call calendar rule. */
   let datesWithBookings = new Set();
   let pollTimer = null;
@@ -209,12 +231,32 @@
     subtotalOut: document.getElementById("line-subtotal"),
     lengthAddonOut: document.getElementById("line-length-addon"),
     totalOut: document.getElementById("line-total"),
-    depositOut: document.getElementById("line-deposit"),
+    depositBaseOut: document.getElementById("line-deposit-base"),
+    depositBaseRow: document.getElementById("line-deposit-base-row"),
+    serviceFeeOut: document.getElementById("line-service-fee"),
+    serviceFeeRow: document.getElementById("line-service-fee-row"),
+    chargeTotalOut: document.getElementById("line-charge-total"),
+    chargeTotalRow: document.getElementById("line-charge-total-row"),
+    inPersonDueOut: document.getElementById("line-in-person-due"),
+    inPersonDueRow: document.getElementById("line-in-person-due-row"),
     depositDetailOut: document.getElementById("line-deposit-detail"),
     sideSubtotal: document.getElementById("side-subtotal"),
     sideLengthAddon: document.getElementById("side-length-addon"),
     sideTotal: document.getElementById("side-total"),
+    sideTotalLabel: document.getElementById("side-total-label"),
+    lineTotalLabel: document.getElementById("line-total-label"),
+    sideDepositExcludedNote: document.getElementById("side-deposit-excluded-note"),
+    lineDepositExcludedNote: document.getElementById("line-deposit-excluded-note"),
     sideDeposit: document.getElementById("side-deposit"),
+    sideDepositRow: document.getElementById("side-deposit-row"),
+    sideServiceFee: document.getElementById("side-service-fee"),
+    sideServiceFeeRow: document.getElementById("side-service-fee-row"),
+    sideChargeTotal: document.getElementById("side-charge-total"),
+    sideChargeTotalRow: document.getElementById("side-charge-total-row"),
+    sideBalanceDue: document.getElementById("side-balance-due"),
+    sideBalanceRow: document.getElementById("side-balance-row"),
+    sideInPersonDue: document.getElementById("side-in-person-due"),
+    sideInPersonRow: document.getElementById("side-in-person-row"),
     paymentBox: document.getElementById("payment-section"),
     photoHair: document.getElementById("photo-hair"),
     photoRef: document.getElementById("photo-ref"),
@@ -245,6 +287,8 @@
     depositNoteInPerson: document.getElementById("deposit-note-in-person"),
     depositPolicyAlert: document.getElementById("deposit-policy-alert"),
     sideDepositNote: document.getElementById("side-deposit-note"),
+    sideCancellationPolicyWrap: document.getElementById("side-cancellation-policy-wrap"),
+    sideCancellationPolicy: document.getElementById("side-cancellation-policy"),
     lineOnlineLabel: document.getElementById("line-online-label"),
     sideOnlineLabel: document.getElementById("side-online-label"),
     submitBtn: document.getElementById("booking-submit-btn"),
@@ -496,14 +540,6 @@
     return DT.fromObject({ year: y, month: mo, day: d }, { zone: CFG.salonTimeZone });
   }
 
-  /** Online bookings/reschedules must be at least BOOKING_LEAD_DAYS full calendar days after today. */
-  function isCalendarDayBlockedByLeadDays(isoDate) {
-    const today = nowZoned().startOf("day");
-    const day = parseIsoDateLocal(isoDate).startOf("day");
-    const earliest = today.plus({ days: BOOKING_LEAD_DAYS });
-    return day < earliest;
-  }
-
   function isPastCalendarDay(isoDate) {
     const today = nowZoned().startOf("day");
     const d = parseIsoDateLocal(isoDate).startOf("day");
@@ -521,19 +557,13 @@
     return false;
   }
 
-  function isClosedWeekday(isoDate) {
-    const closed = Array.isArray(CFG.closedWeekdays) ? CFG.closedWeekdays : [];
-    if (!closed.length) return false;
-    const dow = parseIsoDateLocal(isoDate).weekday % 7;
-    return closed.includes(dow);
-  }
-
   function calendarDayDisabledReason(isoDate) {
     if (isPastCalendarDay(isoDate)) return "Past dates cannot be booked.";
-    if (isClosedWeekday(isoDate)) return "Closed this day.";
     if (isBlackedOut(isoDate)) return "Unavailable this week.";
-    if (isCalendarDayBlockedByLeadDays(isoDate))
-      return `Appointments require at least ${BOOKING_LEAD_DAYS} full days advance notice.`;
+    if (availability) {
+      const reason = availability.calendarDayDisabledReason(isoDate);
+      if (reason) return reason;
+    }
     const selStyle = getSelectedStyle();
     if (selStyle && isHouseStyleId(selStyle.id) && datesWithBookings.has(isoDate))
       return "House calls are only available on days with no other bookings.";
@@ -687,6 +717,7 @@
     const { data, error } = await sb.rpc(rpcName, rpcArgs);
     if (error) {
       console.warn("get_unavailable_times_for_day", error);
+      if (TENANT_BOOKING) throw error;
       return [];
     }
     return isoBusyIntervals(data);
@@ -695,84 +726,44 @@
   async function refreshUnavailableForSelection() {
     if (!selectedIsoDate || !getSelectedStyle() || getSelectedStyle().id === "other") {
       cachedUnavailable = [];
+      availabilityLoadFailed = false;
       return;
     }
-    cachedUnavailable = await fetchUnavailableIntervals(selectedIsoDate);
+    try {
+      cachedUnavailable = await fetchUnavailableIntervals(selectedIsoDate);
+      availabilityLoadFailed = false;
+    } catch (err) {
+      console.warn("availability refresh failed", err);
+      cachedUnavailable = [];
+      availabilityLoadFailed = !!TENANT_BOOKING;
+    }
     renderSlots();
   }
 
-  function slotInstantOnDay(isoDate, hour, minute) {
-    const [y, mo, d] = isoDate.split("-").map(Number);
-    return DT.fromObject({ year: y, month: mo, day: d, hour, minute, second: 0, millisecond: 0 }, {
-      zone: CFG.salonTimeZone,
-    });
-  }
-
-  function saturdayCutoff(isoDate) {
-    const [y, mo, d] = isoDate.split("-").map(Number);
-    return DT.fromObject(
-      {
-        year: y,
-        month: mo,
-        day: d,
-        hour: CFG.saturdayLastStartHour,
-        minute: CFG.saturdayLastStartMinute,
-        second: 0,
-        millisecond: 0,
-      },
-      { zone: CFG.salonTimeZone },
-    );
+  async function ensureSlotStillAvailable(apptIso, durationMinutes) {
+    if (!TENANT_BOOKING || !availability || !DT || !selectedIsoDate) return;
+    const fresh = await fetchUnavailableIntervals(selectedIsoDate);
+    const slotStart = DT.fromISO(apptIso, { zone: CFG.salonTimeZone });
+    if (!slotStart.isValid) {
+      throw new Error("Please choose a valid time slot.");
+    }
+    const cls = availability.classifySlot(slotStart, durationMinutes, fresh);
+    if (cls.kind !== "open") {
+      cachedUnavailable = fresh;
+      renderSlots();
+      throw new Error(cls.reason || "That time slot is no longer available. Please choose a different time.");
+    }
+    cachedUnavailable = fresh;
   }
 
   function generateSlotTimes(isoDate) {
-    const slots = [];
-    const step = CFG.slotStepMinutes;
-    let t = slotInstantOnDay(isoDate, CFG.slotDayStartHour, CFG.slotDayStartMinute);
-    const endLimit = slotInstantOnDay(isoDate, CFG.slotDayEndHour, CFG.slotDayEndMinute);
-    const isSat = parseIsoDateLocal(isoDate).weekday === 6;
-    const satCut = isSat ? saturdayCutoff(isoDate) : null;
-
-    while (t <= endLimit) {
-      if (isSat && t >= satCut) break;
-      slots.push(t);
-      t = t.plus({ minutes: step });
-    }
-    return slots;
-  }
-
-  function overlapCount(candidateStartMs, candidateEndMs) {
-    let n = 0;
-    for (const u of cachedUnavailable) {
-      if (!intervalsOverlap(candidateStartMs, candidateEndMs, u.start, u.end)) continue;
-      if (u.isBlock) return Math.max(1, CFG.concurrentAppointmentCapacity || 1);
-      n++;
-    }
-    return n;
+    if (availability) return availability.generateSlotTimes(isoDate);
+    return [];
   }
 
   function classifySlot(slotStart, durationMin) {
-    const startMs = slotStart.toMillis();
-    const endMs = slotStart.plus({ minutes: durationMin }).toMillis();
-    const nowMs = Date.now();
-    const isSat = slotStart.weekday === 6;
-    const satClose = saturdayCutoff(slotStart.toFormat("yyyy-MM-dd"));
-    if (isSat) {
-      if (slotStart >= satClose)
-        return { kind: "full", reason: "Saturday appointments cannot start at or after 2:00 PM." };
-      const endDt = slotStart.plus({ minutes: durationMin });
-      if (endDt > satClose)
-        return { kind: "full", reason: "Service would extend past closing (2:00 PM Saturday)." };
-    }
-    const today = nowZoned().startOf("day");
-    if (slotStart.startOf("day").equals(today) && startMs < nowMs + CFG.sameDayLeadMinutes * 60 * 1000) {
-      return { kind: "full", reason: "Too soon — allow at least 30 minutes lead time today." };
-    }
-
-    const cap = Math.max(1, CFG.concurrentAppointmentCapacity | 0);
-    const overlaps = overlapCount(startMs, endMs);
-    if (overlaps >= cap) return { kind: "full", reason: "Fully booked." };
-    if (overlaps === cap - 1 && cap > 1) return { kind: "limited", reason: "Limited — one seat left for this window." };
-    return { kind: "open", reason: "" };
+    if (availability) return availability.classifySlot(slotStart, durationMin, cachedUnavailable);
+    return { kind: "full", reason: "Unavailable." };
   }
 
   function renderSlots() {
@@ -793,6 +784,12 @@
       return;
     }
 
+    if (availabilityLoadFailed) {
+      els.slotsWrap.innerHTML =
+        '<p class="booking-slots-placeholder">Could not load availability. Refresh the page and try again.</p>';
+      return;
+    }
+
     const slots = generateSlotTimes(selectedIsoDate);
     const selMs =
       selectedSlotIso && DT.fromISO(selectedSlotIso).isValid ? DT.fromISO(selectedSlotIso).toMillis() : null;
@@ -806,7 +803,7 @@
       else if (cls.kind === "limited") btn.classList.add("time-slot--limited");
       else btn.classList.add("time-slot--full");
 
-      if (cls.kind === "full") {
+      if (cls.kind !== "open") {
         btn.disabled = true;
         btn.title = cls.reason || "";
       } else {
@@ -865,7 +862,10 @@
       amount = round2(amount + 15);
     }
 
-    return round2(Math.min(total, amount));
+    if (depositIncludedInPrice()) {
+      return round2(Math.min(total, amount));
+    }
+    return round2(Math.max(0, amount));
   }
 
   function paymentMode() {
@@ -896,7 +896,8 @@
     const pctDeposit = round2(total * 0.1);
     const houseFee = style && isHouseStyleId(style.id) ? 15 : 0;
     const deposit = onlineChargeForTotal(total, style);
-    const balanceDue = round2(Math.max(0, total - deposit));
+    const included = depositIncludedInPrice();
+    const balanceDue = included ? round2(Math.max(0, total - deposit)) : total;
 
     return {
       base,
@@ -929,35 +930,53 @@
 
     if (els.subtotalOut) els.subtotalOut.textContent = money(base);
     if (els.lengthAddonOut) els.lengthAddonOut.textContent = lengthUsd > 0 ? money(lengthUsd) : "—";
-    if (els.totalOut) els.totalOut.textContent = money(total);
-    if (els.depositOut) {
-      if (mode === "in_person") {
-        els.depositOut.textContent = "$0.00";
-      } else {
-        const fee = computeServiceFee(deposit);
-        const chargeTotal = totalChargeWithFee(deposit);
-        els.depositOut.textContent = money(chargeTotal);
-        // Show fee breakdown beneath if a style is selected
-        if (hasPricedStyle && fee > 0) {
-          els.depositOut.title = `${money(deposit)} + ${money(fee)} service fee`;
-        }
-      }
-    }
 
-    const onlineLabel =
-      mode === "full"
-        ? "Due when booking (full price):"
-        : mode === "in_person"
-          ? "Due when booking:"
-          : "Deposit due when booking:";
+    const serviceFee = mode !== "in_person" ? computeServiceFee(deposit) : 0;
+    const chargeTotal = mode !== "in_person" ? totalChargeWithFee(deposit) : 0;
+    const showOnlineBreakdown = mode !== "in_person" && deposit > 0;
+    var included = depositIncludedInPrice();
+    var isDepositMode = mode === "deposit" && showOnlineBreakdown;
+    var displayTotalAmount = isDepositMode ? (included ? balanceDue : total) : total;
+    var displayTotalLabel = isDepositMode
+      ? included
+        ? "Balance at appointment"
+        : "Due at appointment"
+      : mode === "in_person"
+        ? "Due at appointment"
+        : "Estimated total";
+
+    if (els.totalOut) els.totalOut.textContent = money(displayTotalAmount);
+    if (els.lineTotalLabel) els.lineTotalLabel.textContent = displayTotalLabel + ":";
+
+    if (els.depositBaseOut) els.depositBaseOut.textContent = money(deposit);
+    if (els.depositBaseRow) els.depositBaseRow.hidden = !showOnlineBreakdown;
+    if (els.serviceFeeOut) els.serviceFeeOut.textContent = money(serviceFee);
+    if (els.serviceFeeRow) els.serviceFeeRow.hidden = !(showOnlineBreakdown && serviceFee > 0);
+    if (els.chargeTotalOut) els.chargeTotalOut.textContent = money(chargeTotal);
+    if (els.chargeTotalRow) els.chargeTotalRow.hidden = !showOnlineBreakdown;
+    if (els.inPersonDueOut) els.inPersonDueOut.textContent = money(total);
+    if (els.inPersonDueRow) els.inPersonDueRow.hidden = mode !== "in_person" || !hasPricedStyle;
+
+    const onlineLabel = mode === "full" ? "Due when booking:" : "Deposit:";
     if (els.lineOnlineLabel) els.lineOnlineLabel.textContent = onlineLabel;
     if (els.sideOnlineLabel) {
-      els.sideOnlineLabel.textContent =
-        mode === "full" ? "Due when booking" : mode === "in_person" ? "Due when booking" : "Deposit due";
+      els.sideOnlineLabel.textContent = mode === "full" ? "Due when booking" : "Deposit";
     }
 
+    if (els.sideDepositRow) els.sideDepositRow.hidden = !showOnlineBreakdown;
+    if (els.sideDeposit) els.sideDeposit.textContent = money(deposit);
+    if (els.sideServiceFee) els.sideServiceFee.textContent = money(serviceFee);
+    if (els.sideServiceFeeRow) els.sideServiceFeeRow.hidden = !(showOnlineBreakdown && serviceFee > 0);
+    if (els.sideChargeTotal) els.sideChargeTotal.textContent = money(chargeTotal);
+    if (els.sideChargeTotalRow) els.sideChargeTotalRow.hidden = !showOnlineBreakdown;
+    if (els.sideBalanceDue) els.sideBalanceDue.textContent = money(balanceDue);
+    if (els.sideBalanceRow) {
+      els.sideBalanceRow.hidden = true;
+    }
+    if (els.sideInPersonDue) els.sideInPersonDue.textContent = money(total);
+    if (els.sideInPersonRow) els.sideInPersonRow.hidden = mode !== "in_person" || !hasPricedStyle;
+
     if (els.depositDetailOut) {
-      const serviceFee = mode !== "in_person" ? computeServiceFee(deposit) : 0;
       const feeNote = serviceFee > 0 ? ` Includes ${money(serviceFee)} service fee.` : "";
       if (!hasPricedStyle) {
         els.depositDetailOut.textContent = "";
@@ -973,6 +992,9 @@
         let detail = `Includes ${money(pctDeposit)} (10% of your estimate) plus ${money(15)} house-call deposit.${feeNote} `;
         detail += `Remaining balance ${money(balanceDue)} due in person at your appointment. All deposits are non-refundable.`;
         els.depositDetailOut.textContent = detail;
+      } else if (!included) {
+        els.depositDetailOut.textContent =
+          `${money(totalChargeWithFee(deposit))} due now (additional hold${feeNote}). Full service price ${money(total)} due in person at your appointment.`;
       } else if (PAYMENT.depositKind === "fixed") {
         els.depositDetailOut.textContent =
           `${money(totalChargeWithFee(deposit))} due now (includes ${money(serviceFee)} service fee). Remaining balance ${money(balanceDue)} due in person at your appointment.`;
@@ -985,9 +1007,23 @@
 
     if (els.sideSubtotal) els.sideSubtotal.textContent = money(base);
     if (els.sideLengthAddon) els.sideLengthAddon.textContent = lengthUsd > 0 ? money(lengthUsd) : "—";
-    if (els.sideTotal) els.sideTotal.textContent = money(total);
-    if (els.sideDeposit) {
-      els.sideDeposit.textContent = mode === "in_person" ? "$0.00" : money(deposit);
+    if (els.sideTotal) els.sideTotal.textContent = money(displayTotalAmount);
+    if (els.sideTotalLabel) els.sideTotalLabel.textContent = displayTotalLabel;
+    if (els.sideDepositExcludedNote) {
+      els.sideDepositExcludedNote.hidden = !isDepositMode;
+      if (isDepositMode) {
+        els.sideDepositExcludedNote.textContent = included
+          ? "Your deposit counts toward your service total."
+          : "Deposit is an additional hold fee and is not deducted from your service price.";
+      }
+    }
+    if (els.lineDepositExcludedNote) {
+      els.lineDepositExcludedNote.hidden = !isDepositMode;
+      if (isDepositMode) {
+        els.lineDepositExcludedNote.textContent = included
+          ? "Your deposit counts toward your service total."
+          : "Deposit is an additional hold fee and is not deducted from your service price.";
+      }
     }
 
     if (els.depositNoteInPerson) {
@@ -1012,6 +1048,8 @@
       } else if (mode === "full") {
         els.depositPolicyAlert.textContent =
           "Full payment online secures your appointment. Final price may be adjusted after consultation.";
+      } else if (TENANT_BOOKING && CANCELLATION_POLICY.policySummary) {
+        els.depositPolicyAlert.textContent = String(CANCELLATION_POLICY.policySummary).trim();
       } else if (isHouseBooking) {
         els.depositPolicyAlert.textContent =
           "Deposits are non-refundable (including style portion and house-call deposit). Balance due in person at your appointment.";
@@ -1021,6 +1059,8 @@
       }
     }
 
+    var policySummaryText = String(CANCELLATION_POLICY.policySummary || "").trim();
+
     if (els.sideDepositNote) {
       if (mode === "in_person") {
         els.sideDepositNote.textContent = "Pay in person at your appointment.";
@@ -1029,14 +1069,37 @@
       } else if (isHouseBooking) {
         els.sideDepositNote.textContent =
           "10% style deposit plus $15 for house calls. Balance due in person.";
+      } else if (TENANT_BOOKING && policySummaryText) {
+        els.sideDepositNote.textContent =
+          balanceDue > 0 && mode === "deposit"
+            ? `Balance ${money(balanceDue)} due in person at your appointment.`
+            : "";
+        els.sideDepositNote.hidden = !els.sideDepositNote.textContent;
       } else {
         els.sideDepositNote.textContent = `Balance ${money(balanceDue)} due in person at your appointment.`;
+        els.sideDepositNote.hidden = false;
       }
+    }
+
+    if (els.sideCancellationPolicyWrap && els.sideCancellationPolicy) {
+      var showSidePolicy = TENANT_BOOKING && !!policySummaryText && hasPricedStyle;
+      els.sideCancellationPolicyWrap.hidden = !showSidePolicy;
+      els.sideCancellationPolicy.textContent = showSidePolicy ? policySummaryText : "";
     }
 
     const complete = isFormCompleteForBooking();
     const paymentsBlocked = merchantPaymentsNotReady();
     const showPayment = complete && online;
+    const showTenantPolicy = TENANT_BOOKING && !!policySummaryText && hasPricedStyle;
+    const policySection = document.getElementById("cancellation-policy-section");
+    const policyText = document.getElementById("cancellation-policy-text");
+    if (policySection) {
+      policySection.classList.toggle("hidden", !showTenantPolicy);
+      policySection.setAttribute("aria-hidden", showTenantPolicy ? "false" : "true");
+    }
+    if (policyText) {
+      policyText.textContent = policySummaryText;
+    }
     if (els.paymentBox) {
       els.paymentBox.classList.toggle("hidden", !showPayment && !paymentsBlocked);
       els.paymentBox.setAttribute(
@@ -1070,8 +1133,16 @@
         : "";
     }
 
+    const payDepositBase = document.getElementById("pay-deposit-base");
+    const payDepositBaseRow = document.getElementById("pay-deposit-base-row");
+    const payServiceFee = document.getElementById("pay-service-fee");
+    const payServiceFeeRow = document.getElementById("pay-service-fee-row");
     const depOut = document.getElementById("pay-deposit-preview");
-    if (depOut) depOut.textContent = mode === "in_person" ? "$0.00" : money(deposit);
+    if (payDepositBase) payDepositBase.textContent = money(deposit);
+    if (payDepositBaseRow) payDepositBaseRow.hidden = !showOnlineBreakdown;
+    if (payServiceFee) payServiceFee.textContent = money(serviceFee);
+    if (payServiceFeeRow) payServiceFeeRow.hidden = !(showOnlineBreakdown && serviceFee > 0);
+    if (depOut) depOut.textContent = mode === "in_person" ? "$0.00" : money(chargeTotal);
 
     if (els.submitBtn) {
       els.submitBtn.textContent = online
@@ -1161,6 +1232,66 @@
     stripeElementsMounted = true;
   }
 
+  function getSupabaseEdgeCfg() {
+    if (window.__SALON_SITE_SUPABASE && window.__SALON_SITE_SUPABASE.url && window.__SALON_SITE_SUPABASE.anonKey) {
+      return window.__SALON_SITE_SUPABASE;
+    }
+    var tenant = window.__STYLD_TENANT__;
+    if (tenant && tenant.supabaseUrl && tenant.supabaseAnonKey) {
+      return { url: tenant.supabaseUrl, anonKey: tenant.supabaseAnonKey };
+    }
+    return null;
+  }
+
+  async function invokeBookingEdgeFunction(name, body) {
+    var cfg = getSupabaseEdgeCfg();
+    if (!cfg) throw new Error("Site payment configuration is missing.");
+    var url = cfg.url.replace(/\/$/, "") + "/functions/v1/" + name;
+    var res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer " + cfg.anonKey,
+        apikey: cfg.anonKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+    var data = null;
+    try {
+      data = await res.json();
+    } catch (_) {
+      data = null;
+    }
+    if (!res.ok) {
+      throw new Error((data && data.error) || res.statusText || "Payment request failed");
+    }
+    if (data && data.error) throw new Error(data.error);
+    return data;
+  }
+
+  async function confirmBookingPayment(payload) {
+    var lastError = "Could not confirm payment with your booking.";
+    for (var attempt = 1; attempt <= 3; attempt++) {
+      try {
+        var data = await invokeBookingEdgeFunction("stripe-booking-confirm", {
+          bookingId: payload.bookingId,
+          subdomain: payload.subdomain,
+          paymentIntentId: payload.paymentIntentId,
+        });
+        if (data && data.ok && data.verified) return null;
+        if (data && typeof data.error === "string") lastError = data.error;
+      } catch (e) {
+        lastError = e && e.message ? String(e.message) : lastError;
+      }
+      if (attempt < 3) {
+        await new Promise(function (resolve) {
+          setTimeout(resolve, 400 * attempt);
+        });
+      }
+    }
+    return lastError;
+  }
+
   async function payBookingWithStripe(sb, payload) {
     const stripe = window.__STYLD_STRIPE__;
     if (!stripe || !stripeCardElement) {
@@ -1169,28 +1300,20 @@
 
     // Step 1: Create a PaymentIntent on the backend (returns clientSecret).
     // The backend routes the charge to the site owner's connected account.
-    const { data: piData, error: piError } = await sb.functions.invoke("stripe-booking-pay", {
-      body: {
+    var piData;
+    try {
+      piData = await invokeBookingEdgeFunction("stripe-booking-pay", {
         amountCents: payload.amountCents,
         subdomain: payload.subdomain,
         bookingId: payload.bookingId,
         customerEmail: payload.customerEmail,
         customerName: payload.customerName,
-      },
-    });
-
-    if (piError) {
-      var piDetail = piError.message || "Payment setup failed";
-      try {
-        if (piError.context && typeof piError.context.json === "function") {
-          var pj = await piError.context.json();
-          if (pj && typeof pj.error === "string") piDetail = pj.error;
-        }
-      } catch (_) { /* ignore */ }
-      return { ok: false, error: piDetail };
+      });
+    } catch (paySetupErr) {
+      return { ok: false, error: paySetupErr.message || "Payment setup failed." };
     }
 
-    if (!piData || piData.error || !piData.clientSecret) {
+    if (!piData || !piData.clientSecret) {
       return { ok: false, error: (piData && piData.error) || "Payment setup failed." };
     }
 
@@ -1217,16 +1340,13 @@
     // Mark the booking as paid in the DB before redirecting.
     // Must be awaited — fire-and-forget gets cancelled when the page navigates away.
     if (success && intent.id && payload.bookingId && payload.subdomain) {
-      try {
-        await sb.functions.invoke("stripe-booking-confirm", {
-          body: {
-            bookingId: payload.bookingId,
-            subdomain: payload.subdomain,
-            paymentIntentId: intent.id,
-          },
-        });
-      } catch (e) {
-        console.warn("stripe-booking-confirm:", e);
+      var confirmError = await confirmBookingPayment({
+        bookingId: payload.bookingId,
+        subdomain: payload.subdomain,
+        paymentIntentId: intent.id,
+      });
+      if (confirmError) {
+        return { ok: false, error: confirmError, paymentId: intent.id, status: intent.status };
       }
     }
 
@@ -1337,17 +1457,13 @@
     return DT.fromISO(iso, { zone: CFG.salonTimeZone }).toFormat("yyyy-MM-dd");
   }
 
-  function buildRowPayload(bookingId, paths, apptIso, durationMinutes, unitPaymentId) {
+  function buildRowPayload(bookingId, paths, apptIso, durationMinutes, unitPaymentId, options) {
+    options = options || {};
     const style = getSelectedStyle();
     const notes = document.getElementById("notes")?.value?.trim() || null;
     const { total, deposit, mode } = computeTotals();
     const payInPerson = mode === "in_person";
-
-    const hk = getHairLengthKey();
-    const hairLenLabel =
-      hk === ""
-        ? "Standard (menu length)"
-        : els.hairLength?.selectedOptions?.[0]?.textContent?.trim() || hk;
+    const paidOnline = options.paidOnline === true;
 
     const service_address =
       style && isHouseStyleId(style.id) && isHouseAddressComplete() ? formatServiceAddressForStorage() : null;
@@ -1359,7 +1475,6 @@
       email: document.getElementById("email")?.value?.trim(),
       style_id: style.id,
       style_name: style.name,
-      hair_length: hairLenLabel,
       service_address,
       hair_option: "catalog",
       prewash: "None",
@@ -1367,37 +1482,43 @@
       appointment_slot: appointmentSlotLabelFromIso(apptIso),
       appointment_starts_at: apptIso,
       duration_minutes: durationMinutes,
-      booking_status: payInPerson ? "confirmed" : "pending_payment",
+      booking_status: payInPerson || paidOnline ? "confirmed" : "pending_payment",
       notes,
       promo_code: null,
       estimated_total: total,
       deposit_amount: payInPerson ? 0 : deposit,
-      payment_status: payInPerson ? "in_person" : "pending",
+      payment_status: payInPerson ? "in_person" : paidOnline ? "deposit_paid" : "pending",
       source: "website",
       google_calendar_id: GCAL.calendarId || null,
       pricing_situation: "catalog",
       unit_payment_id: unitPaymentId || null,
+      stripe_payment_intent_id: unitPaymentId || null,
       ...paths,
     };
   }
 
-  async function submitBookingRequest(sb, apptIso, durationMinutes, bookingId, unitPaymentId) {
-    const style = getSelectedStyle();
-    if (!style || style.id === "other") throw new Error("Choose a priced style to book.");
+  async function uploadBookingPhotosForRequest(sb, bookingId) {
     const hairFile = els.photoHair?.files?.[0];
     const refFile = els.photoRef?.files?.[0] || null;
-
-    let paths = { photo_hair_path: null, photo_ref_path: null };
     try {
-      paths = await uploadBookingFiles(sb, bookingId, hairFile, refFile);
+      return await uploadBookingFiles(sb, bookingId, hairFile, refFile);
     } catch (uploadErr) {
       console.warn(uploadErr);
       throw new Error(
         "Your hair photo could not be uploaded. Please check your connection and try again.",
       );
     }
+  }
 
-    const row = buildRowPayload(bookingId, paths, apptIso, durationMinutes, unitPaymentId);
+  async function submitBookingRequest(sb, apptIso, durationMinutes, bookingId, unitPaymentId, options) {
+    options = options || {};
+    const style = getSelectedStyle();
+    if (!style || style.id === "other") throw new Error("Choose a priced style to book.");
+
+    const paths =
+      options.paths || (await uploadBookingPhotosForRequest(sb, bookingId));
+
+    const row = buildRowPayload(bookingId, paths, apptIso, durationMinutes, unitPaymentId, options);
 
     if (TENANT_BOOKING?.subdomain) {
       const { data: tenantId, error: tenantErr } = await sb.rpc("styld_tenant_insert_booking", {
@@ -1532,18 +1653,19 @@
             );
           }
 
+          await ensureSlotStillAvailable(apptIso, durationMinutes);
+
           const online = needsOnlinePayment();
           const bookingId = pendingBookingId || crypto.randomUUID();
           pendingBookingId = bookingId;
-
-          const { id, paths } = await submitBookingRequest(sb, apptIso, durationMinutes, bookingId, null);
-          if (!id) throw new Error("Could not save booking id.");
+          const subdomain = getBookingSubdomain();
 
           if (!online) {
+            const { id, paths } = await submitBookingRequest(sb, apptIso, durationMinutes, bookingId, null);
+            if (!id) throw new Error("Could not save booking id.");
             void invokeNotifySalon(sb, { booking_id: bookingId });
-            // Send confirmation email for in-person bookings
             void sb.functions.invoke("booking-client-email", {
-              body: { bookingId, subdomain: getBookingSubdomain() },
+              body: { bookingId, subdomain },
             }).catch(function(e) { console.warn("booking-client-email:", e); });
             saveLocalBooking({
               ...buildRowPayload(bookingId, paths, apptIso, durationMinutes, null),
@@ -1564,9 +1686,9 @@
 
           if (submitBtn) submitBtn.textContent = "Processing payment…";
 
+          const photoPaths = await uploadBookingPhotosForRequest(sb, bookingId);
           const { deposit } = computeTotals();
           const amountCents = Math.round(Number(deposit || 0) * 100);
-          const subdomain = getBookingSubdomain();
           const nameEl = document.getElementById("full-name");
           const emailEl = document.getElementById("email");
           const payResult = await payBookingWithStripe(sb, {
@@ -1578,13 +1700,28 @@
           });
 
           if (!payResult.ok) {
-            setStripeCardError(payResult.error || "Payment failed.");
-            throw new Error(payResult.error || "Payment failed.");
+            var payErr =
+              payResult.error ||
+              (payResult.paymentId
+                ? "Your card was charged but we could not finalize the booking. Save this reference and contact the business: " +
+                  payResult.paymentId
+                : "Payment failed.");
+            setStripeCardError(payErr);
+            throw new Error(payErr);
           }
 
+          const { id, paths } = await submitBookingRequest(sb, apptIso, durationMinutes, bookingId, payResult.paymentId || null, {
+            paidOnline: true,
+            paths: photoPaths,
+          });
+          if (!id) throw new Error("Payment succeeded but the appointment could not be saved. Contact the business with reference " + (payResult.paymentId || bookingId) + ".");
+
           void invokeNotifySalon(sb, { booking_id: bookingId });
+          void sb.functions.invoke("booking-client-email", {
+            body: { bookingId, subdomain },
+          }).catch(function(e) { console.warn("booking-client-email:", e); });
           saveLocalBooking({
-            ...buildRowPayload(bookingId, paths, apptIso, durationMinutes, payResult.paymentId || null),
+            ...buildRowPayload(bookingId, paths, apptIso, durationMinutes, payResult.paymentId || null, { paidOnline: true }),
             created_at: new Date().toISOString(),
             source: "website",
             payment_status: "deposit_paid",
@@ -1611,7 +1748,11 @@
 
           // If the slot was just taken by someone else, refresh the slot picker
           // so it disappears and the customer can pick another time.
-          if (msg.includes("no longer available") || msg.includes("blocked")) {
+          if (
+            msg.includes("no longer available") ||
+            msg.includes("blocked") ||
+            msg.includes("already booked")
+          ) {
             pendingBookingId = null;
             void refreshUnavailableForSelection().then(() => renderSlots());
             setBookingFeedback(msg, "error");

@@ -16,13 +16,30 @@ import BusinessScreenLayout, { BusinessSection } from '../../components/business
 import { useServiceCatalog } from '../../context/ServiceCatalogContext';
 import { useSiteData } from '../../context/SiteDataContext';
 import {
+  CancellationPolicyPreset,
+  CancellationPolicySettings,
+  CANCELLATION_POLICY_PRESETS,
+  DEFAULT_CANCELLATION_POLICY,
+  REFUND_APPLIES_TO_OPTIONS,
+  RefundAppliesTo,
+  buildPolicySummary,
+} from '../../data/cancellationPolicy';
+import {
   BookingPaymentMode,
   BookingPaymentSettings,
   DEFAULT_BOOKING_PAYMENT,
   DepositKind,
+  computeBalanceDue,
+  computeDepositAmount,
 } from '../../data/bookingPayment';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
-import { loadBookingPayment, saveBookingPayment } from '../../lib/siteServices';
+import { computeServiceFee, totalChargeWithServiceFee } from '../../lib/bookingServiceFee';
+import {
+  loadBookingPayment,
+  loadCancellationPolicy,
+  saveBookingPayment,
+  saveCancellationPolicy,
+} from '../../lib/siteServices';
 import { fetchStripeConnectStatus } from '../../lib/stripeConnect';
 import { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { colors } from '../../theme';
@@ -82,16 +99,14 @@ function computePreview(
       dueLaterLabel: 'At appointment',
     };
   }
-  let deposit =
-    payment.depositKind === 'fixed'
-      ? payment.depositValue
-      : Math.round(total * (payment.depositValue / 100) * 100) / 100;
-  deposit = Math.min(total, Math.max(0, deposit));
+  const deposit = computeDepositAmount(total, payment);
+  const dueLater = computeBalanceDue(total, payment);
+  const included = payment.depositIncludedInPrice !== false;
   return {
     dueNow: deposit,
-    dueLater: Math.max(0, total - deposit),
+    dueLater,
     dueNowLabel: 'Deposit today',
-    dueLaterLabel: 'Balance in person',
+    dueLaterLabel: included ? 'Balance in person' : 'Full price in person',
   };
 }
 
@@ -162,6 +177,8 @@ function ClientPreview({ payment }: { payment: BookingPaymentSettings }) {
     () => computePreview(payment, previewService.price),
     [payment, previewService.price],
   );
+  const serviceFee = payment.mode === 'in_person' ? 0 : computeServiceFee(preview.dueNow);
+  const chargeTotal = payment.mode === 'in_person' ? 0 : totalChargeWithServiceFee(preview.dueNow);
 
   return (
     <View style={styles.previewWrap}>
@@ -177,8 +194,20 @@ function ClientPreview({ payment }: { payment: BookingPaymentSettings }) {
           <View style={styles.styleCardPayment}>
             <View style={styles.styleCardPaymentRow}>
               <Text style={styles.styleCardPaymentLabel}>{preview.dueNowLabel}</Text>
-              <Text style={styles.styleCardPaymentValueAccent}>{formatMoney(preview.dueNow)}</Text>
+              <Text style={styles.styleCardPaymentValue}>{formatMoney(preview.dueNow)}</Text>
             </View>
+            {serviceFee > 0 ? (
+              <View style={styles.styleCardPaymentRow}>
+                <Text style={styles.styleCardPaymentLabel}>Service fee</Text>
+                <Text style={styles.styleCardPaymentValue}>{formatMoney(serviceFee)}</Text>
+              </View>
+            ) : null}
+            {chargeTotal > 0 ? (
+              <View style={styles.styleCardPaymentRow}>
+                <Text style={styles.styleCardPaymentLabel}>Total due now</Text>
+                <Text style={styles.styleCardPaymentValueAccent}>{formatMoney(chargeTotal)}</Text>
+              </View>
+            ) : null}
             {preview.dueLater > 0 ? (
               <View style={styles.styleCardPaymentRow}>
                 <Text style={styles.styleCardPaymentLabel}>{preview.dueLaterLabel}</Text>
@@ -210,9 +239,35 @@ function DepositAmountEditor({
 }) {
   const isPercent = payment.depositKind === 'percent';
 
+  const included = payment.depositIncludedInPrice !== false;
+
   return (
     <View style={styles.depositPanel}>
       <Text style={styles.depositPanelTitle}>Set your deposit</Text>
+
+      <Text style={styles.depositKindLead}>How does the deposit work?</Text>
+      <View style={styles.segmented}>
+        {(
+          [
+            { included: true, label: 'Part of price', subtitle: 'Counts toward the service total' },
+            { included: false, label: 'Additional hold', subtitle: 'On top of the full service price' },
+          ] as const
+        ).map((option) => {
+          const active = payment.depositIncludedInPrice === option.included;
+          return (
+            <Pressable
+              key={option.label}
+              style={[styles.segment, styles.segmentTall, active && styles.segmentActive]}
+              onPress={() => onChange({ ...payment, depositIncludedInPrice: option.included })}
+            >
+              <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{option.label}</Text>
+              <Text style={[styles.segmentSubtext, active && styles.segmentSubtextActive]}>
+                {option.subtitle}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
 
       <View style={styles.segmented}>
         {(['percent', 'fixed'] as DepositKind[]).map((kind) => {
@@ -272,16 +327,47 @@ function DepositAmountEditor({
       </View>
 
       <Text style={styles.tipText}>
-        The remaining balance is collected in person when your client shows up — no extra setup
-        needed.
+        {included
+          ? 'The deposit counts toward the service total. The remaining balance is collected in person.'
+          : 'The deposit is an additional hold. Your client still pays the full service price in person.'}
       </Text>
     </View>
+  );
+}
+
+function CancellationPresetCard({
+  selected,
+  label,
+  description,
+  onPress,
+}: {
+  selected: boolean;
+  label: string;
+  description: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.modeCard, pressed && styles.modeCardPressed]}
+      onPress={onPress}
+    >
+      <View style={styles.modeCardBody}>
+        <Text style={styles.modeCardTitle}>{label}</Text>
+        <Text style={styles.modeCardSubtitle}>{description}</Text>
+      </View>
+      <View style={[styles.modeCheck, selected && styles.modeCheckSelected]}>
+        {selected ? <Ionicons name="checkmark" size={16} color={colors.background} /> : null}
+      </View>
+    </Pressable>
   );
 }
 
 export default function BookingPaymentScreen({ navigation }: Props) {
   const { linkedSite, hasLinkedSite } = useSiteData();
   const [payment, setPayment] = useState<BookingPaymentSettings>(DEFAULT_BOOKING_PAYMENT);
+  const [cancellationPolicy, setCancellationPolicy] = useState<CancellationPolicySettings>(
+    DEFAULT_CANCELLATION_POLICY,
+  );
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -294,11 +380,13 @@ export default function BookingPaymentScreen({ navigation }: Props) {
     setIsLoading(true);
     setError(null);
     try {
-      const [paymentData, stripeStatus] = await Promise.all([
+      const [paymentData, policyData, stripeStatus] = await Promise.all([
         loadBookingPayment(linkedSite),
+        loadCancellationPolicy(linkedSite),
         fetchStripeConnectStatus().catch(() => null),
       ]);
       setPayment(paymentData);
+      setCancellationPolicy(policyData);
       setStripeReady(
         stripeStatus?.status === 'ready' || stripeStatus?.status === 'pending_review',
       );
@@ -316,6 +404,33 @@ export default function BookingPaymentScreen({ navigation }: Props) {
     setPayment(next);
     setSaved(false);
     setIsDirty(true);
+  };
+
+  const updateCancellationPolicy = (next: CancellationPolicySettings) => {
+    setCancellationPolicy(next);
+    setSaved(false);
+    setIsDirty(true);
+  };
+
+  const handlePresetPress = (presetId: CancellationPolicyPreset) => {
+    const preset = CANCELLATION_POLICY_PRESETS.find((item) => item.id === presetId);
+    if (!preset) return;
+    updateCancellationPolicy({
+      preset: preset.id,
+      cancelNoticeHours: 0,
+      fullRefundNoticeHours: preset.fullRefundNoticeHours,
+      refundAppliesTo: preset.refundAppliesTo,
+      policySummary: preset.policySummary,
+    });
+  };
+
+  const handleRefundScopePress = (scope: RefundAppliesTo) => {
+    updateCancellationPolicy({
+      ...cancellationPolicy,
+      preset: 'custom',
+      refundAppliesTo: scope,
+      policySummary: buildPolicySummary(cancellationPolicy.fullRefundNoticeHours, scope),
+    });
   };
 
   const handleModePress = (modeId: BookingPaymentMode) => {
@@ -368,7 +483,10 @@ export default function BookingPaymentScreen({ navigation }: Props) {
 
     setSaving(true);
     try {
-      await saveBookingPayment(linkedSite, payment);
+      await Promise.all([
+        saveBookingPayment(linkedSite, payment),
+        saveCancellationPolicy(linkedSite, cancellationPolicy),
+      ]);
       setSaved(true);
       setIsDirty(false);
       setTimeout(() => setSaved(false), 2500);
@@ -461,6 +579,47 @@ export default function BookingPaymentScreen({ navigation }: Props) {
           menu are accurate.
         </Text>
       ) : null}
+
+      <BusinessSection title="Cancellation policy">
+        <Text style={styles.sectionLead}>
+          Clients can cancel online anytime before the appointment. Refunds depend on your refund
+          window and whether they paid a deposit, full price, or both.
+        </Text>
+        {CANCELLATION_POLICY_PRESETS.map((preset) => (
+          <CancellationPresetCard
+            key={preset.id}
+            selected={cancellationPolicy.preset === preset.id}
+            label={preset.label}
+            description={preset.description}
+            onPress={() => handlePresetPress(preset.id)}
+          />
+        ))}
+        <Text style={styles.policyFieldLabel}>Refunds apply to</Text>
+        {REFUND_APPLIES_TO_OPTIONS.map((option) => (
+          <CancellationPresetCard
+            key={option.id}
+            selected={cancellationPolicy.refundAppliesTo === option.id}
+            label={option.label}
+            description={option.description}
+            onPress={() => handleRefundScopePress(option.id)}
+          />
+        ))}
+        <Text style={styles.policyFieldLabel}>Policy text (shown at checkout)</Text>
+        <TextInput
+          style={styles.policySummaryInput}
+          multiline
+          value={cancellationPolicy.policySummary}
+          onChangeText={(text) =>
+            updateCancellationPolicy({
+              ...cancellationPolicy,
+              preset: 'custom',
+              policySummary: text,
+            })
+          }
+          placeholder="Describe your cancellation and refund rules…"
+          placeholderTextColor={colors.textMuted}
+        />
+      </BusinessSection>
 
       <Pressable
         style={({ pressed }) => [
@@ -593,6 +752,25 @@ const styles = StyleSheet.create({
     borderColor: colors.accentPink,
     backgroundColor: colors.accentPink,
   },
+  policyFieldLabel: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  policySummaryInput: {
+    minHeight: 96,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    borderRadius: 14,
+    padding: 12,
+    color: colors.text,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlignVertical: 'top',
+    backgroundColor: colors.card,
+  },
   previewWrap: {
     marginBottom: 24,
   },
@@ -698,6 +876,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 14,
   },
+  depositKindLead: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
+    marginBottom: 10,
+  },
   segmented: {
     flexDirection: 'row',
     gap: 8,
@@ -713,6 +897,10 @@ const styles = StyleSheet.create({
     borderColor: colors.cardBorder,
     backgroundColor: colors.background,
   },
+  segmentTall: {
+    paddingVertical: 10,
+    gap: 2,
+  },
   segmentActive: {
     borderColor: colors.textMuted,
     backgroundColor: colors.card,
@@ -724,6 +912,17 @@ const styles = StyleSheet.create({
   },
   segmentTextActive: {
     color: colors.text,
+  },
+  segmentSubtext: {
+    color: colors.textMuted,
+    fontSize: 11,
+    lineHeight: 14,
+    textAlign: 'center',
+    opacity: 0.85,
+  },
+  segmentSubtextActive: {
+    color: colors.text,
+    opacity: 0.75,
   },
   presetRow: {
     flexDirection: 'row',

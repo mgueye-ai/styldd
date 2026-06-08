@@ -24,6 +24,7 @@ import {
   TimeRange,
   TimelineOverlay,
 } from '../../components/calendar/timelineUtils';
+import { isWeekdayClosed } from '../../lib/bookingAvailability';
 import BusinessScreenLayout, { BusinessSection } from '../../components/business/BusinessScreenLayout';
 import { useServiceCatalog } from '../../context/ServiceCatalogContext';
 import { useSiteData } from '../../context/SiteDataContext';
@@ -37,13 +38,16 @@ import {
   formatBlockRange,
   loadBlockedIntervals,
 } from '../../lib/siteAdmin';
+import { loadBookingHours, saveBookingHours } from '../../lib/siteServices';
 import {
   BookingHours,
+  DayHours,
   DEFAULT_BOOKING_HOURS,
-  loadBookingHours,
-  saveBookingHours,
-} from '../../lib/siteServices';
-import { generateHoursText } from '../../data/bookingHours';
+  generateHoursText,
+  getDayHours,
+  validateBookingHours,
+  WEEKDAY_ORDER,
+} from '../../data/bookingHours';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
 import { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { colors } from '../../theme';
@@ -132,10 +136,22 @@ function ScheduleTab() {
   const [pendingRange, setPendingRange] = useState<TimeRange | null>(null);
   const [actionChoice, setActionChoice] = useState<ActionChoice>(null);
   const [blocks, setBlocks] = useState<BlockedInterval[]>([]);
+  const [bookingHours, setBookingHours] = useState<BookingHours>(DEFAULT_BOOKING_HOURS);
   const [saving, setSaving] = useState(false);
   const [showBlocks, setShowBlocks] = useState(false);
 
   useFocusEffect(useCallback(() => { refreshCatalog(); }, [refreshCatalog]));
+
+  const refreshBookingHours = useCallback(async () => {
+    if (!linkedSite) return;
+    try {
+      setBookingHours(await loadBookingHours(linkedSite));
+    } catch {
+      /* ignore */
+    }
+  }, [linkedSite]);
+
+  useFocusEffect(useCallback(() => { void refreshBookingHours(); }, [refreshBookingHours]));
 
   const refreshBlocks = useCallback(async () => {
     if (!linkedSite) return;
@@ -229,18 +245,29 @@ function ScheduleTab() {
     setActionChoice(null); // show the choice picker first
   };
 
+  const closedDayReason = isWeekdayClosed(selectedDate, bookingHours)
+    ? 'Closed this day — same on your public booking page.'
+    : null;
+
   return (
     <View style={styles.tabContent}>
       <CalendarWeekHeader
         selectedDate={selectedDate}
         onSelectedDateChange={setSelectedDate}
-        hint="Drag on the timeline, then choose to book or block."
+        bookingHours={bookingHours}
+        hint="Grey areas match your site hours. Booked and blocked times show on top."
       />
+      {closedDayReason ? (
+        <View style={styles.closedBanner}>
+          <Text style={styles.closedBannerText}>{closedDayReason}</Text>
+        </View>
+      ) : null}
       <DraggableDayTimeline
         selectedDate={selectedDate}
         overlays={overlays}
+        bookingHours={bookingHours}
         draftVariant="appointment"
-        dragHint="Press and drag to select a time"
+        dragHint="Press and drag inside open hours to select a time"
         onSelectionComplete={handleDragComplete}
       />
 
@@ -327,17 +354,17 @@ function ScheduleTab() {
 
 // ─── Hours tab ────────────────────────────────────────────────────────────────
 
-type TimeField = 'dayStart' | 'dayEnd';
+type DayPicker = { weekday: number; field: 'start' | 'end' } | null;
 
-const WEEKDAYS = [
-  { value: 1, label: 'Monday' },
-  { value: 2, label: 'Tuesday' },
-  { value: 3, label: 'Wednesday' },
-  { value: 4, label: 'Thursday' },
-  { value: 5, label: 'Friday' },
-  { value: 6, label: 'Saturday' },
-  { value: 0, label: 'Sunday' },
-];
+const WEEKDAY_LABELS: Record<number, string> = {
+  0: 'Sunday',
+  1: 'Monday',
+  2: 'Tuesday',
+  3: 'Wednesday',
+  4: 'Thursday',
+  5: 'Friday',
+  6: 'Saturday',
+};
 
 function formatTime(hour: number, minute: number) {
   const d = new Date();
@@ -345,22 +372,12 @@ function formatTime(hour: number, minute: number) {
   return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
-const DAY_CHIPS = [
-  { value: 1, short: 'Mo' },
-  { value: 2, short: 'Tu' },
-  { value: 3, short: 'We' },
-  { value: 4, short: 'Th' },
-  { value: 5, short: 'Fr' },
-  { value: 6, short: 'Sa' },
-  { value: 0, short: 'Su' },
-];
-
 function HoursTab() {
   const { linkedSite } = useSiteData();
   const [hours, setHours] = useState<BookingHours>(DEFAULT_BOOKING_HOURS);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
-  const [picker, setPicker] = useState<TimeField | null>(null);
+  const [picker, setPicker] = useState<DayPicker>(null);
 
   const refreshHours = useCallback(async () => {
     if (!linkedSite) return;
@@ -371,17 +388,41 @@ function HoursTab() {
 
   const updateHours = (next: BookingHours) => { setHours(next); setSaved(false); };
 
-  const toggleWeekday = (weekday: number) => {
+  const setDayOpen = (weekday: number, open: boolean) => {
     const closed = new Set(hours.closedWeekdays);
-    closed.has(weekday) ? closed.delete(weekday) : closed.add(weekday);
-    updateHours({ ...hours, closedWeekdays: Array.from(closed).sort((a, b) => a - b) });
+    if (open) closed.delete(weekday);
+    else closed.add(weekday);
+    updateHours({
+      ...hours,
+      closedWeekdays: Array.from(closed).sort((a, b) => a - b),
+    });
+  };
+
+  const updateDayHours = (weekday: number, patch: Partial<DayHours>) => {
+    const current = getDayHours(hours, weekday) ?? {
+      startHour: hours.slotDayStartHour,
+      startMinute: hours.slotDayStartMinute,
+      endHour: hours.slotDayEndHour,
+      endMinute: hours.slotDayEndMinute,
+    };
+    const nextDay: DayHours = { ...current, ...patch };
+    updateHours({
+      ...hours,
+      weekdayHours: {
+        ...hours.weekdayHours,
+        [weekday]: nextDay,
+      },
+      closedWeekdays: hours.closedWeekdays.filter((d) => d !== weekday),
+    });
   };
 
   const save = async () => {
     if (!linkedSite) return;
-    const startMin = hours.slotDayStartHour * 60 + hours.slotDayStartMinute;
-    const endMin = hours.slotDayEndHour * 60 + hours.slotDayEndMinute;
-    if (endMin <= startMin) { Alert.alert('Invalid hours', 'End time must be after start time.'); return; }
+    const validationError = validateBookingHours(hours);
+    if (validationError) {
+      Alert.alert('Invalid hours', validationError);
+      return;
+    }
     setSaving(true);
     try {
       await saveBookingHours(linkedSite, hours);
@@ -393,19 +434,31 @@ function HoursTab() {
   };
 
   const getPickerTime = () => {
-    if (picker === 'dayStart') return { hour: hours.slotDayStartHour, minute: hours.slotDayStartMinute };
-    return { hour: hours.slotDayEndHour, minute: hours.slotDayEndMinute };
+    if (!picker) return { hour: 8, minute: 0 };
+    const day = getDayHours(hours, picker.weekday) ?? {
+      startHour: hours.slotDayStartHour,
+      startMinute: hours.slotDayStartMinute,
+      endHour: hours.slotDayEndHour,
+      endMinute: hours.slotDayEndMinute,
+    };
+    if (picker.field === 'start') return { hour: day.startHour, minute: day.startMinute };
+    return { hour: day.endHour, minute: day.endMinute };
   };
 
   const applyPickerDate = (date: Date) => {
-    const h = date.getHours(), m = date.getMinutes();
-    if (picker === 'dayStart') updateHours({ ...hours, slotDayStartHour: h, slotDayStartMinute: m });
-    else updateHours({ ...hours, slotDayEndHour: h, slotDayEndMinute: m });
+    if (!picker) return;
+    const h = date.getHours();
+    const m = date.getMinutes();
+    if (picker.field === 'start') {
+      updateDayHours(picker.weekday, { startHour: h, startMinute: m });
+    } else {
+      updateDayHours(picker.weekday, { endHour: h, endMinute: m });
+    }
   };
 
   const pt = getPickerTime();
   const pickerDate = new Date(); pickerDate.setHours(pt.hour, pt.minute, 0, 0);
-  const openCount = DAY_CHIPS.filter(d => !hours.closedWeekdays.includes(d.value)).length;
+  const openCount = WEEKDAY_ORDER.filter((d) => !hours.closedWeekdays.includes(d)).length;
 
   return (
     <ScrollView
@@ -413,44 +466,78 @@ function HoursTab() {
       showsVerticalScrollIndicator={false}
       contentContainerStyle={hStyles.content}
     >
-      {/* Booking window card */}
-      <Text style={hStyles.sectionLabel}>Booking window</Text>
+      <Text style={hStyles.sectionLabel}>
+        Hours by day <Text style={hStyles.sectionBadge}>{openCount} of 7 open</Text>
+      </Text>
       <View style={hStyles.card}>
-        <Pressable style={hStyles.timeRow} onPress={() => setPicker('dayStart')}>
-          <View style={hStyles.timeBody}>
-            <Text style={hStyles.timeCaption}>Opens at</Text>
-            <Text style={hStyles.timeValue}>{formatTime(hours.slotDayStartHour, hours.slotDayStartMinute)}</Text>
-          </View>
-        </Pressable>
-
-        <View style={hStyles.cardDivider} />
-
-        <Pressable style={hStyles.timeRow} onPress={() => setPicker('dayEnd')}>
-          <View style={hStyles.timeBody}>
-            <Text style={hStyles.timeCaption}>Closes at</Text>
-            <Text style={hStyles.timeValue}>{formatTime(hours.slotDayEndHour, hours.slotDayEndMinute)}</Text>
-          </View>
-        </Pressable>
+        {WEEKDAY_ORDER.map((weekday, index) => {
+          const open = !hours.closedWeekdays.includes(weekday);
+          const dayHours = getDayHours(hours, weekday);
+          return (
+            <View key={weekday}>
+              {index > 0 ? <View style={hStyles.cardDivider} /> : null}
+              <View style={hStyles.dayScheduleRow}>
+                <View style={hStyles.dayScheduleHead}>
+                  <Text style={hStyles.dayScheduleName}>{WEEKDAY_LABELS[weekday]}</Text>
+                  <Pressable
+                    style={[hStyles.dayOpenPill, open && hStyles.dayOpenPillOn]}
+                    onPress={() => setDayOpen(weekday, !open)}
+                  >
+                    <Text style={[hStyles.dayOpenPillText, open && hStyles.dayOpenPillTextOn]}>
+                      {open ? 'Open' : 'Closed'}
+                    </Text>
+                  </Pressable>
+                </View>
+                {open && dayHours ? (
+                  <View style={hStyles.dayScheduleTimes}>
+                    <Pressable
+                      style={hStyles.dayTimeBtn}
+                      onPress={() => setPicker({ weekday, field: 'start' })}
+                    >
+                      <Text style={hStyles.dayTimeCaption}>Opens</Text>
+                      <Text style={hStyles.dayTimeValue}>
+                        {formatTime(dayHours.startHour, dayHours.startMinute)}
+                      </Text>
+                    </Pressable>
+                    <Text style={hStyles.dayTimeDash}>–</Text>
+                    <Pressable
+                      style={hStyles.dayTimeBtn}
+                      onPress={() => setPicker({ weekday, field: 'end' })}
+                    >
+                      <Text style={hStyles.dayTimeCaption}>Closes</Text>
+                      <Text style={hStyles.dayTimeValue}>
+                        {formatTime(dayHours.endHour, dayHours.endMinute)}
+                      </Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <Text style={hStyles.dayClosedHint}>Not bookable on your site</Text>
+                )}
+              </View>
+            </View>
+          );
+        })}
       </View>
 
-      {/* Days open */}
-      <Text style={hStyles.sectionLabel}>Days open <Text style={hStyles.sectionBadge}>{openCount} of 7</Text></Text>
+      {/* Slot interval */}
+      <Text style={hStyles.sectionLabel}>Slot interval</Text>
       <View style={hStyles.card}>
-        <View style={hStyles.dayChipRow}>
-          {DAY_CHIPS.map((day) => {
-            const open = !hours.closedWeekdays.includes(day.value);
-            return (
-              <Pressable
-                key={day.value}
-                style={[hStyles.dayChip, open && hStyles.dayChipOpen]}
-                onPress={() => toggleWeekday(day.value)}
-              >
-                <Text style={[hStyles.dayChipText, open && hStyles.dayChipTextOpen]}>
-                  {day.short}
-                </Text>
-              </Pressable>
-            );
-          })}
+        <View style={hStyles.advanceRow}>
+          <View style={hStyles.timeBody}>
+            <Text style={hStyles.timeCaption}>Minutes between bookable times on your site</Text>
+          </View>
+          <View style={hStyles.advanceInputWrap}>
+            <TextInput
+              style={hStyles.advanceInput}
+              keyboardType="number-pad"
+              value={String(hours.slotStepMinutes)}
+              onChangeText={(t) => {
+                const n = Number(t.replace(/[^\d]/g, ''));
+                if (Number.isFinite(n) && n >= 15) updateHours({ ...hours, slotStepMinutes: n });
+              }}
+            />
+            <Text style={hStyles.advanceSuffix}>min</Text>
+          </View>
         </View>
       </View>
 
@@ -492,7 +579,7 @@ function HoursTab() {
         }
       </Pressable>
 
-      {picker && (
+      {picker ? (
         <DateTimePicker
           value={pickerDate}
           mode="time"
@@ -502,7 +589,7 @@ function HoursTab() {
             if (date) applyPickerDate(date);
           }}
         />
-      )}
+      ) : null}
     </ScrollView>
   );
 }
@@ -620,6 +707,77 @@ const hStyles = StyleSheet.create({
     fontWeight: '600',
   },
 
+  dayScheduleRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  dayScheduleHead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dayScheduleName: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  dayOpenPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  dayOpenPillOn: {
+    backgroundColor: colors.accentPinkMuted,
+    borderColor: colors.accentPinkBorder,
+  },
+  dayOpenPillText: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  dayOpenPillTextOn: {
+    color: colors.accentPink,
+  },
+  dayScheduleTimes: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  dayTimeBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  dayTimeCaption: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+    marginBottom: 2,
+  },
+  dayTimeValue: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  dayTimeDash: {
+    color: colors.textMuted,
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  dayClosedHint: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '500',
+  },
+
   hoursPreviewText: {
     flex: 1,
     color: colors.text,
@@ -682,6 +840,22 @@ const styles = StyleSheet.create({
   tabContent: {
     flex: 1,
     paddingBottom: 16,
+  },
+  closedBanner: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(148, 163, 184, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.24)',
+  },
+  closedBannerText: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 
   // Block list

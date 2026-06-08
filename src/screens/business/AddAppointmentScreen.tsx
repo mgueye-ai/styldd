@@ -1,7 +1,8 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { useCallback, useMemo, useState } from 'react';
-import { Alert, StyleSheet } from 'react-native';
+import { Alert, StyleSheet, Text, View } from 'react-native';
+import { colors } from '../../theme';
 import AppointmentComposerSheet from '../../components/calendar/AppointmentComposerSheet';
 import CalendarWeekHeader from '../../components/calendar/CalendarWeekHeader';
 import DraggableDayTimeline from '../../components/calendar/DraggableDayTimeline';
@@ -16,6 +17,12 @@ import { useSiteData } from '../../context/SiteDataContext';
 import { toDateKey } from '../../lib/siteData';
 import { CatalogService } from '../../data/serviceCatalog';
 import { createManualBooking, loadBlockedIntervals } from '../../lib/siteAdmin';
+import { isWeekdayClosed } from '../../lib/bookingAvailability';
+import {
+  BookingHours,
+  DEFAULT_BOOKING_HOURS,
+  loadBookingHours,
+} from '../../lib/siteServices';
 import { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 
 type Props = NativeStackScreenProps<ProfileStackParamList, 'AddAppointment'>;
@@ -34,8 +41,20 @@ export default function AddAppointmentScreen({ navigation }: Props) {
   const [sheetVisible, setSheetVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [blockOverlays, setBlockOverlays] = useState<TimelineOverlay[]>([]);
+  const [bookingHours, setBookingHours] = useState<BookingHours>(DEFAULT_BOOKING_HOURS);
 
   useFocusEffect(useCallback(() => { refreshCatalog(); }, [refreshCatalog]));
+
+  const refreshHours = useCallback(async () => {
+    if (!linkedSite) return;
+    try {
+      setBookingHours(await loadBookingHours(linkedSite));
+    } catch {
+      /* ignore */
+    }
+  }, [linkedSite]);
+
+  useFocusEffect(useCallback(() => { void refreshHours(); }, [refreshHours]));
 
   const loadBlocks = useCallback(async () => {
     if (!linkedSite) {
@@ -144,14 +163,24 @@ export default function AddAppointmentScreen({ navigation }: Props) {
       <CalendarWeekHeader
         selectedDate={selectedDate}
         onSelectedDateChange={setSelectedDate}
-        hint="Drag on the timeline to pick a time, then choose a style and client."
+        bookingHours={bookingHours}
+        hint="Grey areas match your site hours. Booked and blocked times show on top."
       />
+
+      {isWeekdayClosed(selectedDate, bookingHours) ? (
+        <View style={styles.closedBanner}>
+          <Text style={styles.closedBannerText}>
+            Closed this day — same on your public booking page.
+          </Text>
+        </View>
+      ) : null}
 
       <DraggableDayTimeline
         selectedDate={selectedDate}
         overlays={overlays}
+        bookingHours={bookingHours}
         draftVariant="appointment"
-        dragHint="Press and drag to set appointment time"
+        dragHint="Press and drag inside open hours to set appointment time"
         onSelectionComplete={openComposer}
       />
 
@@ -176,5 +205,20 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingBottom: 16,
+  },
+  closedBanner: {
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(148, 163, 184, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.24)',
+  },
+  closedBannerText: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
   },
 });

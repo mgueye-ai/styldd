@@ -66,7 +66,7 @@ export default function NotificationsPanel({
                 <Ionicons name="notifications-off-outline" size={28} color={colors.textMuted} />
                 <Text style={styles.emptyTitle}>No notifications yet</Text>
                 <Text style={styles.emptyBody}>
-                  New bookings, payments, and confirmations from your live site will show up here.
+                  New bookings, payments, and appointment reminders from your live site will show up here.
                 </Text>
               </View>
             ) : (

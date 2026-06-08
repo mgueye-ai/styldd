@@ -187,16 +187,23 @@
       </div>
     </footer>
 
+    <script src="/js/styld-tenant-config.js?v=40"></script>
+    <script src="/js/styld-tenant-config.local.js?v=40"></script>
+    <script src="/js/styld-tenant-shared.js?v=42"></script>
     <script src="js/supabase-config.js"></script>
     <script src="js/supabase-config.local.js"></script>
     <script type="module">
       import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
-      const c = window.__SALON_SITE_SUPABASE;
+      const tenantCfg = window.__STYLD_TENANT__ || {};
+      const c =
+        tenantCfg.supabaseUrl && tenantCfg.supabaseAnonKey
+          ? { url: tenantCfg.supabaseUrl, anonKey: tenantCfg.supabaseAnonKey }
+          : window.__SALON_SITE_SUPABASE;
       if (c && c.url && c.anonKey) {
         window.salonSupabaseClient = createClient(c.url, c.anonKey);
       }
     </script>
-    <script defer src="js/booking-lookup.js"></script>
+    <script defer src="js/booking-lookup.js?v=2"></script>
       <script src="js/hero-nav.js" defer></script>
   </body>
 </html>

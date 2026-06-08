@@ -303,6 +303,120 @@
     }
   }
 
+  function renderStars(rating) {
+    var n = Math.max(1, Math.min(5, Math.round(Number(rating) || 5)));
+    var html = '';
+    for (var i = 1; i <= 5; i += 1) {
+      html += '<span class="profile-review-star' + (i <= n ? ' is-filled' : '') + '">★</span>';
+    }
+    return html;
+  }
+
+  function truncateMessage(message, max) {
+    var text = String(message || '').trim();
+    if (text.length <= max) return text;
+    return text.slice(0, max).trim() + '…';
+  }
+
+  function reviewInitials(name) {
+    var parts = String(name || '').trim().split(/\s+/);
+    if (parts.length >= 2) {
+      return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase();
+    }
+    return String(name || 'C').slice(0, 2).toUpperCase();
+  }
+
+  function getReviewCardClass(theme) {
+    var layout = theme && theme.styleCardLayout;
+    return layout === 'outlined'
+      ? 'profile-review-card profile-review-card--outlined'
+      : 'profile-review-card';
+  }
+
+  function buildReviewCard(review, index, theme) {
+    var preview = truncateMessage(review.message, 72);
+    var cardClass = getReviewCardClass(theme);
+    return (
+      '<button type="button" class="' + cardClass + '" data-review-index="' + index + '">' +
+      '<div class="profile-review-card__avatar" aria-hidden="true">' + escapeHtml(reviewInitials(review.clientName)) + '</div>' +
+      '<div class="profile-review-card__body">' +
+      '<div class="profile-review-card__stars" aria-hidden="true">' + renderStars(review.rating) + '</div>' +
+      '<p class="profile-review-card__message">' + escapeHtml(preview) + '</p>' +
+      '<p class="profile-review-card__name">' + escapeHtml(review.clientName || 'Client') + '</p>' +
+      '</div>' +
+      '</button>'
+    );
+  }
+
+  function populateReviews(content, theme) {
+    var settings = window.__STYLD_REVIEWS_SETTINGS__ || { enabled: true };
+    var reviews = Array.isArray(window.__STYLD_SITE_REVIEWS__) ? window.__STYLD_SITE_REVIEWS__ : [];
+    var section = document.getElementById('profile-reviews-section');
+    var marquee = document.getElementById('profile-reviews-marquee');
+    var modal = document.getElementById('profile-review-modal');
+
+    if (!section || !marquee) return;
+
+    var enabled = settings.enabled !== false;
+    var hidden = isSectionHidden(content, 'reviews');
+    var show = enabled && !hidden && reviews.length > 0;
+
+    section.hidden = !show;
+    if (!show) {
+      marquee.innerHTML = '';
+      return;
+    }
+
+    var surface =
+      (theme && theme.backgroundColor) ||
+      getComputedStyle(document.documentElement).getPropertyValue('--card-surface').trim() ||
+      getComputedStyle(document.documentElement).getPropertyValue('--cream').trim() ||
+      '';
+    if (surface) {
+      section.style.setProperty('--review-surface', surface);
+      marquee.style.setProperty('--review-surface', surface);
+    }
+
+    var titleEl = document.getElementById('profile-reviews-title');
+    if (titleEl) titleEl.textContent = content.reviewsTitle || 'Client Reviews';
+
+    var cards = reviews.map(function (review, index) {
+      return buildReviewCard(review, index, theme || {});
+    }).join('');
+    marquee.innerHTML =
+      '<div class="profile-reviews-marquee__track">' + cards + cards + '</div>';
+
+    if (modal && !modal.dataset.bound) {
+      modal.dataset.bound = '1';
+      modal.addEventListener('click', function (e) {
+        if (e.target && e.target.closest && e.target.closest('[data-review-modal-close]')) {
+          modal.hidden = true;
+        }
+      });
+      marquee.addEventListener('click', function (e) {
+        var card = e.target && e.target.closest ? e.target.closest('.profile-review-card') : null;
+        if (!card) return;
+        var idx = Number(card.getAttribute('data-review-index'));
+        var review = reviews[idx];
+        if (!review) return;
+        var starsEl = document.getElementById('profile-review-modal-stars');
+        var nameEl = document.getElementById('profile-review-modal-name');
+        var messageEl = document.getElementById('profile-review-modal-message');
+        var modalCard = modal.querySelector('.profile-review-modal__card');
+        if (starsEl) starsEl.innerHTML = renderStars(review.rating);
+        if (nameEl) nameEl.textContent = review.clientName || 'Client';
+        if (messageEl) messageEl.textContent = review.message || '';
+        if (modalCard) {
+          modalCard.classList.toggle(
+            'profile-review-modal__card--outlined',
+            theme && theme.styleCardLayout === 'outlined',
+          );
+        }
+        modal.hidden = false;
+      });
+    }
+  }
+
   window.applyStyldPreviewContent = function applyStyldPreviewContent() {
     var content = window.__STYLD_SITE_CONTENT__;
     if (!content || typeof content !== 'object') return;
@@ -475,10 +589,12 @@
       }
     }
 
+    populateReviews(content, theme);
+
     // Section visibility
     document.querySelectorAll('[data-site-section]').forEach(function (el) {
       var sectionId = el.getAttribute('data-site-section');
-      if (sectionId) el.hidden = isSectionHidden(content, sectionId);
+      if (sectionId && sectionId !== 'reviews') el.hidden = isSectionHidden(content, sectionId);
     });
 
     // Footer

@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { BookingHours, isWeekdayClosed as isWeekdayClosedByNumber } from '../../data/bookingHours';
 import { toDateKey } from '../../lib/siteData';
 import { colors } from '../../theme';
 import {
@@ -13,12 +14,16 @@ import {
 type CalendarWeekHeaderProps = {
   selectedDate: Date;
   onSelectedDateChange: (date: Date) => void;
+  bookingHours?: BookingHours | null;
+  closedWeekdays?: number[];
   hint?: string;
 };
 
 export default function CalendarWeekHeader({
   selectedDate,
   onSelectedDateChange,
+  bookingHours = null,
+  closedWeekdays = [],
   hint,
 }: CalendarWeekHeaderProps) {
   const today = new Date();
@@ -52,6 +57,9 @@ export default function CalendarWeekHeader({
         {weekDays.map((day, index) => {
           const selected = isSameDay(day, selectedDate);
           const isToday = isSameDay(day, today);
+          const isClosed = bookingHours
+            ? isWeekdayClosedByNumber(bookingHours, day.getDay())
+            : closedWeekdays.includes(day.getDay());
 
           return (
             <Pressable
@@ -59,11 +67,29 @@ export default function CalendarWeekHeader({
               style={styles.dayColumn}
               onPress={() => onSelectedDateChange(day)}
             >
-              <View style={[styles.dayPill, selected && styles.dayPillSelected]}>
-                <Text style={[styles.dayLabel, selected && styles.dayLabelSelected]}>
+              <View
+                style={[
+                  styles.dayPill,
+                  selected && styles.dayPillSelected,
+                  isClosed && !selected && styles.dayPillClosed,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.dayLabel,
+                    selected && styles.dayLabelSelected,
+                    isClosed && !selected && styles.dayLabelClosed,
+                  ]}
+                >
                   {DAY_LABELS[index]}
                 </Text>
-                <Text style={[styles.dayNumber, selected && styles.dayNumberSelected]}>
+                <Text
+                  style={[
+                    styles.dayNumber,
+                    selected && styles.dayNumberSelected,
+                    isClosed && !selected && styles.dayNumberClosed,
+                  ]}
+                >
                   {day.getDate()}
                 </Text>
                 {isToday ? (
@@ -123,6 +149,9 @@ const styles = StyleSheet.create({
   dayPillSelected: {
     backgroundColor: colors.calendarSelectedDay,
   },
+  dayPillClosed: {
+    opacity: 0.45,
+  },
   dayLabel: {
     color: colors.textMuted,
     fontSize: 13,
@@ -139,6 +168,12 @@ const styles = StyleSheet.create({
   },
   dayNumberSelected: {
     color: colors.text,
+  },
+  dayLabelClosed: {
+    textDecorationLine: 'line-through',
+  },
+  dayNumberClosed: {
+    textDecorationLine: 'line-through',
   },
   todayDot: {
     width: 5,

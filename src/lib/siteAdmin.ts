@@ -1,7 +1,9 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { STYLE_COVER_BUCKET } from '../data/serviceCatalog';
 import { uploadStyleCoverImage as uploadStyleCoverBlob, uploadUserSiteImage } from './siteMedia';
+import { cancelBookingViaEdge } from './bookingCancel';
 import { createLinkedSiteClient, getLinkedTableName, LinkedSite } from './linkedSites';
+import { supabase } from './supabase';
 
 export type BlockedInterval = {
   id: string;
@@ -229,7 +231,7 @@ export async function createManualBooking(
   if (error) throw new Error(error.message);
 }
 
-export async function cancelBooking(linkedSite: LinkedSite, bookingId: string): Promise<void> {
+export async function completeBooking(linkedSite: LinkedSite, bookingId: string): Promise<void> {
   const { client, tableName, userId } = getClient(linkedSite);
 
   const { data: existing, error: readError } = await client
@@ -244,16 +246,47 @@ export async function cancelBooking(linkedSite: LinkedSite, bookingId: string): 
   if (!existing) throw new Error('Booking not found.');
 
   const data = (existing.data ?? {}) as Record<string, unknown>;
+  const reviewToken =
+    typeof data.review_token === 'string' && data.review_token.trim()
+      ? data.review_token.trim()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 
   const { error } = await client
     .from(tableName)
     .update({
-      data: { ...data, booking_status: 'cancelled' },
+      data: {
+        ...data,
+        booking_status: 'completed',
+        completed_at: new Date().toISOString(),
+        review_token: reviewToken,
+      },
       updated_at: new Date().toISOString(),
     })
     .eq('id', bookingId);
 
   if (error) throw new Error(error.message);
+}
+
+export async function cancelBooking(linkedSite: LinkedSite, bookingId: string): Promise<void> {
+  const { userId } = getClient(linkedSite);
+
+  const { data: subdomainRow, error: subdomainErr } = await supabase
+    .from('styld_site_subdomains')
+    .select('subdomain')
+    .eq('user_id', userId)
+    .maybeSingle();
+
+  if (subdomainErr) throw new Error(subdomainErr.message);
+
+  const subdomain = String(subdomainRow?.subdomain ?? '').trim();
+  if (!subdomain) {
+    throw new Error('Publish your site before cancelling bookings online.');
+  }
+
+  const result = await cancelBookingViaEdge(bookingId, subdomain, 'stylist');
+  if (!result.ok) {
+    throw new Error(result.error || 'Could not cancel booking.');
+  }
 }
 
 export function formatBlockRange(startsAt: string, endsAt: string): string {

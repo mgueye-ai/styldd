@@ -35,6 +35,13 @@
       var secondary = theme.secondaryColor || '#0a0a0a';
       document.documentElement.style.setProperty('--pink', primary);
       document.documentElement.style.setProperty('--ink', secondary);
+      document.documentElement.style.setProperty('--nav-text', secondary);
+    }
+
+    var navBg = (theme.navbarColor || '').trim();
+    if (navBg && /^#[0-9a-fA-F]{6}$/.test(navBg)) {
+      document.documentElement.style.setProperty('--nav-bg', navBg);
+      document.documentElement.style.setProperty('--nav-bg-solid', navBg);
     }
 
     var bg = (theme.backgroundColor || '').trim();
@@ -83,6 +90,7 @@
         mode: 'deposit',
         depositKind: 'percent',
         depositValue: 10,
+        depositIncludedInPrice: true,
         requireCurrentHairPhoto: true,
         requireReferencePhoto: false,
       };
@@ -107,31 +115,48 @@
         typeof raw.requireReferencePhoto === 'boolean'
           ? raw.requireReferencePhoto
           : defaults.requireReferencePhoto;
+      var depositIncludedInPrice =
+        typeof raw.depositIncludedInPrice === 'boolean'
+          ? raw.depositIncludedInPrice
+          : defaults.depositIncludedInPrice;
       return {
         mode: mode,
         depositKind: depositKind,
         depositValue: depositValue,
+        depositIncludedInPrice: depositIncludedInPrice,
         requireCurrentHairPhoto: requireCurrentHairPhoto,
         requireReferencePhoto: requireReferencePhoto,
       };
     }
 
+    var cancellationPolicy =
+      site.cancellationPolicy && typeof site.cancellationPolicy === 'object'
+        ? site.cancellationPolicy
+        : {
+            fullRefundNoticeHours: 24,
+            refundAppliesTo: 'both',
+            policySummary:
+              'You may cancel online anytime before your appointment. Online deposits and full payments are fully refunded when you cancel at least 24 hours before your appointment. Cancellations after that deadline are non-refundable.',
+          };
+
     window.__SALON_SITE_BOOKING = Object.assign({}, window.__SALON_SITE_BOOKING || {}, {
       payment: normalizeBookingPayment(site.bookingPayment),
+      cancellationPolicy: cancellationPolicy,
       salonTimeZone: site.content.timezone || 'America/New_York',
       salonPhoneDisplay: site.content.phoneDisplay || '',
       salonPhoneTel: site.content.phoneTel || '',
-      slotDayStartHour: hours.slotDayStartHour != null ? hours.slotDayStartHour : 8,
-      slotDayStartMinute: hours.slotDayStartMinute != null ? hours.slotDayStartMinute : 0,
-      slotDayEndHour: hours.slotDayEndHour != null ? hours.slotDayEndHour : 19,
-      slotDayEndMinute: hours.slotDayEndMinute != null ? hours.slotDayEndMinute : 30,
-      slotStepMinutes: hours.slotStepMinutes != null ? hours.slotStepMinutes : 30,
-      saturdayLastStartHour: hours.saturdayLastStartHour != null ? hours.saturdayLastStartHour : 14,
-      saturdayLastStartMinute: hours.saturdayLastStartMinute != null ? hours.saturdayLastStartMinute : 0,
-      sameDayLeadMinutes: hours.sameDayLeadMinutes != null ? hours.sameDayLeadMinutes : 30,
-      concurrentAppointmentCapacity:
-        hours.concurrentAppointmentCapacity != null ? hours.concurrentAppointmentCapacity : 2,
-      closedWeekdays: Array.isArray(hours.closedWeekdays) ? hours.closedWeekdays : [],
+      slotDayStartHour: hours.slotDayStartHour,
+      slotDayStartMinute: hours.slotDayStartMinute,
+      slotDayEndHour: hours.slotDayEndHour,
+      slotDayEndMinute: hours.slotDayEndMinute,
+      slotStepMinutes: hours.slotStepMinutes,
+      saturdayLastStartHour: hours.saturdayLastStartHour,
+      saturdayLastStartMinute: hours.saturdayLastStartMinute,
+      sameDayLeadMinutes: hours.sameDayLeadMinutes,
+      concurrentAppointmentCapacity: hours.concurrentAppointmentCapacity,
+      closedWeekdays: hours.closedWeekdays,
+      weekdayHours: hours.weekdayHours,
+      strictNoOverlap: true,
     });
 
     applyBrandToPage(site.content, site.theme, cfg);
@@ -153,10 +178,15 @@
           window.__STYLD_STRIPE_READY__ = false;
         }
 
-        var script = document.createElement('script');
-        script.src = '/js/booking.js?v=45';
-        script.defer = true;
-        document.body.appendChild(script);
+        var availScript = document.createElement('script');
+        availScript.src = '/js/booking-availability.js?v=3';
+        availScript.onload = function () {
+          var script = document.createElement('script');
+          script.src = '/js/booking.js?v=57';
+          script.defer = true;
+          document.body.appendChild(script);
+        };
+        document.body.appendChild(availScript);
       })
       .catch(function (err) {
         showError(err && err.message ? err.message : 'Could not start booking.');

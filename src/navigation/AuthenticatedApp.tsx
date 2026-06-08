@@ -1,3 +1,4 @@
+import { PushNotificationsProvider } from '../context/PushNotificationsContext';
 import { ServiceCatalogProvider } from '../context/ServiceCatalogContext';
 import { OnboardingProvider, useOnboarding } from '../context/OnboardingContext';
 import { SiteContentProvider } from '../context/SiteContentContext';
@@ -21,15 +22,17 @@ function NewUserGate() {
 export default function AuthenticatedApp() {
   return (
     <SiteDataProvider>
-      <SiteContentProvider>
-        <SiteThemeProvider>
-          <OnboardingProvider>
-            <ServiceCatalogProvider>
-              <NewUserGate />
-            </ServiceCatalogProvider>
-          </OnboardingProvider>
-        </SiteThemeProvider>
-      </SiteContentProvider>
+      <PushNotificationsProvider>
+        <SiteContentProvider>
+          <SiteThemeProvider>
+            <OnboardingProvider>
+              <ServiceCatalogProvider>
+                <NewUserGate />
+              </ServiceCatalogProvider>
+            </OnboardingProvider>
+          </SiteThemeProvider>
+        </SiteContentProvider>
+      </PushNotificationsProvider>
     </SiteDataProvider>
   );
 }

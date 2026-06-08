@@ -31,6 +31,72 @@
 
   var lastQuery = { name: "", contact: "", bookingId: "" };
 
+  function getTenantSubdomain() {
+    if (window.StyldTenant && typeof window.StyldTenant.getSubdomain === "function") {
+      return window.StyldTenant.getSubdomain();
+    }
+    var cfg = window.__STYLD_TENANT__ || {};
+    var rootDomain = (cfg.rootDomain || "styldd.com").toLowerCase();
+    var host = (window.location.hostname || "").toLowerCase();
+    var fromQuery = new URLSearchParams(window.location.search).get("subdomain");
+    if (fromQuery) return fromQuery.trim().toLowerCase();
+    if (host.endsWith("." + rootDomain) && host !== rootDomain && host !== "www." + rootDomain) {
+      return host.slice(0, -(rootDomain.length + 1));
+    }
+    return "";
+  }
+
+  function tenantRpcHeaders() {
+    var cfg = window.__STYLD_TENANT__ || {};
+    return {
+      apikey: cfg.supabaseAnonKey,
+      Authorization: "Bearer " + cfg.supabaseAnonKey,
+      "Content-Type": "application/json",
+    };
+  }
+
+  async function tenantLookupBooking(subdomain, bookingId, contact) {
+    var cfg = window.__STYLD_TENANT__ || {};
+    if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) return null;
+    var url = cfg.supabaseUrl.replace(/\/$/, "") + "/rest/v1/rpc/styld_tenant_lookup_booking";
+    var res = await fetch(url, {
+      method: "POST",
+      headers: tenantRpcHeaders(),
+      body: JSON.stringify({
+        p_subdomain: subdomain,
+        p_booking_id: bookingId,
+        p_contact: contact,
+      }),
+    });
+    if (!res.ok) {
+      console.warn("Tenant lookup failed", await res.text());
+      return null;
+    }
+    var body = await res.json();
+    return body && typeof body === "object" ? body : null;
+  }
+
+  async function tenantCancelBooking(subdomain, bookingId, contact) {
+    var cfg = window.__STYLD_TENANT__ || {};
+    if (!cfg.supabaseUrl || !cfg.supabaseAnonKey) return false;
+    var url = cfg.supabaseUrl.replace(/\/$/, "") + "/rest/v1/rpc/styld_tenant_cancel_booking";
+    var res = await fetch(url, {
+      method: "POST",
+      headers: tenantRpcHeaders(),
+      body: JSON.stringify({
+        p_subdomain: subdomain,
+        p_booking_id: bookingId,
+        p_contact: contact,
+      }),
+    });
+    if (!res.ok) {
+      console.warn("Tenant cancel failed", await res.text());
+      return false;
+    }
+    var body = await res.json();
+    return body === true;
+  }
+
   function money(n) {
     return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(Number(n || 0));
   }
@@ -109,6 +175,8 @@
   }
 
   function isCancelled(row) {
+    var status = normalizeText(row.booking_status);
+    if (status === "cancelled" || status === "canceled") return true;
     var slot = normalizeText(row.appointment_slot);
     var notes = normalizeText(row.notes);
     return slot === "cancelled" || notes.indexOf("[cancelled]") >= 0;
@@ -137,6 +205,12 @@
 
   async function lookupByBookingId(bookingId, contact) {
     if (!bookingId) return [];
+    var tenantSubdomain = getTenantSubdomain();
+    if (tenantSubdomain) {
+      var tenantRow = await tenantLookupBooking(tenantSubdomain, bookingId, contact);
+      return tenantRow ? [tenantRow] : [];
+    }
+
     var local = readLocalBookings();
     var localRow = local.find(function (r) {
       return r.id === bookingId;
@@ -298,6 +372,15 @@
   }
 
   async function updateRemoteBooking(bookingId, changes) {
+    var tenantSubdomain = getTenantSubdomain();
+    if (
+      tenantSubdomain &&
+      changes &&
+      (changes.booking_status === "cancelled" || changes.appointment_slot === "Cancelled")
+    ) {
+      return tenantCancelBooking(tenantSubdomain, bookingId, lastQuery.contact);
+    }
+
     var sb = window.salonSupabaseClient;
     if (!sb) return false;
     var res = await sb.from("bookings").update(changes).eq("id", bookingId);
@@ -473,11 +556,32 @@
     }
   }
 
-  function init() {
+  function applyUrlPrefill() {
+    var p = new URLSearchParams(window.location.search);
+    var bookingId = (p.get("booking_id") || "").trim();
+    var contact = (p.get("contact") || p.get("email") || "").trim();
+    var name = (p.get("name") || "").trim();
+    if (els.bookingId && bookingId) els.bookingId.value = bookingId;
+    if (els.contact && contact) els.contact.value = contact;
+    if (els.name && name) els.name.value = name;
+    return {
+      bookingId: bookingId,
+      contact: contact,
+      name: name,
+      autoSubmit: !!(bookingId && contact && name),
+    };
+  }
+
+  async function init() {
     if (!els.form || !els.results) return;
     els.form.addEventListener("submit", onSubmit);
     els.results.addEventListener("click", handleActionClick);
     els.results.addEventListener("submit", handleRescheduleSubmit);
+
+    var prefill = applyUrlPrefill();
+    if (prefill.autoSubmit) {
+      await onSubmit({ preventDefault: function () {} });
+    }
   }
 
   init();

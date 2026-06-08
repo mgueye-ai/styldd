@@ -39,7 +39,10 @@ export type SiteBookingRecord = {
   depositAmount: number;
   depositPaid: boolean;
   paymentStatus: string;
+  paymentIntentId: string;
   bookingStatus: string;
+  refundStatus: string;
+  refundAmountCents: number;
   startsAt: Date | null;
   durationMinutes: number;
   createdAt: Date;
@@ -187,12 +190,17 @@ function parseUnifiedBooking(record: UnifiedSiteRecord): SiteBookingRecord | nul
     price: asNumber(data.estimated_total),
     depositAmount: asNumber(data.deposit_amount),
     paymentStatus: asString(data.payment_status),
+    paymentIntentId:
+      asString(data.stripe_payment_intent_id) || asString(data.unit_payment_id),
     depositPaid: resolveDepositPaid(
       asString(data.payment_status),
       asString(data.booking_status),
       asNumber(data.deposit_amount),
+      asString(data.stripe_payment_intent_id) || asString(data.unit_payment_id),
     ),
     bookingStatus: asString(data.booking_status, 'pending_payment'),
+    refundStatus: asString(data.refund_status, 'none'),
+    refundAmountCents: asNumber(data.refund_amount_cents),
     startsAt,
     durationMinutes: asNumber(data.duration_minutes, 120),
     createdAt: parseDate(record.created_at) ?? new Date(),
@@ -206,11 +214,30 @@ function parseUnifiedBooking(record: UnifiedSiteRecord): SiteBookingRecord | nul
  *    AND a deposit amount exists
  *  - NOT when it's in_person or still pending
  */
-function resolveDepositPaid(paymentStatus: string, bookingStatus: string, depositAmount: number): boolean {
-  if (['in_person', 'pending'].includes(paymentStatus)) return false;
-  if (['deposit_paid', 'paid'].includes(paymentStatus)) return true;
-  if (['confirmed', 'completed'].includes(bookingStatus) && depositAmount > 0) return true;
+function resolveDepositPaid(
+  paymentStatus: string,
+  bookingStatus: string,
+  depositAmount: number,
+  paymentIntentId = '',
+): boolean {
+  const ps = paymentStatus.toLowerCase().trim();
+  const bs = bookingStatus.toLowerCase().trim();
+  if (ps === 'in_person') return false;
+  if (['deposit_paid', 'paid'].includes(ps)) return true;
+  if (['confirmed', 'completed'].includes(bs) && depositAmount > 0) return true;
+  if (paymentIntentId.trim() && depositAmount > 0) return true;
   return false;
+}
+
+export function isBookingAwaitingPayment(booking: Pick<
+  SiteBookingRecord,
+  'depositPaid' | 'paymentStatus' | 'bookingStatus'
+>): boolean {
+  if (booking.depositPaid) return false;
+  const ps = booking.paymentStatus.toLowerCase().trim();
+  if (ps === 'in_person') return false;
+  if (['deposit_paid', 'paid'].includes(ps)) return false;
+  return booking.bookingStatus === 'pending_payment' || ps === 'pending' || ps === '';
 }
 
 function parseFlatBooking(record: FlatBookingRecord): SiteBookingRecord | null {
@@ -233,12 +260,17 @@ function parseFlatBooking(record: FlatBookingRecord): SiteBookingRecord | null {
     price: asNumber(record.estimated_total),
     depositAmount: asNumber(record.deposit_amount),
     paymentStatus: asString(record.payment_status),
+    paymentIntentId:
+      asString(record.stripe_payment_intent_id) || asString(record.unit_payment_id),
     depositPaid: resolveDepositPaid(
       asString(record.payment_status),
       asString(record.booking_status),
       asNumber(record.deposit_amount),
+      asString(record.stripe_payment_intent_id) || asString(record.unit_payment_id),
     ),
     bookingStatus: asString(record.booking_status, 'pending_payment'),
+    refundStatus: asString(record.refund_status, 'none'),
+    refundAmountCents: asNumber(record.refund_amount_cents),
     startsAt,
     durationMinutes: asNumber(record.duration_minutes, 120),
     createdAt: parseDate(record.created_at) ?? new Date(),

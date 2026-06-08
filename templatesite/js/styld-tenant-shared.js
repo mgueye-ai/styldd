@@ -18,6 +18,91 @@
     return row.data;
   }
 
+  var DEFAULT_BOOKING_HOURS = {
+    closedWeekdays: [],
+    slotDayStartHour: 8,
+    slotDayStartMinute: 0,
+    slotDayEndHour: 19,
+    slotDayEndMinute: 30,
+    slotStepMinutes: 30,
+    sameDayLeadMinutes: 4320,
+    saturdayLastStartHour: 14,
+    saturdayLastStartMinute: 0,
+    concurrentAppointmentCapacity: 2,
+  };
+
+  function normalizeNumber(value, fallback) {
+    var n = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(n) ? n : fallback;
+  }
+
+  function normalizeWeekdays(value) {
+    if (!Array.isArray(value)) return DEFAULT_BOOKING_HOURS.closedWeekdays.slice();
+    return value
+      .map(function (d) {
+        return Number(d);
+      })
+      .filter(function (d) {
+        return Number.isInteger(d) && d >= 0 && d <= 6;
+      });
+  }
+
+  function normalizeHour(value, fallback) {
+    var n = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(n) ? Math.min(23, Math.max(0, Math.round(n))) : fallback;
+  }
+
+  function normalizeMinute(value, fallback) {
+    var n = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(n) ? Math.min(59, Math.max(0, Math.round(n))) : fallback;
+  }
+
+  function normalizeWeekdayHours(raw, fallback) {
+    if (!raw || typeof raw !== 'object') return undefined;
+    var next = {};
+    Object.keys(raw).forEach(function (key) {
+      var weekday = Number(key);
+      if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) return;
+      var entry = raw[key];
+      if (!entry || typeof entry !== 'object') return;
+      next[weekday] = {
+        startHour: normalizeHour(entry.startHour, fallback.slotDayStartHour),
+        startMinute: normalizeMinute(entry.startMinute, fallback.slotDayStartMinute),
+        endHour: normalizeHour(entry.endHour, fallback.slotDayEndHour),
+        endMinute: normalizeMinute(entry.endMinute, fallback.slotDayEndMinute),
+      };
+    });
+    return Object.keys(next).length > 0 ? next : undefined;
+  }
+
+  function normalizeBookingHours(raw) {
+    var source = raw && typeof raw === 'object' ? raw : {};
+    var base = {
+      closedWeekdays: normalizeWeekdays(source.closedWeekdays),
+      slotDayStartHour: normalizeNumber(source.slotDayStartHour, DEFAULT_BOOKING_HOURS.slotDayStartHour),
+      slotDayStartMinute: normalizeNumber(source.slotDayStartMinute, DEFAULT_BOOKING_HOURS.slotDayStartMinute),
+      slotDayEndHour: normalizeNumber(source.slotDayEndHour, DEFAULT_BOOKING_HOURS.slotDayEndHour),
+      slotDayEndMinute: normalizeNumber(source.slotDayEndMinute, DEFAULT_BOOKING_HOURS.slotDayEndMinute),
+      slotStepMinutes: normalizeNumber(source.slotStepMinutes, DEFAULT_BOOKING_HOURS.slotStepMinutes),
+      sameDayLeadMinutes: normalizeNumber(source.sameDayLeadMinutes, DEFAULT_BOOKING_HOURS.sameDayLeadMinutes),
+      saturdayLastStartHour: normalizeNumber(
+        source.saturdayLastStartHour,
+        DEFAULT_BOOKING_HOURS.saturdayLastStartHour,
+      ),
+      saturdayLastStartMinute: normalizeNumber(
+        source.saturdayLastStartMinute,
+        DEFAULT_BOOKING_HOURS.saturdayLastStartMinute,
+      ),
+      concurrentAppointmentCapacity: normalizeNumber(
+        source.concurrentAppointmentCapacity,
+        DEFAULT_BOOKING_HOURS.concurrentAppointmentCapacity,
+      ),
+    };
+    var weekdayHours = normalizeWeekdayHours(source.weekdayHours, base);
+    if (weekdayHours) base.weekdayHours = weekdayHours;
+    return base;
+  }
+
   function coverStoragePath(value) {
     if (!value || typeof value !== 'object') {
       return typeof value === 'string' ? value : null;
@@ -136,6 +221,7 @@
   window.StyldTenant = {
     getSubdomain: getSubdomain,
     applySiteFooter: applySiteFooter,
+    normalizeBookingHours: normalizeBookingHours,
 
     loadPublishedSite: function () {
       var cfg = window.__STYLD_TENANT__ || {};
@@ -181,6 +267,7 @@
             var covers = {};
             var bookingHours = null;
             var bookingPayment = null;
+            var cancellationPolicy = null;
 
             records.forEach(function (record) {
               var value = settingValue(record);
@@ -200,6 +287,9 @@
               if (record.record_type === 'site_setting' && record.record_key === 'booking_payment') {
                 bookingPayment = value;
               }
+              if (record.record_type === 'site_setting' && record.record_key === 'cancellation_policy') {
+                cancellationPolicy = value;
+              }
               if (record.record_type === 'style_cover_image' && record.record_key) {
                 var coverPath = coverStoragePath(value);
                 if (typeof coverPath === 'string') covers[record.record_key] = coverPath;
@@ -216,8 +306,9 @@
               meta: meta,
               prices: prices,
               covers: covers,
-              bookingHours: bookingHours,
+              bookingHours: normalizeBookingHours(bookingHours),
               bookingPayment: bookingPayment,
+              cancellationPolicy: cancellationPolicy,
               bookingStyles: buildBookingStyles(meta, prices),
               catalogCards: buildCatalogCards(meta, prices, covers, cfg.supabaseUrl),
             };

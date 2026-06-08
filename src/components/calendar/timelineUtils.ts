@@ -1,3 +1,10 @@
+import { BookingHours } from '../../data/bookingHours';
+import {
+  buildClosedRegions,
+  closedRegionsToOverlays,
+  getTimelineBounds,
+  getTimelineBoundsForDate,
+} from '../../lib/bookingAvailability';
 import { toDateKey } from '../../lib/siteData';
 
 export const HOUR_HEIGHT = 56;
@@ -14,8 +21,46 @@ export type TimelineOverlay = {
   startMinute: number;
   endHour: number;
   endMinute: number;
-  variant: 'booking' | 'block' | 'completed';
+  variant: 'booking' | 'block' | 'completed' | 'closed';
 };
+
+export function resolveTimelineBounds(
+  hours: BookingHours | null | undefined,
+  date?: Date,
+) {
+  if (!hours) {
+    return { startHour: TIMELINE_START, endHour: TIMELINE_END };
+  }
+  if (date) {
+    return getTimelineBoundsForDate(hours, date);
+  }
+  return getTimelineBounds(hours);
+}
+
+export function buildScheduleClosedOverlays(
+  selectedDate: Date,
+  hours: BookingHours | null | undefined,
+): TimelineOverlay[] {
+  if (!hours) return [];
+  return closedRegionsToOverlays(buildClosedRegions(selectedDate, hours));
+}
+
+export function isRangeInClosedOverlay(
+  startMinute: number,
+  endMinute: number,
+  overlays: TimelineOverlay[],
+) {
+  const lo = Math.min(startMinute, endMinute);
+  const hi = Math.max(startMinute, endMinute);
+  const safeHi = hi - lo < SNAP_MINUTES ? lo + SNAP_MINUTES : hi;
+
+  return overlays.some((overlay) => {
+    if (overlay.variant !== 'closed') return false;
+    const overlayStart = overlay.startHour * 60 + overlay.startMinute;
+    const overlayEnd = overlay.endHour * 60 + overlay.endMinute;
+    return lo < overlayEnd && overlayStart < safeHi;
+  });
+}
 
 export type TimeRange = {
   startsAt: Date;
@@ -76,9 +121,12 @@ export function formatTimeRange(startsAt: Date, endsAt: Date) {
   )}`;
 }
 
-export function getOverlayTop(overlay: Pick<TimelineOverlay, 'startHour' | 'startMinute'>) {
+export function getOverlayTop(
+  overlay: Pick<TimelineOverlay, 'startHour' | 'startMinute'>,
+  timelineStartHour = TIMELINE_START,
+) {
   const startMinutes = overlay.startHour * 60 + overlay.startMinute;
-  const timelineStartMinutes = TIMELINE_START * 60;
+  const timelineStartMinutes = timelineStartHour * 60;
   return ((startMinutes - timelineStartMinutes) / 60) * HOUR_HEIGHT;
 }
 
@@ -90,15 +138,27 @@ export function getOverlayHeight(
   return Math.max(((endMinutes - startMinutes) / 60) * HOUR_HEIGHT, 40);
 }
 
-export function snapMinutes(minutes: number) {
+export function snapMinutes(
+  minutes: number,
+  timelineStartHour = TIMELINE_START,
+  timelineEndHour = TIMELINE_END,
+) {
   const snapped = Math.round(minutes / SNAP_MINUTES) * SNAP_MINUTES;
-  const min = TIMELINE_START * 60;
-  const max = (TIMELINE_END + 1) * 60;
+  const min = timelineStartHour * 60;
+  const max = (timelineEndHour + 1) * 60;
   return Math.max(min, Math.min(max, snapped));
 }
 
-export function yToMinutes(y: number) {
-  return snapMinutes(TIMELINE_START * 60 + (y / HOUR_HEIGHT) * 60);
+export function yToMinutes(
+  y: number,
+  timelineStartHour = TIMELINE_START,
+  timelineEndHour = TIMELINE_END,
+) {
+  return snapMinutes(
+    timelineStartHour * 60 + (y / HOUR_HEIGHT) * 60,
+    timelineStartHour,
+    timelineEndHour,
+  );
 }
 
 export function minutesToDate(date: Date, totalMinutes: number) {

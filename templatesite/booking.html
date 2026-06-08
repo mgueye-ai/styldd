@@ -16,7 +16,7 @@
       href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700&family=Inter:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Source+Sans+3:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="css/styles.css?v=35" />
+    <link rel="stylesheet" href="css/styles.css?v=46" />
     <!-- Vercel Web Analytics: enable in Vercel Project Settings > Analytics -->
     <script src="js/vercel-analytics-init.js"></script>
     <script defer src="/_vercel/insights/script.js"></script>
@@ -158,16 +158,6 @@
               </fieldset>
             </div>
 
-            <div class="field" id="hair-length-field-wrap" hidden>
-              <label for="hair-length-select">Extra length / add-on (optional)</label>
-              <select id="hair-length-select" name="hair-length">
-                <option value="" selected>Standard — menu length (no extra charge)</option>
-                <option value="lower-back">Lower Back Length (+$15 · +30 min)</option>
-                <option value="butt">Butt Length (+$25 · +60 min)</option>
-                <option value="knee">Knee Length (+$35 · +90 min)</option>
-              </select>
-            </div>
-
             <div class="field">
               <label for="photo-hair">Current hair photo *</label>
               <input id="photo-hair" name="photo-hair" type="file" accept="image/*" required />
@@ -251,14 +241,25 @@
           <section class="form-section">
             <h2>Pricing</h2>
             <p>
-              <strong>Base service:</strong> <span id="line-subtotal">$0.00</span><br />
-              <strong>Extra length:</strong> <span id="line-length-addon">—</span>
+              <strong>Service price:</strong> <span id="line-subtotal">$0.00</span>
             </p>
             <p>
-              <strong>Estimated total:</strong> <span id="line-total">$0.00</span>
+              <strong id="line-total-label">Estimated total:</strong> <span id="line-total">$0.00</span>
             </p>
-            <p>
-              <strong id="line-online-label">Due when booking:</strong> <span id="line-deposit">$0.00</span>
+            <p class="deposit-note" id="line-deposit-excluded-note" hidden>
+              Deposit due now is paid separately and is not included in this amount.
+            </p>
+            <p id="line-deposit-base-row" hidden>
+              <strong id="line-online-label">Deposit:</strong> <span id="line-deposit-base">$0.00</span>
+            </p>
+            <p id="line-service-fee-row" hidden>
+              <strong>Service fee:</strong> <span id="line-service-fee">$0.00</span>
+            </p>
+            <p id="line-charge-total-row" hidden>
+              <strong>Total due when booking:</strong> <span id="line-charge-total">$0.00</span>
+            </p>
+            <p id="line-in-person-due-row" hidden>
+              <strong>Due at appointment:</strong> <span id="line-in-person-due">$0.00</span>
             </p>
             <p class="deposit-note" id="line-deposit-detail"></p>
             <p class="deposit-note" id="deposit-note-in-person" hidden>
@@ -274,6 +275,11 @@
             <div class="alert" role="alert" id="deposit-policy-alert"></div>
           </section>
 
+          <section class="form-section hidden" id="cancellation-policy-section" aria-hidden="true">
+            <h2>Cancellation policy</h2>
+            <p class="cancellation-policy-text" id="cancellation-policy-text"></p>
+          </section>
+
           <section class="form-section hidden" id="payment-section" aria-hidden="true">
             <h2>Payment</h2>
             <p class="payment-card-trust" id="payment-card-trust" hidden>
@@ -282,7 +288,9 @@
             <div class="payment-placeholder">
               <p><strong>Name:</strong> <span id="pay-name-preview">—</span></p>
               <p><strong>Email:</strong> <span id="pay-email-preview">—</span></p>
-              <p><strong>Due now:</strong> <span id="pay-deposit-preview">$0.00</span></p>
+              <p id="pay-deposit-base-row" hidden><strong>Deposit:</strong> <span id="pay-deposit-base">$0.00</span></p>
+              <p id="pay-service-fee-row" hidden><strong>Service fee:</strong> <span id="pay-service-fee">$0.00</span></p>
+              <p><strong>Total due now:</strong> <span id="pay-deposit-preview">$0.00</span></p>
             </div>
             <div id="stripe-card-element" class="stripe-card-element"></div>
             <p id="stripe-card-error" class="booking-feedback booking-feedback--error" role="alert" hidden></p>
@@ -299,22 +307,41 @@
         <aside class="pricing-sidebar" aria-label="Estimate summary">
           <h3>Your estimate</h3>
           <div class="price-line">
-            <span>Base service</span>
+            <span>Service price</span>
             <span id="side-subtotal">$0.00</span>
           </div>
-          <div class="price-line">
-            <span>Extra length</span>
-            <span id="side-length-addon">—</span>
-          </div>
           <div class="price-line total">
-            <span>Estimated total</span>
+            <span id="side-total-label">Estimated total</span>
             <span id="side-total">$0.00</span>
           </div>
-          <div class="price-line deposit">
-            <span id="side-online-label">Due when booking</span>
+          <p class="deposit-note" id="side-deposit-excluded-note" hidden>
+            Deposit due now is paid separately and is not included in this amount.
+          </p>
+          <div class="price-line deposit" id="side-deposit-row" hidden>
+            <span id="side-online-label">Deposit</span>
             <span id="side-deposit">$0.00</span>
           </div>
+          <div class="price-line fee" id="side-service-fee-row" hidden>
+            <span>Service fee</span>
+            <span id="side-service-fee">$0.00</span>
+          </div>
+          <div class="price-line charge-total" id="side-charge-total-row" hidden>
+            <span>Total due now</span>
+            <span id="side-charge-total">$0.00</span>
+          </div>
+          <div class="price-line balance" id="side-balance-row" hidden>
+            <span>Balance at appointment</span>
+            <span id="side-balance-due">$0.00</span>
+          </div>
+          <div class="price-line deposit" id="side-in-person-row" hidden>
+            <span>Due at appointment</span>
+            <span id="side-in-person-due">$0.00</span>
+          </div>
           <p class="deposit-note" id="side-deposit-note">All deposits non-refundable.</p>
+          <div class="pricing-policy" id="side-cancellation-policy-wrap" hidden>
+            <p class="pricing-policy__heading">Cancellation policy</p>
+            <p class="pricing-policy__text" id="side-cancellation-policy"></p>
+          </div>
         </aside>
       </div>
     </main>
@@ -344,13 +371,14 @@
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/luxon@3.5.0/build/global/luxon.min.js"></script>
+    <script src="/js/booking-availability.js?v=4"></script>
     <script src="https://js.stripe.com/v3/"></script>
     <script src="js/booking-config.js"></script>
     <script src="/js/styld-tenant-config.js?v=37"></script>
     <script src="/js/styld-tenant-config.local.js?v=37"></script>
-    <script src="/js/styld-tenant-shared.js?v=39"></script>
-    <script src="/js/tenant-site.js?v=37"></script>
-    <script src="/js/styld-tenant-booking.js?v=56"></script>
+    <script src="/js/styld-tenant-shared.js?v=43"></script>
+    <script src="/js/tenant-site.js?v=39"></script>
+    <script src="/js/styld-tenant-booking.js?v=63"></script>
     <script src="js/supabase-config.js"></script>
     <script src="js/supabase-config.local.js"></script>
     <script id="booking-fallback-bootstrap">
@@ -373,7 +401,7 @@
           'const sb = createClient(c.url, c.anonKey);' +
           'window.salonSupabaseClient = sb;' +
           'const booking = document.createElement("script");' +
-          'booking.src = "js/booking.js?v=56";' +
+          'booking.src = "js/booking.js?v=53";' +
           'booking.defer = true;' +
           'document.body.appendChild(booking);';
         document.body.appendChild(module);

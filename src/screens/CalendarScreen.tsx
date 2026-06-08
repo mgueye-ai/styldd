@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Dimensions,
   Pressable,
@@ -10,12 +11,17 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import TimelineClosedLayers from '../components/calendar/TimelineClosedLayers';
 import { CalendarStackParamList } from '../navigation/CalendarNavigator';
-import {
-  formatCalendarDateLabel,
-} from '../data/calendarEvents';
 import { useSiteData } from '../context/SiteDataContext';
+import { isWeekdayClosed } from '../lib/bookingAvailability';
+import { BlockedInterval, loadBlockedIntervals } from '../lib/siteAdmin';
 import { toDateKey } from '../lib/siteData';
+import {
+  BookingHours,
+  DEFAULT_BOOKING_HOURS,
+  loadBookingHours,
+} from '../lib/siteServices';
 import { colors } from '../theme';
 
 type Props = NativeStackScreenProps<CalendarStackParamList, 'CalendarHome'>;
@@ -132,6 +138,8 @@ function WeekView({
   weekDays,
   today,
   selectedDate,
+  bookingHours,
+  blocks,
   getEvents,
   onEventPress,
   onDayPress,
@@ -139,6 +147,8 @@ function WeekView({
   weekDays: Date[];
   today: Date;
   selectedDate: Date;
+  bookingHours: BookingHours;
+  blocks: BlockedInterval[];
   getEvents: (key: string) => CalendarEvent[];
   onEventPress: (id: string) => void;
   onDayPress: (day: Date) => void;
@@ -162,17 +172,30 @@ function WeekView({
         {weekDays.map((day, i) => {
           const isToday = isSameDay(day, today);
           const isSelected = isSameDay(day, selectedDate);
+          const isClosed = isWeekdayClosed(day, bookingHours);
           return (
             <Pressable
               key={toDateKey(day)}
               style={wkStyles.dayHeaderCell}
               onPress={() => onDayPress(day)}
             >
-              <Text style={[wkStyles.dayHeaderLabel, isToday && wkStyles.dayHeaderToday]}>
+              <Text
+                style={[
+                  wkStyles.dayHeaderLabel,
+                  isToday && wkStyles.dayHeaderToday,
+                  isClosed && wkStyles.dayHeaderClosed,
+                ]}
+              >
                 {DAY_LABELS[i]}
               </Text>
               <View style={[wkStyles.dayHeaderNum, isSelected && wkStyles.dayHeaderNumSelected, isToday && !isSelected && wkStyles.dayHeaderNumToday]}>
-                <Text style={[wkStyles.dayHeaderNumText, isSelected && wkStyles.dayHeaderNumTextSelected]}>
+                <Text
+                  style={[
+                    wkStyles.dayHeaderNumText,
+                    isSelected && wkStyles.dayHeaderNumTextSelected,
+                    isClosed && wkStyles.dayHeaderClosed,
+                  ]}
+                >
                   {day.getDate()}
                 </Text>
               </View>
@@ -201,6 +224,13 @@ function WeekView({
           const isCurrentDay = isSameDay(day, new Date());
           return (
             <View key={toDateKey(day)} style={wkStyles.dayCol}>
+              <TimelineClosedLayers
+                selectedDate={day}
+                bookingHours={bookingHours}
+                blocks={blocks}
+                timelineStartHour={WEEK_TIMELINE_START}
+                hourHeight={WEEK_HOUR_HEIGHT}
+              />
               {/* Hour lines */}
               {hours.map((hour) => (
                 <View
@@ -251,11 +281,13 @@ function WeekView({
 function MonthView({
   selectedDate,
   today,
+  bookingHours,
   getEvents,
   onDayPress,
 }: {
   selectedDate: Date;
   today: Date;
+  bookingHours: BookingHours;
   getEvents: (key: string) => CalendarEvent[];
   onDayPress: (day: Date) => void;
 }) {
@@ -288,6 +320,7 @@ function MonthView({
 
             const isToday = date ? isSameDay(date, today) : false;
             const isSelected = date ? isSameDay(date, selectedDate) : false;
+            const isClosed = date ? isWeekdayClosed(date, bookingHours) : false;
             const events = date ? getEvents(toDateKey(date)) : [];
             const dotColors = events.slice(0, 3).map((e) =>
               e.completed ? colors.eventCompletedBadge : colors.accentPink,
@@ -315,6 +348,7 @@ function MonthView({
                           !isSameMonth(date, selectedDate) && moStyles.dayNumOtherMonth,
                           isToday && moStyles.dayNumTextToday,
                           isSelected && !isToday && moStyles.dayNumTextSelected,
+                          isClosed && !isToday && !isSelected && moStyles.dayNumClosed,
                         ]}
                       >
                         {date.getDate()}
@@ -340,7 +374,29 @@ function MonthView({
 
 // ─── CalendarScreen ───────────────────────────────────────────────────────────
 export default function CalendarScreen({ navigation }: Props) {
-  const { getCalendarEventsForDateKey, hasLinkedSite, isLoading } = useSiteData();
+  const { linkedSite, getCalendarEventsForDateKey, hasLinkedSite, isLoading } = useSiteData();
+  const [bookingHours, setBookingHours] = useState<BookingHours>(DEFAULT_BOOKING_HOURS);
+  const [blocks, setBlocks] = useState<BlockedInterval[]>([]);
+
+  const refreshScheduleMeta = useCallback(async () => {
+    if (!linkedSite) {
+      setBookingHours(DEFAULT_BOOKING_HOURS);
+      setBlocks([]);
+      return;
+    }
+    try {
+      const [hours, nextBlocks] = await Promise.all([
+        loadBookingHours(linkedSite),
+        loadBlockedIntervals(linkedSite),
+      ]);
+      setBookingHours(hours);
+      setBlocks(nextBlocks);
+    } catch {
+      /* keep last known values */
+    }
+  }, [linkedSite]);
+
+  useFocusEffect(useCallback(() => { void refreshScheduleMeta(); }, [refreshScheduleMeta]));
   const today = useMemo(() => {
     const now = new Date();
     now.setHours(0, 0, 0, 0);
@@ -437,6 +493,7 @@ export default function CalendarScreen({ navigation }: Props) {
             {weekDays.map((day, index) => {
               const selected = isSameDay(day, selectedDate);
               const isToday = isSameDay(day, today);
+              const isClosed = isWeekdayClosed(day, bookingHours);
               return (
                 <Pressable
                   key={toDateKey(day)}
@@ -446,11 +503,29 @@ export default function CalendarScreen({ navigation }: Props) {
                     setViewMode('day');
                   }}
                 >
-                  <View style={[styles.dayPill, selected && styles.dayPillSelected]}>
-                    <Text style={[styles.dayLabel, selected && styles.dayLabelSelected]}>
+                  <View
+                    style={[
+                      styles.dayPill,
+                      selected && styles.dayPillSelected,
+                      isClosed && !selected && styles.dayPillClosed,
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.dayLabel,
+                        selected && styles.dayLabelSelected,
+                        isClosed && !selected && styles.dayLabelClosed,
+                      ]}
+                    >
                       {DAY_LABELS[index]}
                     </Text>
-                    <Text style={[styles.dayNumber, selected && styles.dayNumberSelected]}>
+                    <Text
+                      style={[
+                        styles.dayNumber,
+                        selected && styles.dayNumberSelected,
+                        isClosed && !selected && styles.dayNumberClosed,
+                      ]}
+                    >
                       {day.getDate()}
                     </Text>
                     {isToday ? (
@@ -462,9 +537,19 @@ export default function CalendarScreen({ navigation }: Props) {
             })}
           </View>
         ) : null}
+
+        {viewMode === 'day' ? (
+          <Text style={styles.hoursLegend}>Grey = closed hours · Red tint = blocked time</Text>
+        ) : null}
+
+        {viewMode === 'day' && isWeekdayClosed(selectedDate, bookingHours) ? (
+          <View style={styles.closedBanner}>
+            <Text style={styles.closedBannerText}>Closed today — matches your site booking hours</Text>
+          </View>
+        ) : null}
       </View>
 
-      {/* ── Day view (original, completely unchanged) ── */}
+      {/* ── Day view ── */}
       {viewMode === 'day' ? (
         <ScrollView
           ref={scrollRef}
@@ -496,6 +581,14 @@ export default function CalendarScreen({ navigation }: Props) {
             ) : null}
 
             <View style={styles.eventsColumn}>
+              <TimelineClosedLayers
+                selectedDate={selectedDate}
+                bookingHours={bookingHours}
+                blocks={blocks}
+                timelineStartHour={TIMELINE_START}
+                hourHeight={HOUR_HEIGHT}
+              />
+
               {dayEvents.length === 0 ? (
                 <View style={styles.emptyState}>
                   <Ionicons name="calendar-outline" size={22} color={colors.textMuted} />
@@ -509,11 +602,12 @@ export default function CalendarScreen({ navigation }: Props) {
                   <Text style={styles.emptyStateText}>
                     {!hasLinkedSite
                       ? 'Connect your site table from the Site tab.'
-                      : formatCalendarDateLabel(selectedDateKey)}
+                      : 'Grey = closed hours · Pink = blocked time'}
                   </Text>
                 </View>
-              ) : (
-                dayEvents.map((event) => (
+              ) : null}
+
+              {dayEvents.map((event) => (
                   <Pressable
                     key={event.id}
                     style={({ pressed }) => [
@@ -541,8 +635,7 @@ export default function CalendarScreen({ navigation }: Props) {
                       </View>
                     ) : null}
                   </Pressable>
-                ))
-              )}
+                ))}
             </View>
           </View>
         </ScrollView>
@@ -554,6 +647,8 @@ export default function CalendarScreen({ navigation }: Props) {
           weekDays={weekDays}
           today={today}
           selectedDate={selectedDate}
+          bookingHours={bookingHours}
+          blocks={blocks}
           getEvents={getCalendarEventsForDateKey}
           onEventPress={(id) => navigation.navigate('AppointmentDetail', { appointmentId: id })}
           onDayPress={(day) => {
@@ -573,6 +668,7 @@ export default function CalendarScreen({ navigation }: Props) {
           <MonthView
             selectedDate={selectedDate}
             today={today}
+            bookingHours={bookingHours}
             getEvents={getCalendarEventsForDateKey}
             onDayPress={handleMonthDayPress}
           />
@@ -680,6 +776,37 @@ const styles = StyleSheet.create({
   todayDotSelected: {
     backgroundColor: colors.text,
   },
+  dayPillClosed: {
+    opacity: 0.45,
+  },
+  dayLabelClosed: {
+    textDecorationLine: 'line-through',
+  },
+  dayNumberClosed: {
+    textDecorationLine: 'line-through',
+  },
+  hoursLegend: {
+    marginTop: 4,
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
+  closedBanner: {
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(148, 163, 184, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.24)',
+  },
+  closedBannerText: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
   timelineScroll: {
     flex: 1,
   },
@@ -757,6 +884,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
+    zIndex: 2,
     borderRadius: 18,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -835,6 +963,10 @@ const wkStyles = StyleSheet.create({
   dayHeaderToday: {
     color: colors.accentPink,
   },
+  dayHeaderClosed: {
+    textDecorationLine: 'line-through',
+    opacity: 0.45,
+  },
   dayHeaderNum: {
     width: 26,
     height: 26,
@@ -900,6 +1032,7 @@ const wkStyles = StyleSheet.create({
     position: 'absolute',
     left: 1,
     right: 1,
+    zIndex: 2,
     borderRadius: 6,
     paddingHorizontal: 4,
     paddingVertical: 3,
@@ -981,6 +1114,10 @@ const moStyles = StyleSheet.create({
   dayNumOtherMonth: {
     color: colors.textMuted,
     opacity: 0.4,
+  },
+  dayNumClosed: {
+    textDecorationLine: 'line-through',
+    opacity: 0.45,
   },
   dotsRow: {
     flexDirection: 'row',

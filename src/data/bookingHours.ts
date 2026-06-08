@@ -1,3 +1,12 @@
+export type DayHours = {
+  endHour: number;
+  endMinute: number;
+  startHour: number;
+  startMinute: number;
+};
+
+export type WeekdayHoursMap = Partial<Record<0 | 1 | 2 | 3 | 4 | 5 | 6, DayHours>>;
+
 export type BookingHours = {
   closedWeekdays: number[];
   slotDayEndHour: number;
@@ -9,6 +18,8 @@ export type BookingHours = {
   saturdayLastStartHour: number;
   saturdayLastStartMinute: number;
   concurrentAppointmentCapacity: number;
+  /** Per-day open/close overrides (0=Sun … 6=Sat). Falls back to slotDay* when missing. */
+  weekdayHours?: WeekdayHoursMap;
 };
 
 export const DEFAULT_BOOKING_HOURS: BookingHours = {
@@ -24,6 +35,8 @@ export const DEFAULT_BOOKING_HOURS: BookingHours = {
   concurrentAppointmentCapacity: 2,
 };
 
+export const WEEKDAY_ORDER = [1, 2, 3, 4, 5, 6, 0] as const;
+
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function fmtTime(hour: number, minute: number) {
@@ -33,33 +46,95 @@ function fmtTime(hour: number, minute: number) {
   return `${h}${m} ${ampm}`;
 }
 
-/** Auto-generates a human-readable hours string from BookingHours data. */
-export function generateHoursText(h: BookingHours): string {
-  const openTime = fmtTime(h.slotDayStartHour, h.slotDayStartMinute);
-  const closeTime = fmtTime(h.slotDayEndHour, h.slotDayEndMinute);
-  const timeRange = `${openTime} – ${closeTime}`;
+export function defaultDayHours(h: BookingHours): DayHours {
+  return {
+    startHour: h.slotDayStartHour,
+    startMinute: h.slotDayStartMinute,
+    endHour: h.slotDayEndHour,
+    endMinute: h.slotDayEndMinute,
+  };
+}
 
-  const openDays = [0, 1, 2, 3, 4, 5, 6].filter((d) => !h.closedWeekdays.includes(d));
-  const closedDays = h.closedWeekdays;
+export function isWeekdayClosed(h: BookingHours, weekday: number) {
+  return h.closedWeekdays.includes(weekday);
+}
 
-  if (openDays.length === 0) return 'Closed';
-  if (openDays.length === 7) return `Daily: ${timeRange}`;
+export function getDayHours(h: BookingHours, weekday: number): DayHours | null {
+  if (isWeekdayClosed(h, weekday)) return null;
+  const custom = h.weekdayHours?.[weekday as keyof WeekdayHoursMap];
+  return custom ?? defaultDayHours(h);
+}
 
-  // Build consecutive runs for open days
-  const runs: string[] = [];
-  let runStart = openDays[0];
-  let prev = openDays[0];
-  for (let i = 1; i <= openDays.length; i++) {
-    const cur = openDays[i];
-    if (cur === prev + 1) { prev = cur; continue; }
-    runs.push(runStart === prev ? DAY_NAMES[runStart] : `${DAY_NAMES[runStart]}–${DAY_NAMES[prev]}`);
-    runStart = cur;
-    prev = cur;
+export function getDayWindowMinutes(
+  h: BookingHours,
+  weekday: number,
+): { start: number; end: number } | null {
+  const day = getDayHours(h, weekday);
+  if (!day) return null;
+  return {
+    start: day.startHour * 60 + day.startMinute,
+    end: day.endHour * 60 + day.endMinute,
+  };
+}
+
+export function normalizeWeekdayHours(
+  value: unknown,
+  fallback: BookingHours,
+): WeekdayHoursMap | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+
+  const source = value as Record<string, unknown>;
+  const next: WeekdayHoursMap = {};
+
+  for (const key of Object.keys(source)) {
+    const weekday = Number(key);
+    if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) continue;
+    const entry = source[key];
+    if (!entry || typeof entry !== 'object') continue;
+    const row = entry as Record<string, unknown>;
+    next[weekday as keyof WeekdayHoursMap] = {
+      startHour: normalizeHour(row.startHour, fallback.slotDayStartHour),
+      startMinute: normalizeMinute(row.startMinute, fallback.slotDayStartMinute),
+      endHour: normalizeHour(row.endHour, fallback.slotDayEndHour),
+      endMinute: normalizeMinute(row.endMinute, fallback.slotDayEndMinute),
+    };
   }
 
-  const openLabel = runs.join(', ');
-  const closedLabel = closedDays.map((d) => DAY_NAMES[d]).join(', ');
-  const closedSuffix = closedDays.length > 0 ? `, Closed ${closedLabel}` : '';
+  return Object.keys(next).length > 0 ? next : undefined;
+}
 
-  return `${openLabel}: ${timeRange}${closedSuffix}`;
+function normalizeHour(value: unknown, fallback: number) {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? Math.min(23, Math.max(0, Math.round(n))) : fallback;
+}
+
+function normalizeMinute(value: unknown, fallback: number) {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? Math.min(59, Math.max(0, Math.round(n))) : fallback;
+}
+
+export function validateBookingHours(h: BookingHours): string | null {
+  for (const weekday of WEEKDAY_ORDER) {
+    if (isWeekdayClosed(h, weekday)) continue;
+    const window = getDayWindowMinutes(h, weekday);
+    if (!window) continue;
+    if (window.end <= window.start) {
+      return `${DAY_NAMES[weekday]}: close time must be after open time.`;
+    }
+  }
+  return null;
+}
+
+/** Auto-generates a human-readable hours string from BookingHours data. */
+export function generateHoursText(h: BookingHours): string {
+  const lines = WEEKDAY_ORDER.map((weekday) => {
+    if (isWeekdayClosed(h, weekday)) {
+      return `${DAY_NAMES[weekday]}: Closed`;
+    }
+    const day = getDayHours(h, weekday);
+    if (!day) return `${DAY_NAMES[weekday]}: Closed`;
+    return `${DAY_NAMES[weekday]}: ${fmtTime(day.startHour, day.startMinute)} – ${fmtTime(day.endHour, day.endMinute)}`;
+  });
+
+  return lines.join('\n');
 }

@@ -5,10 +5,12 @@ const ROOT_DOMAIN = process.env.STYLD_ROOT_DOMAIN || 'styldd.com';
 const TENANT_STATIC_PAGES = {
   '/booking': '/booking.html',
   '/booking-lookup': '/booking-lookup.html',
+  '/manage-booking': '/manage-booking.html',
   '/booking-success': '/booking-success.html',
   '/booking-details': '/booking-details.html',
   '/styles-catalog': '/styles-catalog.html',
   '/gallery': '/gallery.html',
+  '/review': '/review.html',
 };
 
 function isRootHost(host) {

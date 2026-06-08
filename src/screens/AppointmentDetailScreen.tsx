@@ -20,32 +20,21 @@ import { useSiteData } from '../context/SiteDataContext';
 import { usePrivacyMode } from '../context/PrivacyContext';
 import { useSiteContent } from '../context/SiteContentContext';
 import { formatSiteAddress } from '../data/siteContent';
+import { cancelBooking, completeBooking } from '../lib/siteAdmin';
+import { requestReviewEmail } from '../lib/siteReviews';
 import { supabase } from '../lib/supabase';
 import { CalendarStackParamList } from '../navigation/CalendarNavigator';
 import { DashboardStackParamList } from '../navigation/DashboardNavigator';
 import { colors } from '../theme';
 import { maskMoney } from '../utils/money';
 
-async function cancelBookingInDb(bookingId: string): Promise<void> {
-  // Fetch current data so we can merge the status in JS (JSONB merge)
-  const { data: row, error: fetchErr } = await supabase
-    .from('styld_site_records')
-    .select('data')
-    .eq('id', bookingId)
-    .eq('record_type', 'booking')
-    .single();
-
-  if (fetchErr || !row) throw new Error(fetchErr?.message ?? 'Booking not found');
-
-  const merged = { ...(row.data as Record<string, unknown>), booking_status: 'cancelled' };
-
-  const { error: updateErr } = await supabase
-    .from('styld_site_records')
-    .update({ data: merged, updated_at: new Date().toISOString() })
-    .eq('id', bookingId)
-    .eq('record_type', 'booking');
-
-  if (updateErr) throw new Error(updateErr.message);
+function refundStatusLabel(status: string): string | null {
+  const s = status.toLowerCase();
+  if (s === 'succeeded') return 'Refunded';
+  if (s === 'pending') return 'Refund processing';
+  if (s === 'failed') return 'Refund failed';
+  if (s === 'skipped') return 'No refund issued';
+  return null;
 }
 
 type Props = NativeStackScreenProps<
@@ -267,11 +256,12 @@ function PhotoGallery({ bookingId }: { bookingId: string }) {
 export default function AppointmentDetailScreen({ navigation, route }: Props) {
   const { appointmentId } = route.params;
   const { privacyMode } = usePrivacyMode();
-  const { getAppointmentById, bookings, refresh } = useSiteData();
+  const { getAppointmentById, bookings, refresh, linkedSite } = useSiteData();
   const { content: siteContent } = useSiteContent();
   const siteAddress = formatSiteAddress(siteContent);
   const appointment = getAppointmentById(appointmentId);
   const [cancelling, setCancelling] = useState(false);
+  const [completing, setCompleting] = useState(false);
 
   // Raw booking record gives us email + bookingStatus
   const rawBooking = bookings.find((b) => b.id === appointmentId);
@@ -303,15 +293,45 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
     Linking.openURL(`https://maps.apple.com/?q=${q}`);
   };
   const handleMarkComplete = () => {
+    if (!linkedSite) {
+      Alert.alert('No linked site', 'Connect your site before completing appointments.');
+      return;
+    }
+
     Alert.alert('Mark as Complete', `Mark "${appointment.service}" as completed?`, [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Mark Complete', style: 'default' },
+      {
+        text: 'Mark Complete',
+        style: 'default',
+        onPress: async () => {
+          setCompleting(true);
+          try {
+            await completeBooking(linkedSite, appointmentId);
+            try {
+              await requestReviewEmail(appointmentId);
+            } catch {
+              // Review email is best-effort — completion still succeeded.
+            }
+            await refresh();
+            Alert.alert('Completed', 'Appointment marked complete. A review request email was sent if reviews are enabled.');
+          } catch (err) {
+            Alert.alert('Error', err instanceof Error ? err.message : 'Could not complete booking');
+          } finally {
+            setCompleting(false);
+          }
+        },
+      },
     ]);
   };
   const handleCancel = () => {
+    if (!linkedSite) {
+      Alert.alert('No linked site', 'Connect your site before cancelling appointments.');
+      return;
+    }
+
     Alert.alert(
       'Cancel Appointment',
-      `Cancel "${appointment?.service}" for ${appointment?.clientName}? This cannot be undone.`,
+      `Cancel "${appointment?.service}" for ${appointment?.clientName}? The client will be emailed and any eligible refund will be processed automatically.`,
       [
         { text: 'Keep It', style: 'cancel' },
         {
@@ -320,7 +340,7 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
           onPress: async () => {
             setCancelling(true);
             try {
-              await cancelBookingInDb(appointmentId);
+              await cancelBooking(linkedSite, appointmentId);
               await refresh();
               navigation.goBack();
             } catch (err) {
@@ -410,6 +430,21 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
               bookingStatus={bookingStatus}
               privacyMode={privacyMode}
             />
+            {isCancelled && rawBooking?.refundStatus && rawBooking.refundStatus !== 'none' ? (
+              <View style={styles.refundBanner}>
+                <Text style={styles.refundBannerLabel}>
+                  {refundStatusLabel(rawBooking.refundStatus) ?? 'Refund'}
+                </Text>
+                {rawBooking.refundAmountCents > 0 ? (
+                  <Text style={styles.refundBannerAmount}>
+                    {maskMoney(
+                      `$${(rawBooking.refundAmountCents / 100).toFixed(2)}`,
+                      privacyMode,
+                    )}
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
           </SectionCard>
 
           {/* ── Client info ── */}
@@ -483,9 +518,9 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
 
           {!isCompleted && !isCancelled && (
             <View style={styles.managementRow}>
-              <Pressable style={styles.completeBtn} onPress={handleMarkComplete}>
+              <Pressable style={styles.completeBtn} onPress={handleMarkComplete} disabled={completing}>
                 <Ionicons name="checkmark-circle-outline" size={18} color={colors.background} />
-                <Text style={styles.completeBtnText}>Mark as complete</Text>
+                <Text style={styles.completeBtnText}>{completing ? 'Saving…' : 'Mark as complete'}</Text>
               </Pressable>
               <Pressable style={[styles.cancelBtn, cancelling && styles.cancelBtnDisabled]} onPress={handleCancel} disabled={cancelling}>
                 {cancelling
@@ -584,6 +619,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5, paddingVertical: 2,
   },
   paidBadgeText: { color: '#15803d', fontSize: 10, fontWeight: '700' },
+  refundBanner: {
+    marginTop: 14,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.cardBorder,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  refundBannerLabel: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
+  refundBannerAmount: { color: colors.text, fontSize: 15, fontWeight: '700' },
 
   /* Info rows */
   infoRow: {

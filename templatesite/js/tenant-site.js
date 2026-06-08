@@ -113,6 +113,8 @@
       var meta = {};
       var prices = {};
       var covers = {};
+      var reviewsSettings = { enabled: true };
+      var reviews = [];
 
       records.forEach(function (record) {
         var value = settingValue(record);
@@ -120,10 +122,29 @@
         if (record.record_type === 'site_setting' && record.record_key === 'site_theme') theme = Object.assign(theme, value || {});
         if (record.record_type === 'site_setting' && record.record_key === 'style_catalog_meta') meta = value || {};
         if (record.record_type === 'site_setting' && record.record_key === 'style_price_overrides') prices = value || {};
+        if (record.record_type === 'site_setting' && record.record_key === 'reviews_settings') {
+          reviewsSettings = Object.assign({ enabled: true }, value || {});
+        }
+        if (record.record_type === 'review') {
+          var reviewData = record.data || {};
+          if (reviewData.published !== false) {
+            reviews.push({
+              id: reviewData.id || record.record_key || '',
+              clientName: reviewData.client_name || 'Client',
+              rating: Number(reviewData.rating) || 5,
+              message: reviewData.message || '',
+              createdAt: reviewData.created_at || '',
+            });
+          }
+        }
         if (record.record_type === 'style_cover_image' && record.record_key) {
           var coverPath = coverStoragePath(value);
           if (typeof coverPath === 'string') covers[record.record_key] = coverPath;
         }
+      });
+
+      reviews.sort(function (a, b) {
+        return String(b.createdAt).localeCompare(String(a.createdAt));
       });
 
       if (!content) {
@@ -145,6 +166,7 @@
         navbarColor: theme.navbarColor || null,
         styleCardLayout: theme.styleCardLayout || 'card',
         cardOutlineColor: theme.cardOutlineColor || null,
+        backgroundColor: theme.backgroundColor || null,
         fontFamily: theme.fontFamily || 'cormorant',
         hideBookNowButton: theme.hideBookNowButton === true,
         templateId: templateId,
@@ -179,6 +201,7 @@
         root.style.setProperty('--hero-pink-deep', darken(primary, 0.68));
         root.style.setProperty('--pink-light', lighten(primary, 0.22));
         root.style.setProperty('--ink', secondary);
+        root.style.setProperty('--nav-text', secondary);
 
         // Derive --muted and --muted-soft from --ink so all body text changes with the text color
         var secRgb = hexToRgb(secondary);
@@ -188,11 +211,34 @@
           root.style.setProperty('--muted-soft', 'rgba(' + r + ',' + g + ',' + b + ',0.46)');
         }
 
+        function surfaceLuminance(hex) {
+          var rgb = hexToRgb(hex);
+          if (!rgb) return 1;
+          return (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+        }
+
         var bg = (theme.backgroundColor || '').trim();
+        if (!bg || !/^#[0-9a-fA-F]{6}$/.test(bg)) {
+          // Dark sites often set light text (secondary) without persisting backgroundColor
+          if (secRgb && surfaceLuminance(secondary) > 0.62) {
+            bg = '#0a0a0a';
+          }
+        }
         if (bg && /^#[0-9a-fA-F]{6}$/.test(bg)) {
           root.style.setProperty('--cream', bg);
           root.style.setProperty('--white', bg);
+          root.style.setProperty('--card-surface', bg);
           document.body.style.backgroundColor = bg;
+          var darkSurface = surfaceLuminance(bg) < 0.45;
+          root.style.setProperty(
+            '--card-border',
+            darkSurface ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
+          );
+          root.style.setProperty(
+            '--card-border-hover',
+            darkSurface ? 'rgba(255, 255, 255, 0.2)' : 'rgba(219, 39, 119, 0.22)',
+          );
+          root.dataset.surfaceMode = darkSurface ? 'dark' : 'light';
         }
 
         // Set active filter tab text color based on primary color luminance
@@ -274,6 +320,8 @@
         });
 
       window.__STYLD_SITE_STYLES__ = styles;
+      window.__STYLD_REVIEWS_SETTINGS__ = reviewsSettings;
+      window.__STYLD_SITE_REVIEWS__ = reviews;
 
       // Hide "Book Now" button if the owner opted out
       if (theme.hideBookNowButton) {

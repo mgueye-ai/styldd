@@ -1,5 +1,8 @@
 import { AppNotification } from '../components/NotificationsPanel';
+import { SiteReview } from '../data/reviewsSettings';
 import { SiteBookingRecord } from './siteData';
+
+type SiteInquiry = { id: string; name: string; createdAt: Date };
 
 type NotificationDraft = AppNotification & { sortAt: number };
 
@@ -54,7 +57,7 @@ function isUpcoming(booking: SiteBookingRecord): boolean {
   return true;
 }
 
-export function buildNotificationsFromBookings(bookings: SiteBookingRecord[]): AppNotification[] {
+function buildBookingNotificationDrafts(bookings: SiteBookingRecord[]): NotificationDraft[] {
   const drafts: NotificationDraft[] = [];
   const recentCutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
 
@@ -125,8 +128,71 @@ export function buildNotificationsFromBookings(bookings: SiteBookingRecord[]): A
     }
   }
 
+  return drafts;
+}
+
+function finalizeDrafts(drafts: NotificationDraft[]): AppNotification[] {
   return drafts
     .sort((a, b) => b.sortAt - a.sortAt)
     .slice(0, 50)
     .map(({ sortAt: _sortAt, ...notification }) => notification);
+}
+
+export function buildNotificationsFromBookings(bookings: SiteBookingRecord[]): AppNotification[] {
+  return finalizeDrafts(buildBookingNotificationDrafts(bookings));
+}
+
+function buildReviewNotifications(reviews: SiteReview[]): NotificationDraft[] {
+  const recentCutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
+  const drafts: NotificationDraft[] = [];
+
+  for (const review of reviews) {
+    if (!review.published) continue;
+    if (review.createdAt.getTime() < recentCutoff) continue;
+
+    drafts.push({
+      id: `review-${review.id}`,
+      title: 'New client review',
+      body: `${review.clientName} left a ${review.rating}-star review on your site.`,
+      time: formatRelativeTime(review.createdAt),
+      icon: 'star-outline',
+      unread: true,
+      sortAt: review.createdAt.getTime(),
+    });
+  }
+
+  return drafts;
+}
+
+function buildInquiryNotifications(inquiries: SiteInquiry[]): NotificationDraft[] {
+  const recentCutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
+  const drafts: NotificationDraft[] = [];
+
+  for (const inquiry of inquiries) {
+    if (inquiry.createdAt.getTime() < recentCutoff) continue;
+
+    drafts.push({
+      id: `inquiry-${inquiry.id}`,
+      title: 'New site inquiry',
+      body: `${inquiry.name} sent a message from your website.`,
+      time: formatRelativeTime(inquiry.createdAt),
+      icon: 'mail-outline',
+      unread: true,
+      sortAt: inquiry.createdAt.getTime(),
+    });
+  }
+
+  return drafts;
+}
+
+export function buildAllNotifications(
+  bookings: SiteBookingRecord[],
+  reviews: SiteReview[] = [],
+  inquiries: SiteInquiry[] = [],
+): AppNotification[] {
+  return finalizeDrafts([
+    ...buildBookingNotificationDrafts(bookings),
+    ...buildReviewNotifications(reviews),
+    ...buildInquiryNotifications(inquiries),
+  ]);
 }

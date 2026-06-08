@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="View or cancel your appointment." />
+    <title>Your appointment</title>
+    <link rel="icon" href="assets/favicon-32.png?v=4" type="image/png" sizes="32x32" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700&family=Inter:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Source+Sans+3:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/css/styles.css?v=45" />
+    <style>
+      #tenant-status {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: 2rem;
+        background: var(--cream, #faf8f4);
+        color: #525252;
+        font: 600 1rem/1.5 var(--font-body, "Source Sans 3", system-ui, sans-serif);
+        text-align: center;
+        z-index: 9999;
+      }
+      #tenant-status[hidden] { display: none; }
+      .manage-booking-page {
+        padding-bottom: 3rem;
+      }
+      .manage-booking-card {
+        max-width: 520px;
+        margin: 0 auto;
+        border-radius: 18px;
+        border: 1px solid color-mix(in srgb, var(--pink, #db2777) 18%, transparent);
+        background: #fff;
+        box-shadow: 0 10px 36px rgba(17, 24, 39, 0.07);
+        overflow: hidden;
+      }
+      .manage-booking-card__head {
+        padding: 1.35rem 1.5rem 1rem;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        background: linear-gradient(
+          165deg,
+          color-mix(in srgb, var(--pink, #db2777) 8%, #fff) 0%,
+          #fff 70%
+        );
+      }
+      .manage-booking-card__eyebrow {
+        margin: 0 0 0.35rem;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--pink-dark, #be185d);
+      }
+      .manage-booking-card__title {
+        margin: 0;
+        font-family: var(--font-display, "Cormorant Garamond", Georgia, serif);
+        font-size: clamp(1.5rem, 4vw, 2rem);
+        font-weight: 600;
+        color: var(--ink, #2c2416);
+      }
+      .manage-booking-card__body {
+        padding: 1.25rem 1.5rem 1.5rem;
+      }
+      .manage-booking-dl {
+        margin: 0;
+        display: grid;
+        gap: 0.85rem;
+      }
+      .manage-booking-dl__row {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: flex-start;
+        padding-bottom: 0.85rem;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.07);
+      }
+      .manage-booking-dl__row:last-child { border-bottom: none; padding-bottom: 0; }
+      .manage-booking-dl dt {
+        margin: 0;
+        font-size: 0.88rem;
+        color: var(--muted, #6b5c4d);
+        font-weight: 600;
+      }
+      .manage-booking-dl dd {
+        margin: 0;
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--ink, #2c2416);
+        text-align: right;
+      }
+      .manage-booking-status {
+        display: inline-block;
+        margin-top: 0.75rem;
+        padding: 0.35rem 0.75rem;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 800;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+      .manage-booking-status.is-active {
+        background: rgba(34, 197, 94, 0.12);
+        color: #15803d;
+        border: 1px solid rgba(34, 197, 94, 0.25);
+      }
+      .manage-booking-status.is-cancelled {
+        background: rgba(239, 68, 68, 0.1);
+        color: #b42318;
+        border: 1px solid rgba(239, 68, 68, 0.2);
+      }
+      .manage-booking-actions {
+        display: flex;
+        flex-direction: column;
+        gap: 0.65rem;
+        margin-top: 1.35rem;
+      }
+      .manage-booking-actions .btn { width: 100%; justify-content: center; }
+      .manage-booking-feedback {
+        margin: 1rem auto 0;
+        max-width: 520px;
+        padding: 0.85rem 1rem;
+        border-radius: 12px;
+        font-size: 0.92rem;
+        line-height: 1.45;
+        text-align: center;
+      }
+      .manage-booking-feedback[hidden] { display: none; }
+      .manage-booking-feedback.is-error {
+        background: rgba(239, 68, 68, 0.08);
+        border: 1px solid rgba(239, 68, 68, 0.2);
+        color: #b42318;
+      }
+      .manage-booking-feedback.is-success {
+        background: rgba(34, 197, 94, 0.1);
+        border: 1px solid rgba(34, 197, 94, 0.22);
+        color: #15803d;
+      }
+      .manage-booking-policy {
+        margin: 0 0 1rem;
+        padding: 0.85rem 1rem;
+        border-radius: 12px;
+        background: rgba(15, 23, 42, 0.04);
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        color: #525252;
+        font-size: 0.92rem;
+        line-height: 1.5;
+      }
+      .manage-booking-policy[hidden] { display: none; }
+      #manage-cancel-btn:disabled {
+        opacity: 0.55;
+        cursor: not-allowed;
+      }
+    </style>
+    <script src="/js/styld-tenant-config.js?v=41"></script>
+    <script src="/js/styld-tenant-config.local.js?v=41"></script>
+    <script defer src="/js/styld-analytics.js"></script>
+  </head>
+  <body class="tpl-profile page-site manage-booking-page">
+    <div id="tenant-status">Loading your appointment…</div>
+
+    <nav class="profile-nav" id="profile-nav">
+      <div class="container profile-nav__inner">
+        <a class="profile-brand" href="/">
+          <div class="profile-brand__logo" id="profile-logo-placeholder" aria-hidden="true"></div>
+          <span id="profile-brand-name">Your Brand</span>
+        </a>
+        <a class="profile-book-btn" href="/booking">Book Now</a>
+      </div>
+    </nav>
+
+    <main class="container booking-details-page">
+      <div class="page-hero page-hero--compact booking-details-hero" style="margin-top: 1.5rem;">
+        <p class="booking-details-hero__eyebrow">Appointment</p>
+        <h1 id="manage-page-heading">Your appointment</h1>
+        <p class="booking-details-hero__lead" id="manage-page-lead">Review your booking details below.</p>
+      </div>
+
+      <p id="manage-feedback" class="manage-booking-feedback" role="status" hidden></p>
+
+      <div id="manage-card" class="manage-booking-card" hidden>
+        <div class="manage-booking-card__head">
+          <p class="manage-booking-card__eyebrow">Confirmed</p>
+          <h2 class="manage-booking-card__title" id="manage-service-name">Appointment</h2>
+          <span id="manage-status-pill" class="manage-booking-status is-active">Active</span>
+        </div>
+        <div class="manage-booking-card__body">
+          <dl class="manage-booking-dl" id="manage-details"></dl>
+          <p id="manage-policy-note" class="manage-booking-policy" hidden></p>
+          <div class="manage-booking-actions" id="manage-actions">
+            <button type="button" class="btn btn-primary" id="manage-cancel-btn">Cancel appointment</button>
+            <a class="btn btn-outline" href="/booking">Book another appointment</a>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <footer class="site-footer site-footer--home-promo">
+      <div class="container footer-bottom">
+        <p id="preview-footer-brand">&copy; Your Brand</p>
+        <p class="footer-built-by">
+          <a
+            class="footer-built-by__link"
+            id="preview-footer-styld-link"
+            href="https://styldd.com"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <img
+              class="footer-built-by__logo"
+              src="https://styldd.com/assets/styld-icon.png"
+              alt=""
+              width="22"
+              height="22"
+              decoding="async"
+            />
+            <span>Built with Styld</span>
+          </a>
+        </p>
+      </div>
+    </footer>
+
+    <script src="/js/styld-tenant-shared.js?v=43"></script>
+    <script src="/js/manage-booking.js?v=3"></script>
+  </body>
+</html>

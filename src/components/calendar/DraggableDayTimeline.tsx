@@ -7,16 +7,18 @@ import {
   View,
 } from 'react-native';
 import { colors } from '../../theme';
+import { BookingHours } from '../../data/bookingHours';
 import {
+  buildScheduleClosedOverlays,
   formatEventTime,
   formatHourLabel,
   getOverlayHeight,
   getOverlayTop,
   HOUR_HEIGHT,
+  isRangeInClosedOverlay,
   isSameDay,
   normalizeDragRange,
-  TIMELINE_END,
-  TIMELINE_START,
+  resolveTimelineBounds,
   TimelineOverlay,
   TimeRange,
   yToMinutes,
@@ -25,6 +27,7 @@ import {
 type DraggableDayTimelineProps = {
   selectedDate: Date;
   overlays: TimelineOverlay[];
+  bookingHours?: BookingHours | null;
   dragHint?: string;
   draftVariant?: 'block' | 'appointment';
   onSelectionComplete: (range: TimeRange) => void;
@@ -38,6 +41,7 @@ function overlapsMinutes(aStart: number, aEnd: number, bStart: number, bEnd: num
 export default function DraggableDayTimeline({
   selectedDate,
   overlays,
+  bookingHours = null,
   dragHint = 'Drag on the timeline to select a time range',
   draftVariant = 'block',
   onSelectionComplete,
@@ -50,10 +54,24 @@ export default function DraggableDayTimeline({
   const dragStartRef = useRef<number | null>(null);
   const draftEndRef = useRef<number | null>(null);
   // keep a stable ref so the panResponder closure can read current overlays
-  const overlaysRef = useRef(overlays);
-  overlaysRef.current = overlays;
+  const closedOverlays = useMemo(
+    () => buildScheduleClosedOverlays(selectedDate, bookingHours),
+    [bookingHours, selectedDate],
+  );
+  const renderedOverlays = useMemo(
+    () => [...closedOverlays, ...overlays],
+    [closedOverlays, overlays],
+  );
 
-  const timelineHeight = (TIMELINE_END - TIMELINE_START + 1) * HOUR_HEIGHT;
+  const { startHour: timelineStart, endHour: timelineEnd } = useMemo(
+    () => resolveTimelineBounds(bookingHours, selectedDate),
+    [bookingHours, selectedDate],
+  );
+
+  const overlaysRef = useRef(renderedOverlays);
+  overlaysRef.current = renderedOverlays;
+
+  const timelineHeight = (timelineEnd - timelineStart + 1) * HOUR_HEIGHT;
   const currentHour = new Date().getHours();
   const isToday = isSameDay(selectedDate, new Date());
 
@@ -78,17 +96,22 @@ export default function DraggableDayTimeline({
   useEffect(() => {
     if (!isToday) return;
 
-    const scrollOffset = Math.max(0, (Math.max(currentHour - 1, TIMELINE_START) - TIMELINE_START) * HOUR_HEIGHT);
+    const scrollOffset = Math.max(
+      0,
+      (Math.max(currentHour - 1, timelineStart) - timelineStart) * HOUR_HEIGHT,
+    );
     requestAnimationFrame(() => {
       scrollRef.current?.scrollTo({ y: scrollOffset, animated: false });
     });
-  }, [selectedDate, currentHour, isToday]);
+  }, [selectedDate, currentHour, isToday, timelineStart]);
 
   const checkConflict = (startMin: number, endMin: number): boolean => {
     const lo = Math.min(startMin, endMin);
     const hi = Math.max(startMin, endMin);
     const safeHi = hi - lo < 30 ? lo + 30 : hi;
+    if (isRangeInClosedOverlay(lo, safeHi, closedOverlays)) return true;
     return overlaysRef.current.some((o) => {
+      if (o.variant === 'closed') return false;
       const oStart = o.startHour * 60 + o.startMinute;
       const oEnd = o.endHour * 60 + o.endMinute;
       return overlapsMinutes(lo, safeHi, oStart, oEnd);
@@ -101,7 +124,7 @@ export default function DraggableDayTimeline({
         onStartShouldSetPanResponder: () => true,
         onMoveShouldSetPanResponder: () => true,
         onPanResponderGrant: (event) => {
-          const minutes = yToMinutes(event.nativeEvent.locationY);
+          const minutes = yToMinutes(event.nativeEvent.locationY, timelineStart, timelineEnd);
           dragStartRef.current = minutes;
           draftEndRef.current = minutes;
           setDraftStart(minutes);
@@ -110,7 +133,7 @@ export default function DraggableDayTimeline({
           setDragging(true);
         },
         onPanResponderMove: (event) => {
-          const minutes = yToMinutes(event.nativeEvent.locationY);
+          const minutes = yToMinutes(event.nativeEvent.locationY, timelineStart, timelineEnd);
           draftEndRef.current = minutes;
           setDraftEnd(minutes);
           const conflict = dragStartRef.current !== null
@@ -143,7 +166,7 @@ export default function DraggableDayTimeline({
         },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [onSelectionComplete, selectedDate],
+    [onSelectionComplete, selectedDate, timelineStart, timelineEnd, closedOverlays],
   );
 
   return (
@@ -158,8 +181,8 @@ export default function DraggableDayTimeline({
         scrollEnabled={!dragging}
       >
         <View style={[styles.timeline, { height: timelineHeight }]}>
-          {Array.from({ length: TIMELINE_END - TIMELINE_START + 1 }, (_, index) => {
-            const hour = TIMELINE_START + index;
+          {Array.from({ length: timelineEnd - timelineStart + 1 }, (_, index) => {
+            const hour = timelineStart + index;
             const isCurrentHour = isToday && hour === currentHour;
 
             return (
@@ -172,35 +195,38 @@ export default function DraggableDayTimeline({
             );
           })}
 
-          {isToday && currentHour >= TIMELINE_START && currentHour <= TIMELINE_END ? (
+          {isToday && currentHour >= timelineStart && currentHour <= timelineEnd ? (
             <View
               style={[
                 styles.currentTimeLine,
-                { top: (currentHour - TIMELINE_START) * HOUR_HEIGHT + HOUR_HEIGHT / 2 },
+                { top: (currentHour - timelineStart) * HOUR_HEIGHT + HOUR_HEIGHT / 2 },
               ]}
             />
           ) : null}
 
           <View style={styles.eventsColumn} {...panResponder.panHandlers}>
-            {overlays.map((overlay) => (
+            {renderedOverlays.map((overlay) => (
               <View
                 key={overlay.id}
                 style={[
                   styles.overlayCard,
+                  overlay.variant === 'closed' && styles.overlayClosed,
                   overlay.variant === 'block' && styles.overlayBlock,
                   overlay.variant === 'completed' && styles.overlayCompleted,
                   overlay.variant === 'booking' && styles.overlayBooking,
                   {
-                    top: getOverlayTop(overlay),
+                    top: getOverlayTop(overlay, timelineStart),
                     height: getOverlayHeight(overlay),
                   },
                 ]}
                 pointerEvents="none"
               >
-                <Text style={styles.overlayTitle} numberOfLines={1}>
-                  {overlay.title}
-                </Text>
-                {overlay.subtitle ? (
+                {overlay.variant !== 'closed' ? (
+                  <Text style={styles.overlayTitle} numberOfLines={1}>
+                    {overlay.title}
+                  </Text>
+                ) : null}
+                {overlay.subtitle && overlay.variant !== 'closed' ? (
                   <Text style={styles.overlaySubtitle} numberOfLines={1}>
                     {overlay.subtitle}
                   </Text>
@@ -216,7 +242,7 @@ export default function DraggableDayTimeline({
                     ? styles.draftConflict
                     : draftVariant === 'appointment' ? styles.draftAppointment : styles.draftBlock,
                   {
-                    top: getOverlayTop(draftOverlay),
+                    top: getOverlayTop(draftOverlay, timelineStart),
                     height: getOverlayHeight(draftOverlay),
                   },
                 ]}
@@ -321,6 +347,12 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(248, 113, 113, 0.16)',
     borderWidth: 1,
     borderColor: 'rgba(248, 113, 113, 0.35)',
+  },
+  overlayClosed: {
+    backgroundColor: 'rgba(148, 163, 184, 0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.32)',
+    opacity: 1,
   },
   overlayTitle: {
     color: colors.text,

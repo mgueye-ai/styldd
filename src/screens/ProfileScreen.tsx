@@ -94,7 +94,11 @@ export default function ProfileScreen({ navigation }: Props) {
   // Overview stats
   const monthRevenue = getRevenueForPeriod('month');
   const upcomingCount = getUpcomingAppointments(100).length;
-  const pendingCount = bookings.filter((b) => b.status === 'pending' || b.status === 'pending_payment').length;
+  const pendingCount = bookings.filter((b) =>
+    !b.depositPaid &&
+    b.paymentStatus.toLowerCase() !== 'in_person' &&
+    (b.bookingStatus === 'pending_payment' || b.paymentStatus.toLowerCase() === 'pending'),
+  ).length;
   const avgJobValue = completedJobs > 0
     ? bookings.filter((b) => b.status === 'completed' && (b.estimatedTotal ?? 0) > 0)
         .reduce((sum, b) => sum + (b.estimatedTotal ?? 0), 0) /
@@ -222,17 +226,39 @@ export default function ProfileScreen({ navigation }: Props) {
         {/* ── Account ── */}
         <SectionLabel title="Account" />
         <View style={styles.menuCard}>
+          <Pressable
+            style={[styles.menuRow, styles.menuRowBorder]}
+            onPress={() => navigation.navigate('ReviewsSettings')}
+          >
+            <View style={styles.menuIconWrap}>
+              <Ionicons name="star-outline" size={18} color={colors.accentPink} />
+            </View>
+            <Text style={styles.menuLabel}>Reviews</Text>
+            <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+          </Pressable>
           {__DEV__ ? (
-            <Pressable
-              style={[styles.menuRow, styles.menuRowBorder]}
-              onPress={() => navigation.navigate('Paywall')}
-            >
-              <View style={styles.menuIconWrap}>
-                <Ionicons name="card-outline" size={18} color={colors.accentPink} />
-              </View>
-              <Text style={styles.menuLabel}>Preview paywall</Text>
-              <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
-            </Pressable>
+            <>
+              <Pressable
+                style={[styles.menuRow, styles.menuRowBorder]}
+                onPress={() => navigation.navigate('EmailPreviews')}
+              >
+                <View style={styles.menuIconWrap}>
+                  <Ionicons name="mail-outline" size={18} color={colors.accentPink} />
+                </View>
+                <Text style={styles.menuLabel}>Preview emails</Text>
+                <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+              </Pressable>
+              <Pressable
+                style={[styles.menuRow, styles.menuRowBorder]}
+                onPress={() => navigation.navigate('Paywall')}
+              >
+                <View style={styles.menuIconWrap}>
+                  <Ionicons name="card-outline" size={18} color={colors.accentPink} />
+                </View>
+                <Text style={styles.menuLabel}>Preview paywall</Text>
+                <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+              </Pressable>
+            </>
           ) : null}
           <Pressable
             style={[styles.menuRow, styles.menuRowBorder]}

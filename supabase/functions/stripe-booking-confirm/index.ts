@@ -49,6 +49,14 @@ Deno.serve(async (req) => {
       return json({ error: `Payment not confirmed (status: ${pi.status})` }, 400);
     }
 
+    const metadata = (pi.metadata as Record<string, string>) || {};
+    if (metadata.bookingId && metadata.bookingId !== String(bookingId)) {
+      return json({ error: 'Payment does not match this booking' }, 400);
+    }
+    if (metadata.subdomain && metadata.subdomain !== String(subdomain)) {
+      return json({ error: 'Payment does not match this site' }, 400);
+    }
+
     // Determine payment type: if the charge amount equals the booking amount
     // (no application fee beyond stripe), consider it a full payment.
     // Default to 'deposit_paid' which covers both deposits and full payments.
@@ -59,30 +67,68 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
 
-    const { error: rpcError } = await supabase.rpc('styld_tenant_mark_booking_paid', {
+    const { data: rowsUpdated, error: rpcError } = await supabase.rpc('styld_tenant_mark_booking_paid', {
       p_subdomain: subdomain,
       p_booking_id: bookingId,
       p_payment_status: paymentStatus,
       p_unit_payment_id: paymentIntentId,
     });
 
+    let pendingInsert = false;
     if (rpcError) {
-      console.error('mark_booking_paid error:', rpcError);
-      return json({ error: 'Could not update booking status' }, 500);
+      const msg = rpcError.message || '';
+      if (msg.includes('Booking not found')) {
+        pendingInsert = true;
+      } else {
+        console.error('mark_booking_paid error:', rpcError);
+        return json({ error: msg || 'Could not update booking status' }, 500);
+      }
+    } else if (!rowsUpdated || Number(rowsUpdated) < 1) {
+      pendingInsert = true;
     }
 
-    // Fire confirmation email (non-blocking — failure doesn't fail the confirm)
-    const emailFnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/booking-client-email`;
-    fetch(emailFnUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ bookingId, subdomain }),
-    }).catch((e: unknown) => console.warn('booking-client-email fire:', e));
+    // Refresh connected-account balance so the app wallet updates quickly.
+    const transferAccountId =
+      (pi.transfer_data as Record<string, string> | undefined)?.destination ?? null;
+    if (stripeKey && transferAccountId) {
+      try {
+        const balRes = await fetch('https://api.stripe.com/v1/balance', {
+          headers: {
+            Authorization: `Bearer ${stripeKey}`,
+            'Stripe-Account': transferAccountId,
+          },
+        });
+        if (balRes.ok) {
+          const balData = await balRes.json();
+          const sumUsd = (entries: { currency: string; amount: number }[] | undefined) =>
+            (entries || [])
+              .filter((b) => b.currency === 'usd')
+              .reduce((sum, b) => sum + b.amount, 0);
+          await supabase.from('styld_stripe_accounts').update({
+            balance_available_cents: sumUsd(balData.available),
+            balance_pending_cents: sumUsd(balData.pending),
+            charges_enabled: true,
+            updated_at: new Date().toISOString(),
+          }).eq('stripe_account_id', transferAccountId);
+        }
+      } catch (e) {
+        console.warn('balance sync after confirm:', e);
+      }
+    }
 
-    return json({ ok: true, paymentStatus });
+    if (!pendingInsert) {
+      const emailFnUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/booking-client-email`;
+      fetch(emailFnUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${Deno.env.get('SUPABASE_ANON_KEY')}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ bookingId, subdomain }),
+      }).catch((e: unknown) => console.warn('booking-client-email fire:', e));
+    }
+
+    return json({ ok: true, verified: true, paymentStatus, rowsUpdated: Number(rowsUpdated) || 0, pendingInsert });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Internal error';
     console.error('stripe-booking-confirm error:', err);

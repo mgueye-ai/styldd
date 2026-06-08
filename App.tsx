@@ -1,4 +1,5 @@
 import { DarkTheme, NavigationContainer } from '@react-navigation/native';
+import { navigationRef } from './src/lib/navigationRef';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -62,7 +63,7 @@ export default function App() {
         <AuthProvider>
           <PurchasesAuthSync />
           <PrivacyProvider>
-            <NavigationContainer theme={theme}>
+            <NavigationContainer ref={navigationRef} theme={theme}>
               <AppRoutes />
               <StatusBar style="light" />
             </NavigationContainer>

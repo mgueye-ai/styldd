@@ -7,10 +7,12 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import PeriodSelector from '../components/PeriodSelector';
 import BrandLogo from '../components/BrandLogo';
+import NotificationsPanel from '../components/NotificationsPanel';
 import ScreenGradient from '../components/ScreenGradient';
 import ServiceImage from '../components/ServiceImage';
 import { Period } from '../data/periods';
 import { usePrivacyMode } from '../context/PrivacyContext';
+import { usePushNotifications } from '../context/PushNotificationsContext';
 import { useSiteData } from '../context/SiteDataContext';
 import { useSiteContent } from '../context/SiteContentContext';
 import { formatSiteAddress } from '../data/siteContent';
@@ -391,6 +393,15 @@ export default function DashboardScreen({ navigation }: Props) {
   const [displayValue, setDisplayValue] = useState(MONTH_VALUE);
   const [stripeSummary, setStripeSummary] = useState<StripeConnectSummary | null>(null);
   const { privacyMode } = usePrivacyMode();
+  const {
+    notifications,
+    unreadCount,
+    panelVisible,
+    openPanel,
+    closePanel,
+    markRead,
+    markAllRead,
+  } = usePushNotifications();
   const { content: siteContent } = useSiteContent();
   const siteAddress = formatSiteAddress(siteContent);
   const {
@@ -398,6 +409,7 @@ export default function DashboardScreen({ navigation }: Props) {
     hasLinkedSite,
     isLoading,
     bookings,
+    refresh,
     getRevenueForPeriod,
     getTodayJobStats,
     getUpcomingAppointments,
@@ -460,14 +472,15 @@ export default function DashboardScreen({ navigation }: Props) {
     setSelectedPeriod(key);
   };
 
-  // Fetch Stripe balance so the dashboard reflects real money (available + processing)
   useFocusEffect(
     useCallback(() => {
-      if (!hasLinkedSite) return;
-      fetchStripeConnectStatus()
-        .then((data) => setStripeSummary(data))
-        .catch(() => {});
-    }, [hasLinkedSite]),
+      if (hasLinkedSite) {
+        void refresh({ silent: true });
+        fetchStripeConnectStatus()
+          .then((data) => setStripeSummary(data))
+          .catch(() => {});
+      }
+    }, [hasLinkedSite, refresh]),
   );
 
   // Any time the revenue target changes (period switch or fresh data load), animate to it.
@@ -499,7 +512,20 @@ export default function DashboardScreen({ navigation }: Props) {
                 {hasLinkedSite ? businessLabel : 'Styld'}
               </Text>
             </View>
-            <View style={{ width: 38 }} />
+            <Pressable style={styles.notificationButton} onPress={openPanel} hitSlop={8}>
+              <Ionicons
+                name={unreadCount > 0 ? 'notifications' : 'notifications-outline'}
+                size={22}
+                color={colors.text}
+              />
+              {unreadCount > 0 ? (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </Text>
+                </View>
+              ) : null}
+            </Pressable>
           </View>
 
           {/* Revenue */}
@@ -603,6 +629,24 @@ export default function DashboardScreen({ navigation }: Props) {
         </ScrollView>
       </SafeAreaView>
 
+      <NotificationsPanel
+        visible={panelVisible}
+        notifications={notifications}
+        privacyMode={privacyMode}
+        onClose={closePanel}
+        onMarkRead={(id) => {
+          markRead(id);
+          if (id.startsWith('new-') || id.startsWith('payment-') || id.startsWith('confirmed-')) {
+            const appointmentId = id.split('-').slice(1).join('-');
+            closePanel();
+            navigation.navigate('AppointmentDetail', { appointmentId });
+          } else if (id.startsWith('review-')) {
+            closePanel();
+            navigation.getParent()?.navigate('Profile', { screen: 'ReviewsSettings' });
+          }
+        }}
+        onMarkAllRead={markAllRead}
+      />
     </View>
   );
 }

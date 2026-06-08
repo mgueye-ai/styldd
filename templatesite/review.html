@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="description" content="Leave a review for your appointment." />
+    <title>Leave a review</title>
+    <link rel="icon" href="assets/favicon-32.png?v=4" type="image/png" sizes="32x32" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,700&family=Inter:wght@400;500;600;700&family=Montserrat:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,500;0,600;0,700;1,500&family=Source+Sans+3:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/css/styles.css?v=47" />
+    <style>
+      #tenant-status {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        padding: 2rem;
+        background: var(--cream, #faf8f4);
+        color: #525252;
+        font: 600 1rem/1.5 var(--font-body, "Source Sans 3", system-ui, sans-serif);
+        text-align: center;
+        z-index: 9999;
+      }
+      #tenant-status[hidden] { display: none; }
+    </style>
+    <script src="/js/styld-tenant-config.js?v=41"></script>
+    <script src="/js/styld-tenant-config.local.js?v=41"></script>
+    <script defer src="/js/styld-analytics.js"></script>
+  </head>
+  <body class="tpl-profile page-site review-page">
+    <div id="tenant-status">Loading…</div>
+
+    <nav class="profile-nav" id="profile-nav">
+      <div class="container profile-nav__inner">
+        <a class="profile-brand" href="/">
+          <div class="profile-brand__logo" id="profile-logo-placeholder" aria-hidden="true"></div>
+          <span id="profile-brand-name">Your Brand</span>
+        </a>
+        <a class="profile-book-btn" href="/booking">Book Now</a>
+      </div>
+    </nav>
+
+    <main class="container booking-details-page">
+      <div class="page-hero page-hero--compact booking-details-hero" style="margin-top: 1.5rem;">
+        <p class="booking-details-hero__eyebrow">Review</p>
+        <h1 id="review-page-title">Leave a review</h1>
+        <p class="booking-details-hero__lead" id="review-page-sub">Tell us how your appointment went.</p>
+      </div>
+
+      <p id="review-status" class="tenant-inline-feedback" role="status" hidden></p>
+
+      <form id="review-form" class="review-form" hidden>
+        <div class="field">
+          <label for="review-name">Your name</label>
+          <input type="text" id="review-name" name="name" autocomplete="name" />
+        </div>
+
+        <div class="field">
+          <span class="field-label-block">Star rating</span>
+          <div class="review-stars-input" id="review-stars" role="group" aria-label="Star rating">
+            <button type="button" data-star="1" aria-label="1 star">★</button>
+            <button type="button" data-star="2" aria-label="2 stars">★</button>
+            <button type="button" data-star="3" aria-label="3 stars">★</button>
+            <button type="button" data-star="4" aria-label="4 stars">★</button>
+            <button type="button" data-star="5" aria-label="5 stars">★</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="review-message">Your review</label>
+          <textarea id="review-message" name="message" required placeholder="What did you love about your visit?"></textarea>
+        </div>
+
+        <button class="btn btn-primary review-form__submit" type="submit" id="review-submit">Submit review</button>
+      </form>
+    </main>
+
+    <footer class="site-footer site-footer--home-promo">
+      <div class="container footer-bottom">
+        <p id="preview-footer-brand">&copy; Your Brand</p>
+        <p class="footer-built-by">
+          <a
+            class="footer-built-by__link"
+            id="preview-footer-styld-link"
+            href="https://styldd.com"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <img
+              class="footer-built-by__logo"
+              src="https://styldd.com/assets/styld-icon.png"
+              alt=""
+              width="22"
+              height="22"
+              decoding="async"
+            />
+            <span>Built with Styld</span>
+          </a>
+        </p>
+      </div>
+    </footer>
+
+    <script src="/js/styld-tenant-shared.js?v=43"></script>
+    <script src="/js/review-page.js?v=2"></script>
+  </body>
+</html>

@@ -20,6 +20,12 @@ import {
   formatBlockRange,
   loadBlockedIntervals,
 } from '../../lib/siteAdmin';
+import { isWeekdayClosed } from '../../lib/bookingAvailability';
+import {
+  BookingHours,
+  DEFAULT_BOOKING_HOURS,
+  loadBookingHours,
+} from '../../lib/siteServices';
 import { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { colors } from '../../theme';
 
@@ -35,6 +41,7 @@ export default function ScheduleScreen({ navigation }: Props) {
   const [sheetVisible, setSheetVisible] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showBlocks, setShowBlocks] = useState(false);
+  const [bookingHours, setBookingHours] = useState<BookingHours>(DEFAULT_BOOKING_HOURS);
 
   const refresh = useCallback(async () => {
     if (!linkedSite) return;
@@ -49,7 +56,16 @@ export default function ScheduleScreen({ navigation }: Props) {
     }
   }, [linkedSite]);
 
-  useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
+  const refreshHours = useCallback(async () => {
+    if (!linkedSite) return;
+    try {
+      setBookingHours(await loadBookingHours(linkedSite));
+    } catch {
+      /* ignore */
+    }
+  }, [linkedSite]);
+
+  useFocusEffect(useCallback(() => { refresh(); void refreshHours(); }, [refresh, refreshHours]));
 
   const selectedDateKey = toDateKey(selectedDate);
 
@@ -147,14 +163,24 @@ export default function ScheduleScreen({ navigation }: Props) {
       <CalendarWeekHeader
         selectedDate={selectedDate}
         onSelectedDateChange={setSelectedDate}
-        hint="Drag on the timeline to block time. Existing bookings show underneath."
+        bookingHours={bookingHours}
+        hint="Grey areas match your site hours. Booked and blocked times show on top."
       />
+
+      {isWeekdayClosed(selectedDate, bookingHours) ? (
+        <View style={styles.closedBanner}>
+          <Text style={styles.closedBannerText}>
+            Closed this day — same on your public booking page.
+          </Text>
+        </View>
+      ) : null}
 
       <DraggableDayTimeline
         selectedDate={selectedDate}
         overlays={overlays}
+        bookingHours={bookingHours}
         draftVariant="block"
-        dragHint="Press and drag to block a time range"
+        dragHint="Press and drag inside open hours to block a time range"
         onSelectionComplete={openSheet}
       />
 
@@ -204,6 +230,21 @@ const styles = StyleSheet.create({
   content: {
     flex: 1,
     paddingBottom: 16,
+  },
+  closedBanner: {
+    marginBottom: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(148, 163, 184, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.24)',
+  },
+  closedBannerText: {
+    color: colors.textMuted,
+    fontSize: 13,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   blocksToggle: {
     flexDirection: 'row',

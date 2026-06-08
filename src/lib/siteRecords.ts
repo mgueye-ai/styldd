@@ -1,6 +1,7 @@
 import { DEFAULT_ONBOARDING_STATE } from '../data/onboarding';
 import { DEFAULT_BOOKING_HOURS } from '../data/bookingHours';
 import { DEFAULT_BOOKING_PAYMENT } from '../data/bookingPayment';
+import { DEFAULT_REVIEWS_SETTINGS } from '../data/reviewsSettings';
 import { DEFAULT_SITE_PUBLISH } from '../data/sitePublish';
 import { DEFAULT_SITE_CONTENT } from '../data/siteContent';
 import { DEFAULT_SITE_THEME } from '../data/siteTheme';
@@ -73,6 +74,12 @@ export async function ensureUserSiteSeeded(userId: string, businessName?: string
       record_type: 'site_setting',
       record_key: 'site_publish',
       data: { value: DEFAULT_SITE_PUBLISH },
+    },
+    {
+      user_id: userId,
+      record_type: 'site_setting',
+      record_key: 'reviews_settings',
+      data: { value: DEFAULT_REVIEWS_SETTINGS },
     },
   ];
 

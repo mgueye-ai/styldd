@@ -1,6 +1,16 @@
 import { SupabaseClient } from '@supabase/supabase-js';
 import { STYLE_COVER_BUCKET } from '../data/serviceCatalog';
-import { BookingHours, DEFAULT_BOOKING_HOURS } from '../data/bookingHours';
+import {
+  BookingHours,
+  DEFAULT_BOOKING_HOURS,
+  normalizeWeekdayHours,
+} from '../data/bookingHours';
+import {
+  CancellationPolicySettings,
+  DEFAULT_CANCELLATION_POLICY,
+  CANCELLATION_POLICY_PRESETS,
+  normalizeCancellationPolicy,
+} from '../data/cancellationPolicy';
 import {
   BookingPaymentSettings,
   DEFAULT_BOOKING_PAYMENT,
@@ -19,6 +29,13 @@ export type { BookingHours } from '../data/bookingHours';
 export { DEFAULT_BOOKING_HOURS } from '../data/bookingHours';
 export type { BookingPaymentSettings } from '../data/bookingPayment';
 export { DEFAULT_BOOKING_PAYMENT } from '../data/bookingPayment';
+export type { CancellationPolicySettings } from '../data/cancellationPolicy';
+export {
+  DEFAULT_CANCELLATION_POLICY,
+  CANCELLATION_POLICY_PRESETS,
+  REFUND_APPLIES_TO_OPTIONS,
+  buildPolicySummary,
+} from '../data/cancellationPolicy';
 
 type UnifiedSettingRow = {
   id: string;
@@ -312,6 +329,7 @@ export function normalizeBookingHours(value: unknown): BookingHours {
       source.concurrentAppointmentCapacity,
       DEFAULT_BOOKING_HOURS.concurrentAppointmentCapacity,
     ),
+    weekdayHours: normalizeWeekdayHours(source.weekdayHours, DEFAULT_BOOKING_HOURS),
   };
 }
 
@@ -421,6 +439,80 @@ export async function loadBookingPayment(linkedSite: LinkedSite | null): Promise
       : null;
 
   return normalizeBookingPayment(value);
+}
+
+export async function loadCancellationPolicy(
+  linkedSite: LinkedSite,
+): Promise<CancellationPolicySettings> {
+  const client = createLinkedSiteClient(linkedSite);
+  const tableName = getLinkedTableName(linkedSite);
+
+  if (!client || !tableName) {
+    return DEFAULT_CANCELLATION_POLICY;
+  }
+
+  const userId = linkedSite.user_id;
+  const { data, error } = await client
+    .from(tableName)
+    .select('data')
+    .eq('user_id', userId)
+    .eq('record_type', 'site_setting')
+    .eq('record_key', 'cancellation_policy')
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+
+  const raw =
+    data?.data && typeof data.data === 'object' && 'value' in data.data
+      ? (data.data as { value?: unknown }).value
+      : data?.data;
+
+  return normalizeCancellationPolicy(raw);
+}
+
+export async function saveCancellationPolicy(
+  linkedSite: LinkedSite,
+  policy: CancellationPolicySettings,
+): Promise<void> {
+  const client = createLinkedSiteClient(linkedSite);
+  const tableName = getLinkedTableName(linkedSite);
+
+  if (!client || !tableName) {
+    throw new Error('Missing site data configuration.');
+  }
+
+  const userId = linkedSite.user_id;
+  const normalized = normalizeCancellationPolicy(policy);
+
+  const { data: existing, error: readError } = await client
+    .from(tableName)
+    .select('id')
+    .eq('user_id', userId)
+    .eq('record_type', 'site_setting')
+    .eq('record_key', 'cancellation_policy')
+    .maybeSingle();
+
+  if (readError) throw new Error(readError.message);
+
+  const payload = {
+    data: { value: normalized },
+    updated_at: new Date().toISOString(),
+  };
+
+  if (existing?.id) {
+    const { error } = await client.from(tableName).update(payload).eq('id', existing.id);
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  const { error } = await client.from(tableName).insert({
+    user_id: userId,
+    record_type: 'site_setting',
+    record_key: 'cancellation_policy',
+    ...payload,
+  });
+
+  if (error) throw new Error(error.message);
 }
 
 export async function saveBookingPayment(

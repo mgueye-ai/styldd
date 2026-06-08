@@ -8,6 +8,11 @@ export type BookingPaymentSettings = {
   depositKind: DepositKind;
   /** Percent (1–100) or fixed dollar amount */
   depositValue: number;
+  /**
+   * When true (default), deposit counts toward the service total and reduces the in-person balance.
+   * When false, deposit is an additional hold on top of the full service price.
+   */
+  depositIncludedInPrice: boolean;
   /** Whether clients must upload a current hair photo */
   requireCurrentHairPhoto: boolean;
   /** Whether clients must upload a reference image */
@@ -18,9 +23,35 @@ export const DEFAULT_BOOKING_PAYMENT: BookingPaymentSettings = {
   mode: 'deposit',
   depositKind: 'percent',
   depositValue: 10,
+  depositIncludedInPrice: true,
   requireCurrentHairPhoto: true,
   requireReferencePhoto: false,
 };
+
+export function computeDepositAmount(total: number, payment: BookingPaymentSettings): number {
+  if (payment.mode !== 'deposit') return 0;
+  const t = Math.max(0, total);
+  let deposit =
+    payment.depositKind === 'fixed'
+      ? payment.depositValue
+      : Math.round(t * (payment.depositValue / 100) * 100) / 100;
+  if (payment.depositIncludedInPrice !== false) {
+    deposit = Math.min(t, Math.max(0, deposit));
+  } else {
+    deposit = Math.max(0, deposit);
+  }
+  return deposit;
+}
+
+export function computeBalanceDue(total: number, payment: BookingPaymentSettings): number {
+  if (payment.mode === 'in_person') return Math.max(0, total);
+  if (payment.mode === 'full') return 0;
+  const deposit = computeDepositAmount(total, payment);
+  if (payment.depositIncludedInPrice !== false) {
+    return Math.max(0, total - deposit);
+  }
+  return Math.max(0, total);
+}
 
 const VALID_MODES: BookingPaymentMode[] = ['full', 'deposit', 'in_person'];
 const VALID_KINDS: DepositKind[] = ['percent', 'fixed'];
@@ -58,5 +89,17 @@ export function normalizeBookingPayment(value: unknown): BookingPaymentSettings 
       ? source.requireReferencePhoto
       : DEFAULT_BOOKING_PAYMENT.requireReferencePhoto;
 
-  return { mode, depositKind, depositValue, requireCurrentHairPhoto, requireReferencePhoto };
+  const depositIncludedInPrice =
+    typeof source.depositIncludedInPrice === 'boolean'
+      ? source.depositIncludedInPrice
+      : DEFAULT_BOOKING_PAYMENT.depositIncludedInPrice;
+
+  return {
+    mode,
+    depositKind,
+    depositValue,
+    depositIncludedInPrice,
+    requireCurrentHairPhoto,
+    requireReferencePhoto,
+  };
 }

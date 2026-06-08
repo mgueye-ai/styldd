@@ -7,6 +7,14 @@
  * Payload: { bookingId: string, subdomain: string }
  */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { normalizeCancellationPolicy } from '../_shared/cancellation-policy.ts';
+import {
+  buildBookingManageUrl,
+  buildConfirmationCancellationNote,
+  loadSiteEmailBranding,
+  StyldEmailBranding,
+  wrapStyldEmail,
+} from '../_shared/styld-email-brand.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -51,165 +59,123 @@ function fmtTime(iso: string | null): string {
   } catch { return ''; }
 }
 
-function buildEmail(opts: {
-  clientName: string;
-  businessName: string;
-  businessCity: string;
-  logoUrl: string | null;
-  coverUrl: string | null;
-  siteUrl: string;
-  service: string;
-  startsAt: string | null;
-  durationMinutes: number;
-  location: string;
-  priceCents: number;
-  depositCents: number;
-  depositPaid: boolean;
-  isInPerson: boolean;
-  bookingId: string;
-}): string {
+function buildEmail(
+  branding: StyldEmailBranding,
+  opts: {
+    clientName: string;
+    coverUrl: string | null;
+    service: string;
+    startsAt: string | null;
+    durationMinutes: number;
+    location: string;
+    priceCents: number;
+    depositCents: number;
+    depositPaid: boolean;
+    isInPerson: boolean;
+    bookingId: string;
+    manageUrl: string;
+    policySummary: string;
+  },
+): string {
   const {
-    clientName, businessName, businessCity, logoUrl, coverUrl, siteUrl,
-    service, startsAt, durationMinutes, location, priceCents, depositCents,
-    depositPaid, isInPerson, bookingId,
+    clientName, coverUrl, service, startsAt, durationMinutes, location,
+    priceCents, depositCents, depositPaid, isInPerson, bookingId, manageUrl, policySummary,
   } = opts;
 
   const remaining = priceCents - (depositPaid ? depositCents : 0);
   const shortId = bookingId.slice(0, 8).toUpperCase();
-
-  const logoBlock = logoUrl
-    ? `<img src="${esc(logoUrl)}" alt="${esc(businessName)}" width="64" height="64"
-         style="display:block;border-radius:50%;border:2px solid rgba(252,97,163,0.3);margin:0 auto 12px;object-fit:cover;" />`
-    : `<div style="width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,#1a1a2e,#fc61a3);margin:0 auto 12px;display:flex;align-items:center;justify-content:center;">
-         <span style="color:#fff;font-size:22px;font-weight:800;">${esc(businessName.charAt(0))}</span>
-       </div>`;
+  const rowBorder = branding.rowBorderColor;
+  const successColor = '#22c55e';
 
   const coverBlock = coverUrl
     ? `<img src="${esc(coverUrl)}" alt="${esc(service)}" width="100%" height="180"
          style="display:block;width:100%;height:180px;object-fit:cover;border-radius:12px;margin-bottom:20px;" />`
     : '';
 
-  const depositRow = depositPaid && depositCents > 0 ? `
+  const depositRow =
+    depositPaid && depositCents > 0 && remaining > 0
+      ? `
     <tr>
-      <td style="padding:10px 0;border-bottom:1px solid #2a2a3e;color:#a0a0c0;font-size:14px;">Deposit paid</td>
-      <td style="padding:10px 0;border-bottom:1px solid #2a2a3e;color:#22c55e;font-size:14px;font-weight:700;text-align:right;">${money(depositCents)}</td>
+      <td style="padding:10px 0;border-bottom:1px solid ${rowBorder};color:${branding.softTextColor};font-size:14px;">Deposit paid</td>
+      <td style="padding:10px 0;border-bottom:1px solid ${rowBorder};color:${successColor};font-size:14px;font-weight:700;text-align:right;">${money(depositCents)}</td>
     </tr>
     <tr>
-      <td style="padding:10px 0;color:#a0a0c0;font-size:14px;">Due at service</td>
-      <td style="padding:10px 0;color:#fc61a3;font-size:14px;font-weight:700;text-align:right;">${money(remaining)}</td>
-    </tr>` : '';
+      <td style="padding:10px 0;color:${branding.softTextColor};font-size:14px;">Due at service</td>
+      <td style="padding:10px 0;color:${branding.primaryColor};font-size:14px;font-weight:700;text-align:right;">${money(remaining)}</td>
+    </tr>`
+      : '';
 
   const paymentNote = isInPerson
-    ? `<p style="margin:0 0 0;color:#a0a0c0;font-size:13px;">Full payment of <strong style="color:#f0f0ff;">${money(priceCents)}</strong> is due at the time of service.</p>`
+    ? `<p style="margin:0;color:${branding.softTextColor};font-size:13px;">Full payment of <strong style="color:${branding.textColor};">${money(priceCents)}</strong> is due at the time of service.</p>`
     : depositPaid && remaining > 0
-      ? `<p style="margin:0;color:#a0a0c0;font-size:13px;">You have a remaining balance of <strong style="color:#fc61a3;">${money(remaining)}</strong> due at your appointment.</p>`
-      : `<p style="margin:0;color:#22c55e;font-size:13px;font-weight:600;">✓ Paid in full</p>`;
+      ? `<p style="margin:0;color:${branding.softTextColor};font-size:13px;">You have a remaining balance of <strong style="color:${branding.primaryColor};">${money(remaining)}</strong> due at your appointment.</p>`
+      : `<p style="margin:0;color:${successColor};font-size:13px;font-weight:600;">✓ Paid in full</p>`;
 
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>Booking Confirmed – ${esc(businessName)}</title>
-</head>
-<body style="margin:0;padding:0;background:#0e0e1a;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;">
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#0e0e1a;">
-<tr><td align="center" style="padding:32px 16px 40px;">
-
-  <!-- Card -->
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="520" style="max-width:520px;width:100%;background:#1a1a2e;border-radius:20px;overflow:hidden;border:1px solid rgba(252,97,163,0.18);box-shadow:0 16px 48px rgba(0,0,0,0.5);">
-
-    <!-- Header -->
-    <tr>
-      <td style="padding:32px 28px 24px;text-align:center;background:linear-gradient(160deg,#1e1e35 0%,#1a1a2e 100%);border-bottom:1px solid rgba(252,97,163,0.15);">
-        ${logoBlock}
-        <h1 style="margin:0 0 6px;color:#f0f0ff;font-size:22px;font-weight:800;letter-spacing:-0.3px;">${esc(businessName)}</h1>
-        <p style="margin:0;color:#8080a0;font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">${esc(businessCity)}</p>
-      </td>
-    </tr>
-
-    <!-- Confirmed banner -->
-    <tr>
+  const body = `<tr>
       <td style="padding:20px 28px 16px;text-align:center;">
         <div style="display:inline-block;background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.3);border-radius:999px;padding:6px 18px;margin-bottom:16px;">
-          <span style="color:#22c55e;font-size:13px;font-weight:700;letter-spacing:0.05em;">✓ BOOKING CONFIRMED</span>
+          <span style="color:${successColor};font-size:13px;font-weight:700;letter-spacing:0.05em;">✓ BOOKING CONFIRMED</span>
         </div>
-        <h2 style="margin:0 0 6px;color:#f0f0ff;font-size:26px;font-weight:800;letter-spacing:-0.5px;">See you soon, ${esc(clientName.split(' ')[0])}!</h2>
-        <p style="margin:0;color:#8080a0;font-size:14px;">Your appointment has been confirmed. Here's your receipt.</p>
+        <h2 style="margin:0 0 6px;color:${branding.textColor};font-family:${branding.headingFont};font-size:26px;font-weight:700;letter-spacing:-0.3px;">See you soon, ${esc(clientName.split(' ')[0])}!</h2>
+        <p style="margin:0;color:${branding.mutedColor};font-size:14px;">Your appointment has been confirmed. Here's your receipt.</p>
       </td>
     </tr>
-
-    <!-- Body -->
     <tr>
       <td style="padding:0 28px 28px;">
         ${coverBlock}
-
-        <!-- Receipt card -->
-        <div style="background:#12122a;border-radius:14px;border:1px solid rgba(252,97,163,0.12);padding:20px 20px 4px;margin-bottom:20px;">
-          <p style="margin:0 0 14px;color:#8080a0;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;">Appointment details</p>
+        <div style="background:${branding.innerCardBg};border-radius:14px;border:1px solid ${branding.borderColor};padding:20px 20px 4px;margin-bottom:20px;">
+          <p style="margin:0 0 14px;color:${branding.mutedColor};font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;">Appointment details</p>
           <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
             <tr>
-              <td style="padding:10px 0;border-bottom:1px solid #2a2a3e;color:#a0a0c0;font-size:14px;">Service</td>
-              <td style="padding:10px 0;border-bottom:1px solid #2a2a3e;color:#f0f0ff;font-size:14px;font-weight:700;text-align:right;">${esc(service)}</td>
+              <td style="padding:10px 0;border-bottom:1px solid ${rowBorder};color:${branding.softTextColor};font-size:14px;">Service</td>
+              <td style="padding:10px 0;border-bottom:1px solid ${rowBorder};color:${branding.textColor};font-size:14px;font-weight:700;text-align:right;">${esc(service)}</td>
             </tr>
             <tr>
-              <td style="padding:10px 0;border-bottom:1px solid #2a2a3e;color:#a0a0c0;font-size:14px;">Date</td>
-              <td style="padding:10px 0;border-bottom:1px solid #2a2a3e;color:#f0f0ff;font-size:14px;font-weight:600;text-align:right;">${esc(fmtDate(startsAt))}</td>
+              <td style="padding:10px 0;border-bottom:1px solid ${rowBorder};color:${branding.softTextColor};font-size:14px;">Date</td>
+              <td style="padding:10px 0;border-bottom:1px solid ${rowBorder};color:${branding.textColor};font-size:14px;font-weight:600;text-align:right;">${esc(fmtDate(startsAt))}</td>
             </tr>
             <tr>
-              <td style="padding:10px 0;border-bottom:1px solid #2a2a3e;color:#a0a0c0;font-size:14px;">Time</td>
-              <td style="padding:10px 0;border-bottom:1px solid #2a2a3e;color:#f0f0ff;font-size:14px;font-weight:600;text-align:right;">${esc(fmtTime(startsAt))}</td>
+              <td style="padding:10px 0;border-bottom:1px solid ${rowBorder};color:${branding.softTextColor};font-size:14px;">Time</td>
+              <td style="padding:10px 0;border-bottom:1px solid ${rowBorder};color:${branding.textColor};font-size:14px;font-weight:600;text-align:right;">${esc(fmtTime(startsAt))}</td>
             </tr>
             <tr>
-              <td style="padding:10px 0;border-bottom:1px solid #2a2a3e;color:#a0a0c0;font-size:14px;">Duration</td>
-              <td style="padding:10px 0;border-bottom:1px solid #2a2a3e;color:#f0f0ff;font-size:14px;font-weight:600;text-align:right;">${durationMinutes} min</td>
+              <td style="padding:10px 0;border-bottom:1px solid ${rowBorder};color:${branding.softTextColor};font-size:14px;">Duration</td>
+              <td style="padding:10px 0;border-bottom:1px solid ${rowBorder};color:${branding.textColor};font-size:14px;font-weight:600;text-align:right;">${durationMinutes} min</td>
             </tr>
             <tr>
-              <td style="padding:10px 0;border-bottom:1px solid #2a2a3e;color:#a0a0c0;font-size:14px;">Location</td>
-              <td style="padding:10px 0;border-bottom:1px solid #2a2a3e;color:#f0f0ff;font-size:14px;font-weight:600;text-align:right;">${esc(location)}</td>
+              <td style="padding:10px 0;border-bottom:1px solid ${rowBorder};color:${branding.softTextColor};font-size:14px;">Location</td>
+              <td style="padding:10px 0;border-bottom:1px solid ${rowBorder};color:${branding.textColor};font-size:14px;font-weight:600;text-align:right;">${esc(location)}</td>
             </tr>
             <tr>
-              <td style="padding:14px 0 10px;border-bottom:1px solid #2a2a3e;color:#a0a0c0;font-size:14px;font-weight:700;">Total</td>
-              <td style="padding:14px 0 10px;border-bottom:1px solid #2a2a3e;color:#fc61a3;font-size:18px;font-weight:800;text-align:right;">${money(priceCents)}</td>
+              <td style="padding:14px 0 10px;border-bottom:1px solid ${rowBorder};color:${branding.softTextColor};font-size:14px;font-weight:700;">Total</td>
+              <td style="padding:14px 0 10px;border-bottom:1px solid ${rowBorder};color:${branding.primaryColor};font-size:18px;font-weight:800;text-align:right;">${money(priceCents)}</td>
             </tr>
             ${depositRow}
           </table>
         </div>
-
-        <!-- Payment note -->
-        <div style="background:#12122a;border-radius:12px;border:1px solid rgba(252,97,163,0.1);padding:14px 16px;margin-bottom:20px;">
+        <div style="background:${branding.innerCardBg};border-radius:12px;border:1px solid ${branding.borderColor};padding:14px 16px;margin-bottom:20px;">
           ${paymentNote}
         </div>
-
-        <!-- Booking ref -->
         <div style="text-align:center;margin-bottom:8px;">
-          <span style="color:#4a4a6a;font-size:12px;">Booking reference: </span>
-          <span style="color:#8080a0;font-size:12px;font-family:'Courier New',monospace;font-weight:700;">#${esc(shortId)}</span>
+          <span style="color:${branding.mutedColor};font-size:12px;">Booking reference: </span>
+          <span style="color:${branding.softTextColor};font-size:12px;font-family:'Courier New',monospace;font-weight:700;">#${esc(shortId)}</span>
         </div>
-
-        <p style="margin:0 0 4px;color:#6060a0;font-size:13px;text-align:center;">
-          Questions? Reply to this email or visit
-          <a href="${esc(siteUrl)}" style="color:#fc61a3;text-decoration:none;font-weight:600;">${esc(siteUrl.replace('https://', ''))}</a>
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 20px;">
+          <tr>
+            <td align="center">
+              <a href="${esc(manageUrl)}" style="display:inline-block;padding:12px 24px;border-radius:999px;border:1px solid ${branding.borderColor};color:${branding.textColor};font-size:14px;font-weight:700;text-decoration:none;background:${branding.innerCardBg};">View or cancel appointment</a>
+            </td>
+          </tr>
+        </table>
+        <p style="margin:0;color:${branding.mutedColor};font-size:13px;text-align:center;">
+          Questions? Visit
+          <a href="${esc(branding.siteUrl)}" style="color:${branding.primaryColor};text-decoration:none;font-weight:600;">${esc(branding.siteUrl.replace('https://', ''))}</a>
         </p>
+        ${buildConfirmationCancellationNote(branding, policySummary)}
       </td>
-    </tr>
+    </tr>`;
 
-    <!-- Styld footer -->
-    <tr>
-      <td style="padding:16px 28px 20px;text-align:center;border-top:1px solid rgba(252,97,163,0.1);background:#12122a;">
-        <p style="margin:0 0 4px;color:#4a4a6a;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;">Booking powered by</p>
-        <p style="margin:0;font-size:16px;font-weight:900;letter-spacing:-0.5px;">
-          <span style="color:#f0f0ff;">Styl</span><span style="color:#fc61a3;">d</span>
-        </p>
-        <p style="margin:6px 0 0;color:#3a3a5a;font-size:11px;">This is an automated confirmation. Please do not reply directly.</p>
-      </td>
-    </tr>
-
-  </table>
-</td></tr>
-</table>
-</body>
-</html>`;
+  return wrapStyldEmail(branding, body, `Booking Confirmed – ${branding.businessName}`);
 }
 
 // ─── main handler ─────────────────────────────────────────────────────────────
@@ -255,21 +221,24 @@ Deno.serve(async (req) => {
     // Deduplicate: don't send twice
     if (b.client_email_sent_at) return json({ ok: true, skipped: true, reason: 'already_sent' });
 
-    // 3. Fetch site settings for branding
-    const { data: settingRow } = await supabase
-      .from('styld_site_records')
-      .select('data')
-      .eq('user_id', userId)
-      .eq('record_type', 'site_setting')
-      .eq('record_key', 'site_content')
-      .single();
-
-    const siteContent = (settingRow?.data as Record<string, unknown>)?.value as Record<string, unknown> ?? {};
-    const businessName = String(siteContent.brandName ?? siteContent.business_name ?? 'Your Stylist');
-    const businessCity = String(siteContent.city ?? siteContent.location ?? '');
-
-    // 4. Subdomain → site URL
     const siteUrl = `https://${subdomain}.styldd.com`;
+    const [branding, cancellationPolicyRow] = await Promise.all([
+      loadSiteEmailBranding(supabase, userId, siteUrl),
+      supabase
+        .from('styld_site_records')
+        .select('data')
+        .eq('user_id', userId)
+        .eq('record_type', 'site_setting')
+        .eq('record_key', 'cancellation_policy')
+        .maybeSingle(),
+    ]);
+    const cancellationRaw =
+      cancellationPolicyRow.data?.data &&
+      typeof cancellationPolicyRow.data.data === 'object'
+        ? (cancellationPolicyRow.data.data as { value?: unknown }).value ??
+          cancellationPolicyRow.data.data
+        : null;
+    const policySummary = normalizeCancellationPolicy(cancellationRaw).policySummary;
 
     // 5. Get style cover image signed URL (best-effort)
     const styleId = String(b.style_id ?? '');
@@ -301,13 +270,12 @@ Deno.serve(async (req) => {
       ['confirmed', 'completed'].includes(bookingStatus);
     const isInPerson = paymentStatus === 'in_person' || bookingStatus === 'confirmed' && depositCents === 0;
 
-    const html = buildEmail({
-      clientName: String(b.full_name ?? 'there'),
-      businessName,
-      businessCity,
-      logoUrl: null, // future: pull from site settings
+    const clientName = String(b.full_name ?? 'there');
+    const manageUrl = buildBookingManageUrl(siteUrl, bookingId, clientEmail, clientName);
+
+    const html = buildEmail(branding, {
+      clientName,
       coverUrl,
-      siteUrl,
       service: String(b.style_name ?? b.style_id ?? 'Appointment'),
       startsAt: String(b.appointment_starts_at ?? ''),
       durationMinutes: Number(b.duration_minutes ?? 120),
@@ -317,6 +285,8 @@ Deno.serve(async (req) => {
       depositPaid,
       isInPerson,
       bookingId,
+      manageUrl,
+      policySummary,
     });
 
     // 7. Send via Resend
@@ -329,7 +299,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         from: resendFrom,
         to: [clientEmail],
-        subject: `✓ Booking confirmed – ${businessName}`,
+        subject: `✓ Booking confirmed – ${branding.businessName}`,
         html,
       }),
     });

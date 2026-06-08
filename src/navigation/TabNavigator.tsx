@@ -3,21 +3,22 @@ import {
   BottomTabBarProps,
   createBottomTabNavigator,
 } from '@react-navigation/bottom-tabs';
+import { NavigatorScreenParams } from '@react-navigation/native';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import CalendarNavigator from './CalendarNavigator';
 import ClientNavigator from './ClientNavigator';
-import DashboardNavigator from './DashboardNavigator';
-import ProfileNavigator from './ProfileNavigator';
+import DashboardNavigator, { DashboardStackParamList } from './DashboardNavigator';
+import ProfileNavigator, { ProfileStackParamList } from './ProfileNavigator';
 import SiteNavigator from './SiteNavigator';
 import { colors } from '../theme';
 
 export type TabParamList = {
   Calendar: undefined;
-  Dashboard: undefined;
+  Dashboard: NavigatorScreenParams<DashboardStackParamList>;
   Site: undefined;
-  Profile: undefined;
+  Profile: NavigatorScreenParams<ProfileStackParamList>;
   Client: undefined;
 };
 

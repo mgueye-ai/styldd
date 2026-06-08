@@ -249,7 +249,8 @@ function buildColorOverrideCss(theme: SitePreviewTheme): string {
   const navbarColor = theme.navbarColor && /^#[0-9a-fA-F]{6}$/.test(theme.navbarColor)
     ? theme.navbarColor
     : null;
-  const navBgPart = navbarColor ? `--nav-bg:${navbarColor};` : '';
+  const navBgPart = navbarColor ? `--nav-bg:${navbarColor};--nav-bg-solid:${navbarColor};` : '';
+  const navTextPart = `--nav-text:${secondary};`;
   const cardOutlineColor = theme.cardOutlineColor && /^#[0-9a-fA-F]{6}$/.test(theme.cardOutlineColor)
     ? theme.cardOutlineColor : null;
   const cardOutlinePart = cardOutlineColor ? `--card-outline:${cardOutlineColor};` : '';
@@ -263,7 +264,7 @@ function buildColorOverrideCss(theme: SitePreviewTheme): string {
     : 0;
   const filterActiveText = primaryLuminance > 0.5 ? '#000000' : '#ffffff';
   const hideBookNowPart = theme.hideBookNowButton ? '.profile-book-btn{display:none!important}' : '';
-  return `:root{--pink:${primary};--pink-dark:${primaryDark};--pink-heading:${primaryHeading};--hero-pink:${primaryLight};--hero-pink-deep:${primaryDark};--pink-light:${primaryLight};--ink:${secondary};--font-display:${fontDisplay};--font-body:${fontBody};--filter-active-text:${filterActiveText};${bgPart}${navBgPart}${mutedPart}${cardOutlinePart}}${hideBookNowPart}`;
+  return `:root{--pink:${primary};--pink-dark:${primaryDark};--pink-heading:${primaryHeading};--hero-pink:${primaryLight};--hero-pink-deep:${primaryDark};--pink-light:${primaryLight};--ink:${secondary};--font-display:${fontDisplay};--font-body:${fontBody};--filter-active-text:${filterActiveText};${bgPart}${navBgPart}${navTextPart}${mutedPart}${cardOutlinePart}}${hideBookNowPart}`;
 }
 
 export function getSitePreviewPageUrl(): string | null {

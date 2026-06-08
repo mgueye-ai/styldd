@@ -4,8 +4,10 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
+import { AppState, AppStateStatus } from 'react-native';
 import { AppointmentDetail } from '../data/appointments';
 import { Client } from '../data/clients';
 import { CalendarEvent } from '../data/calendarEvents';
@@ -25,7 +27,11 @@ import {
   MoneyStats,
   SiteDataSnapshot,
 } from '../lib/siteData';
+import { HOSTED_SITE_TABLE } from '../lib/siteRecords';
+import { supabase } from '../lib/supabase';
 import { useAuth } from './AuthContext';
+
+const LIVE_POLL_MS = 20_000;
 
 const EMPTY_SNAPSHOT: SiteDataSnapshot = {
   linkedSite: null,
@@ -44,7 +50,7 @@ type SiteDataContextValue = {
   appointments: AppointmentDetail[];
   bookings: SiteBookingRecord[];
   clients: Client[];
-  refresh: () => Promise<void>;
+  refresh: (opts?: { silent?: boolean }) => Promise<void>;
   getAppointmentById: (id: string) => AppointmentDetail | undefined;
   getClientById: (id: string) => Client | undefined;
   getCalendarEventsForDateKey: (dateKey: string) => CalendarEvent[];
@@ -62,8 +68,12 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
   const [snapshot, setSnapshot] = useState<SiteDataSnapshot>(EMPTY_SNAPSHOT);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const silentRefreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const appState = useRef<AppStateStatus>(AppState.currentState);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent ?? false;
+
     if (!user?.id) {
       setSnapshot(EMPTY_SNAPSHOT);
       setError(null);
@@ -71,8 +81,10 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    setIsLoading(true);
-    setError(null);
+    if (!silent) {
+      setIsLoading(true);
+      setError(null);
+    }
 
     try {
       const nextSnapshot = await loadSiteData(
@@ -80,17 +92,104 @@ export function SiteDataProvider({ children }: { children: React.ReactNode }) {
         profile?.business_name ?? profile?.full_name,
       );
       setSnapshot(nextSnapshot);
+      if (!silent) setError(null);
     } catch (err) {
-      setSnapshot(EMPTY_SNAPSHOT);
-      setError(err instanceof Error ? err.message : 'Could not load linked site data.');
+      if (!silent) {
+        setSnapshot(EMPTY_SNAPSHOT);
+        setError(err instanceof Error ? err.message : 'Could not load linked site data.');
+      }
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   }, [user?.id, profile?.business_name, profile?.full_name]);
 
-  useEffect(() => {
-    refresh();
+  const scheduleSilentRefresh = useCallback(() => {
+    if (silentRefreshTimer.current) clearTimeout(silentRefreshTimer.current);
+    silentRefreshTimer.current = setTimeout(() => {
+      silentRefreshTimer.current = null;
+      void refresh({ silent: true });
+    }, 400);
   }, [refresh]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const onRecordChange = (recordType: unknown) => {
+      if (recordType === 'booking' || recordType === 'blocked_interval') {
+        scheduleSilentRefresh();
+      }
+    };
+
+    const channel = supabase
+      .channel(`site-data-live-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: HOSTED_SITE_TABLE,
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          onRecordChange((payload.new as { record_type?: string })?.record_type);
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: HOSTED_SITE_TABLE,
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          onRecordChange((payload.new as { record_type?: string })?.record_type);
+        },
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: HOSTED_SITE_TABLE,
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          onRecordChange((payload.old as { record_type?: string })?.record_type);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      if (silentRefreshTimer.current) clearTimeout(silentRefreshTimer.current);
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id, scheduleSilentRefresh]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const poll = setInterval(() => {
+      if (appState.current !== 'active') return;
+      void refresh({ silent: true });
+    }, LIVE_POLL_MS);
+
+    const sub = AppState.addEventListener('change', (nextState) => {
+      appState.current = nextState;
+      if (nextState === 'active') {
+        void refresh({ silent: true });
+      }
+    });
+
+    return () => {
+      clearInterval(poll);
+      sub.remove();
+    };
+  }, [user?.id, refresh]);
 
   const value = useMemo<SiteDataContextValue>(
     () => ({

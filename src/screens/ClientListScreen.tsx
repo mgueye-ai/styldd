@@ -1,10 +1,19 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import { useState } from 'react';
+import {
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from 'react-native';
+import { useMemo, useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import ClientContactSheet from '../components/clients/ClientContactSheet';
 import ScreenGradient from '../components/ScreenGradient';
 import { Client } from '../data/clients';
+import { useOnboarding } from '../context/OnboardingContext';
 import { useSiteData } from '../context/SiteDataContext';
 import { usePrivacyMode } from '../context/PrivacyContext';
 import { ClientStackParamList } from '../navigation/ClientNavigator';
@@ -27,23 +36,51 @@ function avatarColor(name: string) {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
+function hasValidEmail(client: Client): boolean {
+  const email = client.email.trim();
+  return Boolean(email && email !== '—' && email.includes('@'));
+}
+
 function ClientRow({
   client,
   privacyMode,
+  selectionMode,
+  selected,
   onPress,
+  onToggleSelect,
+  onLongPressSelect,
 }: {
   client: Client;
   privacyMode: boolean;
+  selectionMode: boolean;
+  selected: boolean;
   onPress: () => void;
+  onToggleSelect: () => void;
+  onLongPressSelect: () => void;
 }) {
-  const lastBooking = client.pastBookings[0];
   const bg = avatarColor(client.name);
+  const canEmail = hasValidEmail(client);
 
   return (
     <Pressable
       style={({ pressed }) => [styles.row, pressed && { opacity: 0.55 }]}
-      onPress={onPress}
+      onPress={selectionMode ? onToggleSelect : onPress}
+      onLongPress={selectionMode ? undefined : onLongPressSelect}
     >
+      {selectionMode ? (
+        <Pressable
+          hitSlop={8}
+          onPress={onToggleSelect}
+          style={[
+            styles.checkbox,
+            selected && styles.checkboxSelected,
+            !canEmail && styles.checkboxDisabled,
+          ]}
+        >
+          {selected ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
+        </Pressable>
+      ) : null}
+
       <View style={[styles.avatar, { backgroundColor: bg }]}>
         <Text style={styles.avatarText}>{initials(client.name)}</Text>
       </View>
@@ -52,7 +89,7 @@ function ClientRow({
         <Text style={styles.clientName} numberOfLines={1}>{client.name}</Text>
         <Text style={styles.clientMeta} numberOfLines={1}>
           {client.totalBookings} booking{client.totalBookings === 1 ? '' : 's'}
-          {lastBooking ? ` · ${lastBooking.service}` : ''}
+          {selectionMode && !canEmail ? ' · No email on file' : ''}
         </Text>
       </View>
 
@@ -69,15 +106,57 @@ function Divider() {
 
 export default function ClientListScreen({ navigation }: Props) {
   const { privacyMode } = usePrivacyMode();
-  const { clients, hasLinkedSite, isLoading } = useSiteData();
+  const { clients, hasLinkedSite, isLoading, businessLabel } = useSiteData();
+  const { sitePublish } = useOnboarding();
   const [query, setQuery] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [contactOpen, setContactOpen] = useState(false);
 
   const filtered = query.trim()
     ? clients.filter((c) =>
         c.name.toLowerCase().includes(query.toLowerCase()),
       )
     : clients;
+
+  const selectedClients = useMemo(
+    () => clients.filter((client) => selectedIds.has(client.id)),
+    [clients, selectedIds],
+  );
+
+  const emailableCount = useMemo(
+    () => selectedClients.filter(hasValidEmail).length,
+    [selectedClients],
+  );
+
+  const exitSelectionMode = () => {
+    setSelectionMode(false);
+    setSelectedIds(new Set());
+  };
+
+  const toggleClient = (clientId: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(clientId)) next.delete(clientId);
+      else next.add(clientId);
+      return next;
+    });
+  };
+
+  const startContactFlow = () => {
+    setSelectionMode(true);
+    setSelectedIds(new Set());
+    setSearchOpen(false);
+    setQuery('');
+  };
+
+  const openCompose = () => {
+    if (!selectedClients.length) return;
+    setContactOpen(true);
+  };
+
+  const siteUrl = sitePublish.publicUrl ?? '';
 
   return (
     <View style={styles.container}>
@@ -86,28 +165,59 @@ export default function ClientListScreen({ navigation }: Props) {
       <SafeAreaView style={styles.safeArea} edges={['top']}>
         <View style={styles.header}>
           <View style={styles.headerTop}>
-            <View>
-              <Text style={styles.title}>Clients</Text>
-              <Text style={styles.subtitle}>
-                {hasLinkedSite
-                  ? `${filtered.length} client${filtered.length === 1 ? '' : 's'}`
-                  : 'Link a site to load clients'}
-              </Text>
+            <View style={styles.headerLeft}>
+              {selectionMode ? (
+                <Pressable hitSlop={10} onPress={exitSelectionMode} style={styles.headerAction}>
+                  <Ionicons name="close" size={20} color={colors.textMuted} />
+                </Pressable>
+              ) : null}
+              <View>
+                <Text style={styles.title}>
+                  {selectionMode ? 'Select clients' : 'Clients'}
+                </Text>
+                <Text style={styles.subtitle}>
+                  {selectionMode
+                    ? `${selectedIds.size} selected${emailableCount !== selectedIds.size ? ` · ${emailableCount} with email` : ''}`
+                    : hasLinkedSite
+                      ? `${filtered.length} client${filtered.length === 1 ? '' : 's'}`
+                      : 'Link a site to load clients'}
+                </Text>
+              </View>
             </View>
-            <Pressable
-              hitSlop={10}
-              onPress={() => { setSearchOpen((o) => !o); if (searchOpen) setQuery(''); }}
-              style={styles.searchToggle}
-            >
-              <Ionicons
-                name={searchOpen ? 'close' : 'search'}
-                size={20}
-                color={searchOpen ? colors.accentPink : colors.textMuted}
-              />
-            </Pressable>
+
+            <View style={styles.headerActions}>
+              {selectionMode && selectedIds.size > 0 ? (
+                <Pressable
+                  hitSlop={10}
+                  onPress={openCompose}
+                  style={[styles.headerComposeBtn, !emailableCount && styles.headerComposeBtnMuted]}
+                >
+                  <Ionicons name="send" size={14} color="#fff" />
+                  <Text style={styles.headerComposeText}>Compose</Text>
+                </Pressable>
+              ) : null}
+              {!selectionMode && hasLinkedSite && clients.length > 0 ? (
+                <Pressable hitSlop={10} onPress={startContactFlow} style={styles.headerAction}>
+                  <Ionicons name="mail-outline" size={20} color={colors.accentPink} />
+                </Pressable>
+              ) : null}
+              {!selectionMode ? (
+                <Pressable
+                  hitSlop={10}
+                  onPress={() => { setSearchOpen((o) => !o); if (searchOpen) setQuery(''); }}
+                  style={styles.headerAction}
+                >
+                  <Ionicons
+                    name={searchOpen ? 'close' : 'search'}
+                    size={20}
+                    color={searchOpen ? colors.accentPink : colors.textMuted}
+                  />
+                </Pressable>
+              ) : null}
+            </View>
           </View>
 
-          {searchOpen && (
+          {searchOpen && !selectionMode && (
             <View style={styles.searchBar}>
               <Ionicons name="search" size={15} color={colors.textMuted} />
               <TextInput
@@ -162,13 +272,33 @@ export default function ClientListScreen({ navigation }: Props) {
                 <ClientRow
                   client={item}
                   privacyMode={privacyMode}
+                  selectionMode={selectionMode}
+                  selected={selectedIds.has(item.id)}
                   onPress={() => navigation.navigate('ClientDetail', { clientId: item.id })}
+                  onToggleSelect={() => toggleClient(item.id)}
+                  onLongPressSelect={() => {
+                    setSelectionMode(true);
+                    setSelectedIds(new Set([item.id]));
+                  }}
                 />
               </View>
             )}
           />
         )}
+
       </SafeAreaView>
+
+      <ClientContactSheet
+        visible={contactOpen}
+        clients={selectedClients}
+        businessLabel={businessLabel}
+        siteUrl={siteUrl}
+        onClose={() => setContactOpen(false)}
+        onSent={() => {
+          setContactOpen(false);
+          exitSelectionMode();
+        }}
+      />
     </View>
   );
 }
@@ -192,6 +322,38 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
   },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    flex: 1,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 6,
+  },
+  headerAction: {
+    padding: 4,
+  },
+  headerComposeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: colors.accentPink,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  headerComposeBtnMuted: {
+    opacity: 0.55,
+  },
+  headerComposeText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
+  },
   title: {
     color: colors.text,
     fontSize: 28,
@@ -202,10 +364,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 14,
     fontWeight: '500',
-  },
-  searchToggle: {
-    marginTop: 6,
-    padding: 4,
   },
   searchBar: {
     flexDirection: 'row',
@@ -229,8 +387,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingBottom: 120,
   },
-  // The card effect is split across header/footer/rows so the
-  // FlatList can still recycle rows while the card border wraps them all.
   cardTop: {
     backgroundColor: colors.card,
     borderTopLeftRadius: 20,
@@ -266,6 +422,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 13,
     gap: 12,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: colors.cardBorder,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
+  checkboxSelected: {
+    backgroundColor: colors.accentPink,
+    borderColor: colors.accentPink,
+  },
+  checkboxDisabled: {
+    opacity: 0.35,
   },
   avatar: {
     width: 42,

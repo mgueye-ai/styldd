@@ -24,3 +24,19 @@ major_version = 17
 [storage]
 enabled = true
 file_size_limit = "50MiB"
+
+# Public tenant booking site calls these with the anon key (no logged-in user).
+[functions.stripe-booking-pay]
+verify_jwt = false
+
+[functions.stripe-booking-confirm]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.booking-client-email]
+verify_jwt = false
+
+[functions.styld-push-notify]
+verify_jwt = false
