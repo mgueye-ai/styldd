@@ -391,7 +391,7 @@ function RecentBookingRow({
 export default function DashboardScreen({ navigation }: Props) {
   const [selectedPeriod, setSelectedPeriod] = useState<Period>('month');
   const [displayValue, setDisplayValue] = useState(MONTH_VALUE);
-  const [stripeSummary, setStripeSummary] = useState<StripeConnectSummary | null>(null);
+  const [stripeSummary, setStripeSummary] = useState<StripeConnectSummary | null | undefined>(undefined);
   const { privacyMode } = usePrivacyMode();
   const {
     notifications,
@@ -474,14 +474,21 @@ export default function DashboardScreen({ navigation }: Props) {
 
   useFocusEffect(
     useCallback(() => {
-      if (hasLinkedSite) {
-        void refresh({ silent: true });
-        fetchStripeConnectStatus()
-          .then((data) => setStripeSummary(data))
-          .catch(() => {});
-      }
+      if (hasLinkedSite) void refresh({ silent: true });
+      setStripeSummary(undefined);
+      fetchStripeConnectStatus()
+        .then((data) => setStripeSummary(data))
+        .catch(() => setStripeSummary(null));
     }, [hasLinkedSite, refresh]),
   );
+
+  const stripeReady = stripeSummary?.status === 'ready';
+  const stripeKnown = stripeSummary !== undefined;
+  const showRevenueAmount = stripeKnown && stripeReady;
+
+  const openStyldPaySetup = useCallback(() => {
+    navigation.getParent()?.navigate('Profile', { screen: 'Payments', params: { tab: 'payouts' } });
+  }, [navigation]);
 
   // Any time the revenue target changes (period switch or fresh data load), animate to it.
   useEffect(() => {
@@ -532,21 +539,33 @@ export default function DashboardScreen({ navigation }: Props) {
           <View style={styles.revenueSection}>
             <PeriodSelector selectedPeriod={selectedPeriod} onPeriodChange={switchPeriod} />
             <View style={styles.revenueAmountWrap}>
-              <Text style={styles.revenueAmount}>
-                {maskMoney(displayValue, privacyMode)}
-              </Text>
+              {!stripeKnown ? (
+                <SkeletonBox width={180} height={52} radius={12} />
+              ) : showRevenueAmount ? (
+                <Text style={styles.revenueAmount}>
+                  {maskMoney(displayValue, privacyMode)}
+                </Text>
+              ) : (
+                <Pressable onPress={hasLinkedSite ? openStyldPaySetup : undefined} hitSlop={8}>
+                  <Text style={styles.revenueSetupText}>
+                    {hasLinkedSite ? 'Set up Styld Pay' : 'Link your site'}
+                  </Text>
+                </Pressable>
+              )}
             </View>
-            {stripeSummary?.status === 'ready' ? (
+            {showRevenueAmount && stripeSummary ? (
               <Text style={styles.stripeBalanceLine}>
                 {privacyMode
                   ? '•••• available · •••• processing'
                   : `${formatUsdFromCents(stripeSummary.balanceAvailableCents)} available · ${formatUsdFromCents(stripeSummary.balancePendingCents)} processing`}
               </Text>
-            ) : (
+            ) : stripeKnown ? (
               <Text style={styles.stripeBalanceLine}>
-                {hasLinkedSite ? 'From your bookings' : 'Link your site to see earnings'}
+                {hasLinkedSite
+                  ? 'Profile → Form & Payments to collect payouts'
+                  : 'Link your site to see earnings'}
               </Text>
-            )}
+            ) : null}
           </View>
 
           {/* Today's vibe card */}
@@ -689,6 +708,10 @@ const styles = StyleSheet.create({
   revenueAmount: {
     color: colors.text, fontSize: 64, fontWeight: '700', fontFamily: fonts.number,
     letterSpacing: -2, textAlign: 'center', lineHeight: 68,
+  },
+  revenueSetupText: {
+    color: colors.text, fontSize: 28, fontWeight: '700',
+    textAlign: 'center', lineHeight: 34, letterSpacing: -0.5,
   },
   stripeBalanceLine: {
     fontSize: 13, color: colors.textMuted, textAlign: 'center', marginTop: 6,

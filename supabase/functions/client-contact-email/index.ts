@@ -131,8 +131,6 @@ function buildEmailHtml(
   },
 ): string {
   const { headline, paragraphs, ctaLabel, replyEmail } = opts;
-  const ctaGradient = `linear-gradient(135deg,${branding.primaryColor},${branding.secondaryColor})`;
-
   const bodyHtml = paragraphs
     .map(
       (p) =>
@@ -143,13 +141,13 @@ function buildEmailHtml(
   const siteLabel = branding.siteUrl.replace(/^https?:\/\//, '');
 
   const body = `<tr>
-      <td style="padding:28px 28px 8px;">
+      <td style="padding:28px 28px 8px;color:${branding.textColor};">
         <h2 style="margin:0 0 18px;color:${branding.textColor};font-family:${branding.headingFont};font-size:24px;font-weight:700;letter-spacing:-0.3px;">${esc(headline)}</h2>
         ${bodyHtml}
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 20px;">
           <tr>
-            <td style="border-radius:999px;background:${ctaGradient};">
-              <a href="${esc(branding.siteUrl)}" style="display:inline-block;padding:14px 28px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;letter-spacing:0.02em;">${esc(ctaLabel)}</a>
+            <td style="border-radius:999px;background:${branding.ctaGradient};">
+              <a href="${esc(branding.siteUrl)}" style="display:inline-block;padding:14px 28px;color:${branding.ctaTextColor};font-size:15px;font-weight:700;text-decoration:none;letter-spacing:0.02em;">${esc(ctaLabel)}</a>
             </td>
           </tr>
         </table>

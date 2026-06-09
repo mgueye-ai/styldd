@@ -21,11 +21,16 @@ import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-nat
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { PAYWALL_CONTENT } from '../data/paywallContent';
 import { getPlanPricing, type Plan } from '../lib/paywallPackages';
+import type { CustomerInfo } from 'react-native-purchases';
+import { useAuth } from '../context/AuthContext';
 import { usePurchases } from '../context/PurchasesContext';
 import { ProfileStackParamList } from '../navigation/ProfileNavigator';
 import { colors, fonts } from '../theme';
 
-type Props = NativeStackScreenProps<ProfileStackParamList, 'Paywall'>;
+type Props = NativeStackScreenProps<ProfileStackParamList, 'Paywall'> & {
+  mandatory?: boolean;
+  onSubscribed?: () => void | Promise<void>;
+};
 
 const HERO_IMAGE = require('../../assets/paywall-top.png');
 const BRAND_ICON = require('../../assets/icon.png');
@@ -171,26 +176,65 @@ function PaywallBackground() {
   );
 }
 
-export default function PaywallScreen({ navigation }: Props) {
+export default function PaywallScreen({ navigation, mandatory = false, onSubscribed }: Props) {
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const { user } = useAuth();
   const heroHeight = Math.round(Math.min(height * 0.28, 220)) + insets.top;
-  const { currentOffering, purchasePackage, restorePurchases, isReady, refresh, isConfigured } =
-    usePurchases();
+  const {
+    currentOffering,
+    purchasePackage,
+    restorePurchases,
+    isReady,
+    refresh,
+    isConfigured,
+    waitForEntitlement,
+    forceCheckSubscriptionStatus,
+  } = usePurchases();
   const content = PAYWALL_CONTENT;
   const [selectedPlan, setSelectedPlan] = useState<Plan>('yearly');
   const [busy, setBusy] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
+      let cancelled = false;
+      void (async () => {
+        const entitled = await forceCheckSubscriptionStatus();
+        if (cancelled || !entitled) return;
+        if (onSubscribed) {
+          await onSubscribed();
+        } else if (!mandatory) {
+          navigation.goBack();
+        }
+      })();
       void refresh();
-    }, [refresh]),
+      return () => {
+        cancelled = true;
+      };
+    }, [forceCheckSubscriptionStatus, onSubscribed, mandatory, navigation, refresh]),
   );
 
   const pricing = useMemo(
     () => getPlanPricing(currentOffering?.availablePackages ?? []),
     [currentOffering],
   );
+
+  async function completeAfterSubscription(seedInfo?: CustomerInfo | null) {
+    const entitled = await waitForEntitlement(6, seedInfo);
+    if (!entitled) {
+      Alert.alert(
+        'Almost there',
+        'Your payment went through, but we are still confirming your subscription. Wait a few seconds and tap Restore, or restart the app.',
+      );
+      return;
+    }
+
+    if (mandatory && onSubscribed) {
+      await onSubscribed();
+      return;
+    }
+    navigation.goBack();
+  }
 
   async function handlePurchase() {
     const pkg = selectedPlan === 'monthly' ? pricing.monthlyPkg : pricing.yearlyPkg;
@@ -204,21 +248,43 @@ export default function PaywallScreen({ navigation }: Props) {
       return;
     }
     setBusy(true);
-    const result = await purchasePackage(pkg);
-    setBusy(false);
-    if (result.error) {
-      Alert.alert('Purchase failed', result.error);
-      return;
+    try {
+      const result = await purchasePackage(pkg, user?.id);
+      if (result.error) {
+        Alert.alert('Purchase failed', result.error);
+        return;
+      }
+      if (!result.entitled && !result.customerInfo) {
+        return;
+      }
+      await completeAfterSubscription(result.customerInfo);
+    } finally {
+      setBusy(false);
     }
-    navigation.goBack();
   }
 
   async function handleRestore() {
     setBusy(true);
-    const result = await restorePurchases();
-    setBusy(false);
-    if (result.error) Alert.alert('Restore failed', result.error);
-    else Alert.alert('Restored', 'Your purchases have been restored.');
+    try {
+      const result = await restorePurchases(user?.id);
+      if (result.error) {
+        Alert.alert('Restore failed', result.error);
+        return;
+      }
+      const entitled = result.entitled || (await waitForEntitlement(20, result.customerInfo));
+      if (!entitled) {
+        Alert.alert('No subscription found', 'We could not find an active Styld subscription on this account.');
+        return;
+      }
+      if (mandatory) {
+        await completeAfterSubscription(result.customerInfo);
+        return;
+      }
+      Alert.alert('Restored', 'Your purchases have been restored.');
+      navigation.goBack();
+    } finally {
+      setBusy(false);
+    }
   }
 
   const featurePairs = [
@@ -252,13 +318,15 @@ export default function PaywallScreen({ navigation }: Props) {
             <Image source={BRAND_ICON} style={styles.brandIcon} resizeMode="cover" />
             <Text style={styles.brandName}>Styld</Text>
           </View>
-          <Pressable
-            style={[styles.closeBtn, { top: insets.top + 8 }]}
-            onPress={() => navigation.goBack()}
-            hitSlop={12}
-          >
-            <Ionicons name="close" size={16} color={colors.textMuted} />
-          </Pressable>
+          {!mandatory ? (
+            <Pressable
+              style={[styles.closeBtn, { top: insets.top + 8 }]}
+              onPress={() => navigation.goBack()}
+              hitSlop={12}
+            >
+              <Ionicons name="close" size={16} color={colors.textMuted} />
+            </Pressable>
+          ) : null}
         </View>
 
         <View style={styles.body}>

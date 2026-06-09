@@ -23,7 +23,10 @@ import SitePreviewWebView from '../components/site/SitePreviewWebView';
 import { useServiceCatalog } from '../context/ServiceCatalogContext';
 import { useSiteContent } from '../context/SiteContentContext';
 import { useSiteTheme } from '../context/SiteThemeContext';
+import { useAppAccess } from '../context/AppAccessContext';
+import { useAuth } from '../context/AuthContext';
 import { useOnboarding } from '../context/OnboardingContext';
+import { usePurchases } from '../context/PurchasesContext';
 import { formatStylePrice } from '../data/siteStyles';
 import { LOCATION_PARTS, LocationPart, SITE_SECTIONS, SiteSection } from '../data/siteContent';
 import { DEFAULT_STYLE_DURATION_MINUTES, formatStyleDuration } from '../data/siteStyles';
@@ -223,9 +226,20 @@ function LocationPartCard({
 }
 
 export default function SiteEditorScreen({ navigation }: Props) {
-  const { content, updateContent, isSaving } = useSiteContent();
-  const { sitePublish, publishSite, saveDraftSubdomain } = useOnboarding();
-  const { theme, updateTheme, heroImageUrl, logoImageUrl, stackImageUrls, isSaving: isSavingTheme } = useSiteTheme();
+  const { content, updateContent, isSaving, saveContentNow } = useSiteContent();
+  const { user } = useAuth();
+  const { isBuildSiteOnly } = useAppAccess();
+  const { isConfigured, isSubscriptionReady, forceCheckSubscriptionStatus } = usePurchases();
+  const { sitePublish, publishSite } = useOnboarding();
+  const {
+    theme,
+    updateTheme,
+    heroImageUrl,
+    logoImageUrl,
+    stackImageUrls,
+    isSaving: isSavingTheme,
+    saveThemeNow,
+  } = useSiteTheme();
   const { catalogServices, getCoverUrl, getPrice, getStyleMeta, isSaving: isSavingStyles, refresh } =
     useServiceCatalog();
   const [tab, setTab] = useState<EditorTab>('style');
@@ -242,14 +256,19 @@ export default function SiteEditorScreen({ navigation }: Props) {
 
   // ── Publish state ──
   const rootDomain = getSiteRootDomain();
-  const [subdomain, setSubdomain] = useState(sitePublish.subdomain || '');
+  const [subdomain, setSubdomain] = useState('');
   const [publishAvailable, setPublishAvailable] = useState<boolean | null>(null);
   const [publishStatus, setPublishStatus] = useState<string | null>(null);
   const [publishStep, setPublishStep] = useState<PublishStep>('idle');
   const [publishError, setPublishError] = useState<string | null>(null);
   const [subdomainAlts, setSubdomainAlts] = useState<string[]>([]);
-  const [autoSaved, setAutoSaved] = useState(false);
   const isAlreadyLive = sitePublish.published && sitePublish.publicUrl;
+
+  useEffect(() => {
+    if (isAlreadyLive && sitePublish.subdomain) {
+      setSubdomain(sitePublish.subdomain);
+    }
+  }, [isAlreadyLive, sitePublish.subdomain]);
 
   // ── Animations ──
   const tabAnim = useRef(new Animated.Value(1)).current;
@@ -276,30 +295,30 @@ export default function SiteEditorScreen({ navigation }: Props) {
 
   useEffect(() => {
     const slug = normalizeSubdomain(subdomain);
-    setAutoSaved(false);
     setSubdomainAlts([]);
     statusAnim.setValue(0);
     altsAnim.setValue(0);
-    if (slug.length < 2) { setPublishAvailable(null); setPublishStatus(null); return; }
-    // If user typed back their own current domain, treat it as available immediately
+    if (slug.length < 2) {
+      setPublishAvailable(null);
+      setPublishStatus(null);
+      return;
+    }
     const currentSlug = normalizeSubdomain(sitePublish.subdomain || '');
-    if (slug === currentSlug) {
+    if (isAlreadyLive && slug === currentSlug) {
       setPublishAvailable(true);
       setPublishStatus('Your current domain');
       setSubdomainAlts([]);
       Animated.timing(statusAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
-      saveDraftSubdomain(slug).then(() => setAutoSaved(true)).catch(() => {});
       return;
     }
     const timer = setTimeout(async () => {
       try {
-        const result = await checkSubdomainAvailability(slug, '');
+        const result = await checkSubdomainAvailability(slug, user?.id ?? '');
         setPublishAvailable(result.available);
         if (result.available) {
-          setPublishStatus('Available — saved');
+          setPublishStatus('Available');
           setSubdomainAlts([]);
           Animated.timing(statusAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
-          saveDraftSubdomain(slug).then(() => setAutoSaved(true)).catch(() => {});
         } else {
           setPublishStatus(result.reason ?? 'Already taken');
           const alts = generateAlternatives(slug);
@@ -307,22 +326,53 @@ export default function SiteEditorScreen({ navigation }: Props) {
           Animated.timing(statusAnim, { toValue: 1, duration: 200, useNativeDriver: true }).start();
           Animated.timing(altsAnim, { toValue: 1, duration: 250, delay: 80, useNativeDriver: true }).start();
         }
-      } catch { setPublishAvailable(null); setPublishStatus(null); }
+      } catch {
+        setPublishAvailable(null);
+        setPublishStatus(null);
+      }
     }, 500);
     return () => clearTimeout(timer);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subdomain]);
+  }, [subdomain, isAlreadyLive, sitePublish.subdomain, user?.id]);
 
-  const handlePublish = async () => {
+  const runPublish = async (slug: string) => {
     setPublishStep('publishing');
     setPublishError(null);
     try {
-      await publishSite(subdomain);
+      await Promise.all([saveContentNow(content), saveThemeNow()]);
+      await publishSite(slug);
       setPublishStep('success');
     } catch (err) {
       setPublishError(err instanceof Error ? err.message : 'Publish failed.');
       setPublishStep('error');
     }
+  };
+
+  const handlePublish = async () => {
+    const slug = normalizeSubdomain(subdomain);
+
+    if (!isAlreadyLive) {
+      if (slug.length < 2) {
+        setTab('publish');
+        setPublishError('Choose your domain on the Publish tab first.');
+        setPublishStep('error');
+        return;
+      }
+      if (publishAvailable === false) {
+        setTab('publish');
+        setPublishError(publishStatus ?? 'That domain is not available.');
+        setPublishStep('error');
+        return;
+      }
+      if (isConfigured && isSubscriptionReady) {
+        const entitled = await forceCheckSubscriptionStatus();
+        if (!entitled) {
+          navigation.navigate('MandatoryPaywall', { pendingSubdomain: slug });
+          return;
+        }
+      }
+    }
+
+    await runPublish(slug);
   };
 
   const canPublish =
@@ -418,12 +468,13 @@ export default function SiteEditorScreen({ navigation }: Props) {
     <SafeAreaView style={styles.container} edges={['top']}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Ionicons name="chevron-back" size={22} color={colors.text} />
-        </Pressable>
+        {!isBuildSiteOnly ? (
+          <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="chevron-back" size={22} color={colors.text} />
+          </Pressable>
+        ) : (
+          <View style={styles.backButton} />
+        )}
         <Text style={styles.headerTitle}>Edit site</Text>
         <View style={styles.headerRight}>
           {isSavingAny ? (
@@ -762,12 +813,8 @@ export default function SiteEditorScreen({ navigation }: Props) {
             )}
             <Text style={styles.publishHint}>
               {isAlreadyLive
-                ? autoSaved
-                  ? 'Domain saved — takes effect on next publish.'
-                  : 'Changing domain takes effect on next publish.'
-                : autoSaved
-                  ? 'Domain saved — tap Publish to go live.'
-                  : 'Your public booking link.'}
+                ? 'Changing domain takes effect on your next publish.'
+                : 'Pick a domain when you are ready — it is saved when you publish.'}
             </Text>
           </View>
         ) : null}

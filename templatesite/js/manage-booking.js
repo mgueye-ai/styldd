@@ -82,73 +82,17 @@
 
   function applyTheme(site) {
     var content = site.content || {};
-    var theme = site.theme || {};
-    var cfg = window.__STYLD_TENANT__ || {};
-    var root = document.documentElement;
-
     state.salonTimeZone = content.timezone || null;
 
-    if (content.brandName && els.brandName) {
-      els.brandName.textContent = content.brandName;
-      document.title = (content.brandName || 'Your appointment') + ' | Your appointment';
+    if (window.StyldTenant && typeof window.StyldTenant.applySiteTheme === 'function') {
+      window.StyldTenant.applySiteTheme(site.theme);
     }
-
-    if (els.logo && theme.logoImagePath && cfg.supabaseUrl) {
-      var logoUrl =
-        cfg.supabaseUrl.replace(/\/$/, '') +
-        '/storage/v1/object/public/style-covers/' +
-        String(theme.logoImagePath).replace(/^\/+/, '');
-      els.logo.style.backgroundImage = 'url("' + logoUrl + '")';
-      els.logo.style.backgroundSize = 'cover';
-      els.logo.style.backgroundPosition = 'center';
-    }
-
-    var primary = theme.primaryColor || '#db2777';
-    var secondary = theme.secondaryColor || '#0a0a0a';
-    root.style.setProperty('--pink', primary);
-    root.style.setProperty('--pink-dark', primary);
-    root.style.setProperty('--ink', secondary);
-    root.style.setProperty('--nav-text', secondary);
-
-    var navBg = (theme.navbarColor || '').trim();
-    if (navBg && /^#[0-9a-fA-F]{6}$/.test(navBg)) {
-      root.style.setProperty('--nav-bg', navBg);
-      root.style.setProperty('--nav-bg-solid', navBg);
-    }
-
-    var bg = (theme.backgroundColor || '').trim();
-    if (bg && /^#[0-9a-fA-F]{6}$/.test(bg)) {
-      root.style.setProperty('--cream', bg);
-      root.style.setProperty('--white', bg);
-      document.body.style.backgroundColor = bg;
-    }
-
-    var fontDisplayMap = {
-      cormorant: '"Cormorant Garamond", Georgia, serif',
-      playfair: '"Playfair Display", Georgia, serif',
-      lora: '"Lora", Georgia, serif',
-      inter: 'Inter, system-ui, sans-serif',
-      'dm-sans': '"DM Sans", system-ui, sans-serif',
-      poppins: 'Poppins, system-ui, sans-serif',
-      nunito: '"Nunito", system-ui, sans-serif',
-      montserrat: 'Montserrat, system-ui, sans-serif',
-    };
-    var fontBodyMap = {
-      cormorant: '"Source Sans 3", system-ui, sans-serif',
-      playfair: '"Source Sans 3", system-ui, sans-serif',
-      lora: '"Source Sans 3", system-ui, sans-serif',
-      inter: 'Inter, system-ui, sans-serif',
-      'dm-sans': '"DM Sans", system-ui, sans-serif',
-      poppins: 'Poppins, system-ui, sans-serif',
-      nunito: '"Nunito", system-ui, sans-serif',
-      montserrat: 'Montserrat, system-ui, sans-serif',
-    };
-    var fontId = theme.fontFamily || 'cormorant';
-    root.style.setProperty('--font-display', fontDisplayMap[fontId] || fontDisplayMap.cormorant);
-    root.style.setProperty('--font-body', fontBodyMap[fontId] || fontBodyMap.cormorant);
-
-    if (window.StyldTenant && window.StyldTenant.applySiteFooter) {
-      window.StyldTenant.applySiteFooter(content);
+    if (window.StyldTenant && typeof window.StyldTenant.applyPageBranding === 'function') {
+      window.StyldTenant.applyPageBranding(site, {
+        documentTitleSuffix: 'Your appointment',
+        brandNameEl: els.brandName,
+        logoEl: els.logo,
+      });
     }
   }
 

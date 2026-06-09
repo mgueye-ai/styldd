@@ -10,6 +10,7 @@ import {
   fetchStripeConnectStatus,
   formatUsdFromCents,
   requestStripeConnectPayout,
+  resolveStripeConnectUrl,
   startStripeConnectOnboarding,
   syncStripeConnect,
   type StripeConnectSummary,
@@ -79,11 +80,9 @@ export default function WalletBalanceSection({ onSummaryChange, showOnlyWhenActi
     setBusy(true);
     try {
       const result = await startStripeConnectOnboarding();
-      if ('alreadyOnboarded' in result && result.alreadyOnboarded) {
-        setConnectUrl(result.dashboardUrl);
-      } else {
-        setConnectUrl(result.onboardingUrl);
-      }
+      const url = resolveStripeConnectUrl(result);
+      if (!url) throw new Error('Could not open Stripe Connect');
+      setConnectUrl(url);
     } catch (err) {
       Alert.alert('Setup failed', err instanceof Error ? err.message : 'Try again');
     } finally {
@@ -214,14 +213,20 @@ export default function WalletBalanceSection({ onSummaryChange, showOnlyWhenActi
               }
             </Pressable>
           </View>
-        ) : needsOnboarding ? (
-          <Pressable style={[styles.actionBtn, busy && styles.btnDisabled]} disabled={busy} onPress={() => void handleSetupPayments()}>
-            {busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.actionBtnText}>Set up Styld Pay</Text>}
-          </Pressable>
-        ) : isPending ? (
-          <Pressable style={[styles.actionBtn, styles.actionBtnMuted, busy && styles.btnDisabled]} disabled={busy} onPress={() => void handleSyncAfterOnboarding()}>
-            {busy ? <ActivityIndicator color="#fff" size="small" /> : <Text style={[styles.actionBtnText, { color: colors.textMuted }]}>Check status</Text>}
-          </Pressable>
+        ) : !isReady ? (
+          <View style={styles.pendingActions}>
+            <Pressable style={[styles.actionBtn, busy && styles.btnDisabled]} disabled={busy} onPress={() => void handleSetupPayments()}>
+              {busy
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={styles.actionBtnText}>{summary?.hasAccount ? 'Continue in Stripe' : 'Set up Styld Pay'}</Text>
+              }
+            </Pressable>
+            {isPending && (
+              <Pressable style={styles.statusLink} disabled={busy} onPress={() => void handleSyncAfterOnboarding()}>
+                <Text style={styles.statusLinkText}>Refresh status</Text>
+              </Pressable>
+            )}
+          </View>
         ) : null}
       </View>
 
@@ -328,6 +333,9 @@ const styles = StyleSheet.create({
   },
   actionBtnMuted: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.cardBorder },
   actionBtnText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+  pendingActions: { alignItems: 'center', gap: 6 },
+  statusLink: { paddingVertical: 6, paddingHorizontal: 10 },
+  statusLinkText: { color: colors.accentPink, fontSize: 13, fontWeight: '600' },
   btnDisabled: { opacity: 0.45 },
 
   emptyText: { fontSize: 13, color: colors.textMuted, lineHeight: 19 },

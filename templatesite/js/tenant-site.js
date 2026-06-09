@@ -99,7 +99,9 @@
       var rows = results[0];
       var row = rows && rows[0];
       if (!row || !row.published_at) {
-        throw new Error('This site has not been published yet.');
+        throw new Error(
+          'This site is temporarily offline. The owner needs an active Styld subscription to keep their booking site live.',
+        );
       }
       return rest(
         'styld_site_records?user_id=eq.' +

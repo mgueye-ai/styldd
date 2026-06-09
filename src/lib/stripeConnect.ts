@@ -45,7 +45,20 @@ export type StripeConnectSummary = {
 
 export type StripeOnboardResult =
   | { alreadyOnboarded: true; dashboardUrl: string }
-  | { alreadyOnboarded?: false; onboardingUrl: string; accountId: string };
+  | {
+      alreadyOnboarded?: false;
+      onboardingUrl: string;
+      dashboardUrl?: string;
+      accountId: string;
+    };
+
+/** URL to open in the in-app Stripe Connect WebView. */
+export function resolveStripeConnectUrl(result: StripeOnboardResult): string {
+  if ('alreadyOnboarded' in result && result.alreadyOnboarded) {
+    return result.dashboardUrl;
+  }
+  return result.onboardingUrl || result.dashboardUrl || '';
+}
 
 async function readFunctionError(error: unknown): Promise<string | null> {
   if (!(error instanceof FunctionsHttpError)) return null;

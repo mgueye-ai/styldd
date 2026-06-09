@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -18,7 +18,7 @@ import {
   View,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
-import BusinessScreenLayout, { BusinessSection } from '../../components/business/BusinessScreenLayout';
+import BusinessScreenLayout from '../../components/business/BusinessScreenLayout';
 import { useServiceCatalog } from '../../context/ServiceCatalogContext';
 import { useSiteData } from '../../context/SiteDataContext';
 import {
@@ -38,7 +38,6 @@ import {
   computeBalanceDue,
   computeDepositAmount,
 } from '../../data/bookingPayment';
-import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
 import {
   loadBookingPayment,
   loadCancellationPolicy,
@@ -49,6 +48,7 @@ import {
   fetchStripeConnectStatus,
   formatUsdFromCents,
   requestStripeConnectPayout,
+  resolveStripeConnectUrl,
   startStripeConnectOnboarding,
   syncStripeConnect,
   type StripeConnectSummary,
@@ -146,6 +146,111 @@ const PAYMENT_MODES: { id: BookingPaymentMode; label: string; subtitle: string; 
 ];
 
 const DEPOSIT_PRESETS_PERCENT = [10, 20, 25, 50];
+
+type FormSectionId = 'payments' | 'form' | 'policy' | 'preview';
+
+function paymentModeLabel(mode: BookingPaymentMode) {
+  return PAYMENT_MODES.find((item) => item.id === mode)?.label ?? 'Payment';
+}
+
+function formFieldsSummary(payment: BookingPaymentSettings) {
+  const required = [
+    payment.requireCurrentHairPhoto && 'Hair photo',
+    payment.requireReferencePhoto && 'Reference photo',
+  ].filter(Boolean) as string[];
+  if (required.length === 0) return 'No photos required';
+  return required.join(' · ');
+}
+
+function policyPresetLabel(policy: CancellationPolicySettings) {
+  if (policy.preset === 'custom') return 'Custom policy';
+  return CANCELLATION_POLICY_PRESETS.find((item) => item.id === policy.preset)?.label ?? 'Policy';
+}
+
+function FormOverviewNav({
+  payment,
+  cancellationPolicy,
+  previewDueNow,
+  onJump,
+}: {
+  payment: BookingPaymentSettings;
+  cancellationPolicy: CancellationPolicySettings;
+  previewDueNow: number;
+  onJump: (id: FormSectionId) => void;
+}) {
+  const items: { id: FormSectionId; icon: string; label: string; value: string }[] = [
+    { id: 'payments', icon: 'card-outline', label: 'Payments', value: paymentModeLabel(payment.mode) },
+    { id: 'form', icon: 'images-outline', label: 'Form fields', value: formFieldsSummary(payment) },
+    { id: 'policy', icon: 'shield-checkmark-outline', label: 'Cancellation', value: policyPresetLabel(cancellationPolicy) },
+    {
+      id: 'preview',
+      icon: 'eye-outline',
+      label: 'Preview',
+      value: payment.mode === 'in_person' ? 'Free to book' : `${formatMoney(previewDueNow)} due now`,
+    },
+  ];
+
+  return (
+    <View style={bStyles.overviewGrid}>
+      {items.map((item) => (
+        <Pressable
+          key={item.id}
+          style={({ pressed }) => [bStyles.overviewCard, pressed && bStyles.overviewCardPressed]}
+          onPress={() => onJump(item.id)}
+        >
+          <View style={bStyles.overviewIconWrap}>
+            <Ionicons name={item.icon as any} size={16} color={colors.accentPink} />
+          </View>
+          <Text style={bStyles.overviewLabel}>{item.label}</Text>
+          <Text style={bStyles.overviewValue} numberOfLines={2}>{item.value}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+function FormGroup({
+  id,
+  icon,
+  title,
+  description,
+  onSectionLayout,
+  children,
+}: {
+  id: FormSectionId;
+  icon: string;
+  title: string;
+  description: string;
+  onSectionLayout: (id: FormSectionId, y: number) => void;
+  children: ReactNode;
+}) {
+  return (
+    <View
+      style={bStyles.groupCard}
+      onLayout={(e) => onSectionLayout(id, e.nativeEvent.layout.y)}
+    >
+      <View style={bStyles.groupHeader}>
+        <View style={bStyles.groupIconWrap}>
+          <Ionicons name={icon as any} size={18} color={colors.accentPink} />
+        </View>
+        <View style={bStyles.groupHeaderText}>
+          <Text style={bStyles.groupTitle}>{title}</Text>
+          <Text style={bStyles.groupDesc}>{description}</Text>
+        </View>
+      </View>
+      {children}
+    </View>
+  );
+}
+
+function SubsectionTitle({ title, lead }: { title: string; lead?: string }) {
+  return (
+    <View style={bStyles.subsectionHead}>
+      <Text style={bStyles.subsectionTitle}>{title}</Text>
+      {lead ? <Text style={bStyles.subsectionLead}>{lead}</Text> : null}
+    </View>
+  );
+}
 
 function computePreview(payment: BookingPaymentSettings, total: number) {
   const t = Math.max(0, total);
@@ -291,6 +396,19 @@ function BookingTab({ onGoToPayouts }: { onGoToPayouts: () => void }) {
     [payment, previewService.price],
   );
 
+  const scrollRef = useRef<ScrollView>(null);
+  const sectionOffsets = useRef<Partial<Record<FormSectionId, number>>>({});
+
+  const handleSectionLayout = useCallback((id: FormSectionId, y: number) => {
+    sectionOffsets.current[id] = y;
+  }, []);
+
+  const jumpToSection = useCallback((id: FormSectionId) => {
+    const y = sectionOffsets.current[id];
+    if (y == null) return;
+    scrollRef.current?.scrollTo({ y: Math.max(0, y - 8), animated: true });
+  }, []);
+
   if (!hasLinkedSite) {
     return (
       <View style={bStyles.emptyWrap}>
@@ -303,13 +421,30 @@ function BookingTab({ onGoToPayouts }: { onGoToPayouts: () => void }) {
   if (error) return <Text style={bStyles.errorText}>{error}</Text>;
 
   return (
-    <ScrollView contentContainerStyle={bStyles.content} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      ref={scrollRef}
+      contentContainerStyle={bStyles.content}
+      showsVerticalScrollIndicator={false}
+    >
       <Text style={bStyles.screenIntro}>
-        Set up how clients pay, your cancellation rules, and what they upload when booking.
+        Tap a section below to jump there, or scroll through payments, form fields, policies, and preview.
       </Text>
 
-      <BusinessSection title="How clients pay">
-        <Text style={bStyles.lead}>Choose when clients pay — you can change this anytime.</Text>
+      <FormOverviewNav
+        payment={payment}
+        cancellationPolicy={cancellationPolicy}
+        previewDueNow={preview.dueNow}
+        onJump={jumpToSection}
+      />
+
+      <FormGroup
+        id="payments"
+        icon="card-outline"
+        title="Payments"
+        description="When clients pay and how much is due online"
+        onSectionLayout={handleSectionLayout}
+      >
+        <SubsectionTitle title="Payment method" lead="Choose when clients pay — you can change this anytime." />
         {!stripeReady && (
           <View style={bStyles.gateBanner}>
             <Ionicons name="card-outline" size={16} color={colors.accentPink} />
@@ -352,166 +487,90 @@ function BookingTab({ onGoToPayouts }: { onGoToPayouts: () => void }) {
             </Pressable>
           );
         })}
-      </BusinessSection>
 
-      {payment.mode === 'deposit' && (
-        <BusinessSection title="Deposit amount">
-          <Text style={bStyles.depositKindLead}>How does the deposit work?</Text>
-          <View style={bStyles.segmented}>
-            {(
-              [
-                { included: true, label: 'Part of price', subtitle: 'Counts toward the service total' },
-                { included: false, label: 'Additional hold', subtitle: 'On top of the full service price' },
-              ] as const
-            ).map((option) => {
-              const active = payment.depositIncludedInPrice === option.included;
-              return (
-                <Pressable
-                  key={option.label}
-                  style={[bStyles.segment, bStyles.segmentTall, active && bStyles.segmentActive]}
-                  onPress={() => updatePayment({ ...payment, depositIncludedInPrice: option.included })}
-                >
-                  <Text style={[bStyles.segmentText, active && bStyles.segmentTextActive]}>{option.label}</Text>
-                  <Text style={[bStyles.segmentSubtext, active && bStyles.segmentSubtextActive]}>
-                    {option.subtitle}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          <View style={bStyles.segmented}>
-            {(['percent', 'fixed'] as DepositKind[]).map((kind) => {
-              const active = payment.depositKind === kind;
-              return (
-                <Pressable
-                  key={kind}
-                  style={[bStyles.segment, active && bStyles.segmentActive]}
-                  onPress={() => updatePayment({ ...payment, depositKind: kind })}
-                >
-                  <Text style={[bStyles.segmentText, active && bStyles.segmentTextActive]}>
-                    {kind === 'percent' ? 'Percentage' : 'Fixed amount'}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-          {payment.depositKind === 'percent' && (
-            <View style={bStyles.presetRow}>
-              {DEPOSIT_PRESETS_PERCENT.map((pct) => {
-                const active = payment.depositValue === pct;
+        {payment.mode === 'deposit' && (
+          <View style={bStyles.innerBlock}>
+            <SubsectionTitle title="Deposit amount" lead="How much clients pay when they book." />
+            <Text style={bStyles.depositKindLead}>How does the deposit work?</Text>
+            <View style={bStyles.segmented}>
+              {(
+                [
+                  { included: true, label: 'Part of price', subtitle: 'Counts toward the service total' },
+                  { included: false, label: 'Additional hold', subtitle: 'On top of the full service price' },
+                ] as const
+              ).map((option) => {
+                const active = payment.depositIncludedInPrice === option.included;
                 return (
                   <Pressable
-                    key={pct}
-                    style={[bStyles.presetChip, active && bStyles.presetChipActive]}
-                    onPress={() => updatePayment({ ...payment, depositValue: pct })}
+                    key={option.label}
+                    style={[bStyles.segment, bStyles.segmentTall, active && bStyles.segmentActive]}
+                    onPress={() => updatePayment({ ...payment, depositIncludedInPrice: option.included })}
                   >
-                    <Text style={[bStyles.presetText, active && bStyles.presetTextActive]}>{pct}%</Text>
+                    <Text style={[bStyles.segmentText, active && bStyles.segmentTextActive]}>{option.label}</Text>
+                    <Text style={[bStyles.segmentSubtext, active && bStyles.segmentSubtextActive]}>
+                      {option.subtitle}
+                    </Text>
                   </Pressable>
                 );
               })}
             </View>
-          )}
-          <View style={bStyles.amountRow}>
-            {payment.depositKind === 'fixed' && <Text style={bStyles.amountPrefix}>$</Text>}
-            <TextInput
-              style={bStyles.amountInput}
-              keyboardType="number-pad"
-              value={String(payment.depositValue)}
-              onChangeText={(t) => {
-                const n = Number(t.replace(/[^\d]/g, ''));
-                if (Number.isFinite(n)) updatePayment({ ...payment, depositValue: n });
-              }}
-            />
-            {payment.depositKind === 'percent' && <Text style={bStyles.amountSuffix}>%</Text>}
-          </View>
-        </BusinessSection>
-      )}
-
-      <BusinessSection title="What clients see">
-        <Text style={bStyles.lead}>Preview of pricing on your booking page for a sample service.</Text>
-        <View style={bStyles.previewCard}>
-          <Image source={APP_ICON} style={bStyles.previewImg} resizeMode="cover" />
-          <View style={bStyles.previewBody}>
-            <Text style={bStyles.previewTitle}>{previewService.title}</Text>
-            <View style={bStyles.previewMid}>
-              <Text style={bStyles.previewMeta}>ESTIMATE</Text>
-              <Text style={bStyles.previewPrice}>{formatMoney(previewService.price)}</Text>
+            <View style={bStyles.segmented}>
+              {(['percent', 'fixed'] as DepositKind[]).map((kind) => {
+                const active = payment.depositKind === kind;
+                return (
+                  <Pressable
+                    key={kind}
+                    style={[bStyles.segment, active && bStyles.segmentActive]}
+                    onPress={() => updatePayment({ ...payment, depositKind: kind })}
+                  >
+                    <Text style={[bStyles.segmentText, active && bStyles.segmentTextActive]}>
+                      {kind === 'percent' ? 'Percentage' : 'Fixed amount'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
             </View>
-            <View style={bStyles.previewPayRow}>
-              <Text style={bStyles.previewPayLabel}>{preview.dueNowLabel}</Text>
-              <Text style={bStyles.previewPayAccent}>{formatMoney(preview.dueNow)}</Text>
-            </View>
-            {preview.dueLater > 0 && (
-              <View style={bStyles.previewPayRow}>
-                <Text style={bStyles.previewPayLabel}>{preview.dueLaterLabel}</Text>
-                <Text style={bStyles.previewPayValue}>{formatMoney(preview.dueLater)}</Text>
+            {payment.depositKind === 'percent' && (
+              <View style={bStyles.presetRow}>
+                {DEPOSIT_PRESETS_PERCENT.map((pct) => {
+                  const active = payment.depositValue === pct;
+                  return (
+                    <Pressable
+                      key={pct}
+                      style={[bStyles.presetChip, active && bStyles.presetChipActive]}
+                      onPress={() => updatePayment({ ...payment, depositValue: pct })}
+                    >
+                      <Text style={[bStyles.presetText, active && bStyles.presetTextActive]}>{pct}%</Text>
+                    </Pressable>
+                  );
+                })}
               </View>
             )}
+            <View style={bStyles.amountRow}>
+              {payment.depositKind === 'fixed' && <Text style={bStyles.amountPrefix}>$</Text>}
+              <TextInput
+                style={bStyles.amountInput}
+                keyboardType="number-pad"
+                value={String(payment.depositValue)}
+                onChangeText={(t) => {
+                  const n = Number(t.replace(/[^\d]/g, ''));
+                  if (Number.isFinite(n)) updatePayment({ ...payment, depositValue: n });
+                }}
+              />
+              {payment.depositKind === 'percent' && <Text style={bStyles.amountSuffix}>%</Text>}
+            </View>
           </View>
-        </View>
-      </BusinessSection>
+        )}
+      </FormGroup>
 
-      <BusinessSection title="Cancellation & refunds">
-        <Text style={bStyles.lead}>
-          Clients can cancel online anytime before the appointment. Refunds depend on your notice
-          window and whether they paid a deposit, full price, or both.
-        </Text>
-        {CANCELLATION_POLICY_PRESETS.map((preset) => {
-          const selected = cancellationPolicy.preset === preset.id;
-          return (
-            <Pressable
-              key={preset.id}
-              style={bStyles.modeCard}
-              onPress={() => handlePresetPress(preset.id)}
-            >
-              <View style={bStyles.modeBody}>
-                <Text style={bStyles.modeTitle}>{preset.label}</Text>
-                <Text style={bStyles.modeSub}>{preset.description}</Text>
-              </View>
-              <View style={[bStyles.check, selected && bStyles.checkSelected]}>
-                {selected ? <Ionicons name="checkmark" size={16} color={colors.background} /> : null}
-              </View>
-            </Pressable>
-          );
-        })}
-        <Text style={bStyles.policyFieldLabel}>Refunds apply to</Text>
-        {REFUND_APPLIES_TO_OPTIONS.map((option) => {
-          const selected = cancellationPolicy.refundAppliesTo === option.id;
-          return (
-            <Pressable
-              key={option.id}
-              style={bStyles.modeCard}
-              onPress={() => handleRefundScopePress(option.id)}
-            >
-              <View style={bStyles.modeBody}>
-                <Text style={bStyles.modeTitle}>{option.label}</Text>
-                <Text style={bStyles.modeSub}>{option.description}</Text>
-              </View>
-              <View style={[bStyles.check, selected && bStyles.checkSelected]}>
-                {selected ? <Ionicons name="checkmark" size={16} color={colors.background} /> : null}
-              </View>
-            </Pressable>
-          );
-        })}
-        <Text style={bStyles.policyFieldLabel}>Policy text (shown at checkout)</Text>
-        <TextInput
-          style={bStyles.policySummaryInput}
-          multiline
-          value={cancellationPolicy.policySummary}
-          onChangeText={(text) =>
-            updateCancellationPolicy({
-              ...cancellationPolicy,
-              preset: 'custom',
-              policySummary: text,
-            })
-          }
-          placeholder="Describe your cancellation and refund rules…"
-          placeholderTextColor={colors.textMuted}
-        />
-      </BusinessSection>
-
-      <BusinessSection title="What clients upload">
-        <Text style={bStyles.lead}>Choose which photos clients must add on the booking form.</Text>
+      <FormGroup
+        id="form"
+        icon="images-outline"
+        title="Form fields"
+        description="Photos and info clients add when booking"
+        onSectionLayout={handleSectionLayout}
+      >
+        <SubsectionTitle title="Required photos" lead="Choose which photos clients must upload on the booking form." />
         <Pressable
           style={bStyles.toggleRow}
           onPress={() => updatePayment({ ...payment, requireCurrentHairPhoto: !payment.requireCurrentHairPhoto })}
@@ -536,7 +595,108 @@ function BookingTab({ onGoToPayouts }: { onGoToPayouts: () => void }) {
             {payment.requireReferencePhoto ? <Ionicons name="checkmark" size={14} color="#fff" /> : null}
           </View>
         </Pressable>
-      </BusinessSection>
+      </FormGroup>
+
+      <FormGroup
+        id="policy"
+        icon="shield-checkmark-outline"
+        title="Cancellation"
+        description="Refund rules when clients cancel online"
+        onSectionLayout={handleSectionLayout}
+      >
+        <SubsectionTitle
+          title="Refund window"
+          lead="Clients can cancel anytime before the appointment. Refunds depend on how far in advance they cancel."
+        />
+        {CANCELLATION_POLICY_PRESETS.map((preset) => {
+          const selected = cancellationPolicy.preset === preset.id;
+          return (
+            <Pressable
+              key={preset.id}
+              style={bStyles.modeCard}
+              onPress={() => handlePresetPress(preset.id)}
+            >
+              <View style={bStyles.modeBody}>
+                <Text style={bStyles.modeTitle}>{preset.label}</Text>
+                <Text style={bStyles.modeSub}>{preset.description}</Text>
+              </View>
+              <View style={[bStyles.check, selected && bStyles.checkSelected]}>
+                {selected ? <Ionicons name="checkmark" size={16} color={colors.background} /> : null}
+              </View>
+            </Pressable>
+          );
+        })}
+
+        <View style={bStyles.innerBlock}>
+          <SubsectionTitle title="What gets refunded" lead="Which online payments follow your refund window." />
+          {REFUND_APPLIES_TO_OPTIONS.map((option) => {
+            const selected = cancellationPolicy.refundAppliesTo === option.id;
+            return (
+              <Pressable
+                key={option.id}
+                style={bStyles.modeCard}
+                onPress={() => handleRefundScopePress(option.id)}
+              >
+                <View style={bStyles.modeBody}>
+                  <Text style={bStyles.modeTitle}>{option.label}</Text>
+                  <Text style={bStyles.modeSub}>{option.description}</Text>
+                </View>
+                <View style={[bStyles.check, selected && bStyles.checkSelected]}>
+                  {selected ? <Ionicons name="checkmark" size={16} color={colors.background} /> : null}
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        <View style={bStyles.innerBlock}>
+          <SubsectionTitle title="Policy text" lead="Shown at checkout and in cancellation emails." />
+          <TextInput
+            style={bStyles.policySummaryInput}
+            multiline
+            value={cancellationPolicy.policySummary}
+            onChangeText={(text) =>
+              updateCancellationPolicy({
+                ...cancellationPolicy,
+                preset: 'custom',
+                policySummary: text,
+              })
+            }
+            placeholder="Describe your cancellation and refund rules…"
+            placeholderTextColor={colors.textMuted}
+          />
+        </View>
+      </FormGroup>
+
+      <FormGroup
+        id="preview"
+        icon="eye-outline"
+        title="Checkout preview"
+        description="What clients see on your booking page"
+        onSectionLayout={handleSectionLayout}
+      >
+        <SubsectionTitle title="Sample service" lead="Pricing preview for one of your services." />
+        <View style={bStyles.previewCard}>
+          <Image source={APP_ICON} style={bStyles.previewImg} resizeMode="cover" />
+          <View style={bStyles.previewBody}>
+            <Text style={bStyles.previewTitle}>{previewService.title}</Text>
+            <View style={bStyles.previewMid}>
+              <Text style={bStyles.previewMeta}>ESTIMATE</Text>
+              <Text style={bStyles.previewPrice}>{formatMoney(previewService.price)}</Text>
+            </View>
+            <View style={bStyles.previewPayRow}>
+              <Text style={bStyles.previewPayLabel}>{preview.dueNowLabel}</Text>
+              <Text style={bStyles.previewPayAccent}>{formatMoney(preview.dueNow)}</Text>
+            </View>
+            {preview.dueLater > 0 && (
+              <View style={bStyles.previewPayRow}>
+                <Text style={bStyles.previewPayLabel}>{preview.dueLaterLabel}</Text>
+                <Text style={bStyles.previewPayValue}>{formatMoney(preview.dueLater)}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </FormGroup>
 
       <Pressable style={[bStyles.saveBtn, saving && { opacity: 0.65 }]} onPress={save} disabled={saving}>
         <Text style={bStyles.saveBtnText}>
@@ -548,7 +708,7 @@ function BookingTab({ onGoToPayouts }: { onGoToPayouts: () => void }) {
 }
 
 const bStyles = StyleSheet.create({
-  content: { paddingBottom: 48 },
+  content: { paddingBottom: 48, paddingHorizontal: 16 },
   emptyWrap: { padding: 24, alignItems: 'center' },
   emptyText: { color: colors.textMuted, fontSize: 14, textAlign: 'center' },
   errorText: { color: '#f87171', fontSize: 14, padding: 20 },
@@ -556,14 +716,71 @@ const bStyles = StyleSheet.create({
     color: colors.textMuted,
     fontSize: 14,
     lineHeight: 20,
-    marginBottom: 4,
+    marginBottom: 14,
     paddingHorizontal: 4,
   },
-  lead: { color: colors.textMuted, fontSize: 14, lineHeight: 20, marginBottom: 14 },
+  overviewGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 20,
+  },
+  overviewCard: {
+    width: '48%',
+    flexGrow: 1,
+    minWidth: '46%',
+    backgroundColor: colors.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    padding: 12,
+    gap: 6,
+  },
+  overviewCardPressed: { opacity: 0.82 },
+  overviewIconWrap: {
+    width: 30,
+    height: 30,
+    borderRadius: 9,
+    backgroundColor: colors.accentPinkMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  overviewLabel: { color: colors.text, fontSize: 13, fontWeight: '700' },
+  overviewValue: { color: colors.textMuted, fontSize: 12, lineHeight: 16 },
+  groupCard: {
+    backgroundColor: colors.card,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    padding: 16,
+    marginBottom: 14,
+    gap: 4,
+  },
+  groupHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
+  groupIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: colors.accentPinkMuted,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  groupHeaderText: { flex: 1, gap: 2 },
+  groupTitle: { color: colors.text, fontSize: 17, fontWeight: '700' },
+  groupDesc: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
+  subsectionHead: { marginTop: 4, marginBottom: 12 },
+  subsectionTitle: { color: colors.text, fontSize: 14, fontWeight: '700', marginBottom: 4 },
+  subsectionLead: { color: colors.textMuted, fontSize: 13, lineHeight: 18 },
+  innerBlock: {
+    marginTop: 8,
+    paddingTop: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.cardBorder,
+  },
   gateBanner: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.accentPinkMuted, borderRadius: 12, padding: 12, marginBottom: 12 },
   gateBannerText: { flex: 1, fontSize: 13, color: colors.text, lineHeight: 18 },
   gateBannerLink: { color: colors.accentPink, fontWeight: '600' },
-  modeCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16, borderWidth: 1.5, borderColor: colors.cardBorder, backgroundColor: colors.card, marginBottom: 10 },
+  modeCard: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 16, borderWidth: 1.5, borderColor: colors.cardBorder, backgroundColor: colors.background, marginBottom: 10 },
   modeCardLocked: { opacity: 0.55, backgroundColor: colors.progressTrack },
   modeBody: { flex: 1, minWidth: 0, paddingRight: 8 },
   modeTitleRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginBottom: 4 },
@@ -577,7 +794,7 @@ const bStyles = StyleSheet.create({
   popularText: { color: colors.accentPink, fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.3 },
   check: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, borderColor: colors.cardBorder, alignItems: 'center', justifyContent: 'center' },
   checkSelected: { borderColor: colors.accentPink, backgroundColor: colors.accentPink },
-  previewCard: { flexDirection: 'row', alignItems: 'stretch', gap: 14, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.cardBorder, backgroundColor: colors.card },
+  previewCard: { flexDirection: 'row', alignItems: 'stretch', gap: 14, padding: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.cardBorder, backgroundColor: colors.background },
   previewImg: { width: 88, height: 88, borderRadius: 12, backgroundColor: colors.background },
   previewBody: { flex: 1, minWidth: 0, justifyContent: 'center', gap: 6 },
   previewTitle: { color: colors.text, fontSize: 17, fontWeight: '700' },
@@ -606,9 +823,8 @@ const bStyles = StyleSheet.create({
   amountPrefix: { color: colors.textMuted, fontSize: 22, fontWeight: '600', fontFamily: fonts.numberMedium, marginRight: 4 },
   amountInput: { flex: 1, color: colors.text, fontSize: 28, fontWeight: '700', fontFamily: fonts.number, paddingVertical: 14 },
   amountSuffix: { color: colors.textMuted, fontSize: 22, fontWeight: '600', fontFamily: fonts.numberMedium, marginLeft: 4 },
-  saveBtn: { alignItems: 'center', backgroundColor: colors.accentPink, borderRadius: 16, paddingVertical: 16, marginTop: 4, shadowColor: colors.accentPink, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 },
+  saveBtn: { alignItems: 'center', backgroundColor: colors.accentPink, borderRadius: 16, paddingVertical: 16, marginTop: 8, shadowColor: colors.accentPink, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12, elevation: 6 },
   saveBtnText: { color: colors.background, fontSize: 16, fontWeight: '700' },
-  policyFieldLabel: { color: colors.textMuted, fontSize: 13, fontWeight: '600', marginTop: 8, marginBottom: 8 },
   policySummaryInput: {
     minHeight: 96,
     borderWidth: 1,
@@ -619,13 +835,13 @@ const bStyles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 20,
     textAlignVertical: 'top',
-    backgroundColor: colors.card,
+    backgroundColor: colors.background,
     marginBottom: 8,
   },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.card,
+    backgroundColor: colors.background,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 14,
@@ -684,11 +900,9 @@ function PayoutsTab() {
     setBusy(true);
     try {
       const result = await startStripeConnectOnboarding();
-      if ('alreadyOnboarded' in result && result.alreadyOnboarded) {
-        Alert.alert('Already set up', 'Your payout account is active.');
-        return;
-      }
-      setConnectUrl(result.onboardingUrl);
+      const url = resolveStripeConnectUrl(result);
+      if (!url) throw new Error('Could not open Stripe Connect');
+      setConnectUrl(url);
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Try again');
     } finally { setBusy(false); }
@@ -845,19 +1059,38 @@ function PayoutsTab() {
           /* ── Not yet set up ── */
           <View style={pStyles.setupWrap}>
             <Text style={pStyles.setupHeading}>
-              {isPending ? 'Verification in progress' : 'Set up Styld Pay'}
+              {summary?.status === 'pending_review'
+                ? 'Almost there'
+                : summary?.hasAccount
+                  ? 'Finish Styld Pay setup'
+                  : 'Set up Styld Pay'}
             </Text>
             <Text style={pStyles.setupSub}>
-              {isPending
-                ? "We're verifying your information — usually takes a few minutes."
-                : 'Accept online payments and pay out directly to your bank.'}
+              {summary?.status === 'pending_review'
+                ? 'Stripe may still need a few details from you. Open Stripe below to finish your profile or check what\'s left.'
+                : summary?.hasAccount
+                  ? 'Pick up where you left off in Stripe to complete your payout profile.'
+                  : 'Accept online payments and pay out directly to your bank.'}
             </Text>
-            {!isPending && (
-              <Pressable style={[pStyles.setupBtn, busy && { opacity: 0.5 }]} disabled={busy} onPress={() => void handleOpenOnboarding()}>
-                {busy
-                  ? <ActivityIndicator color="#fff" size="small" />
-                  : <Text style={pStyles.setupBtnText}>{summary?.hasAccount ? 'Continue setup' : 'Get started'}</Text>
-                }
+            <Pressable
+              style={[pStyles.setupBtn, busy && { opacity: 0.5 }]}
+              disabled={busy}
+              onPress={() => void handleOpenOnboarding()}
+            >
+              {busy
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Text style={pStyles.setupBtnText}>
+                    {summary?.hasAccount ? 'Continue in Stripe' : 'Get started'}
+                  </Text>
+              }
+            </Pressable>
+            {isPending && (
+              <Pressable
+                style={[pStyles.refreshLink, busy && { opacity: 0.5 }]}
+                disabled={busy}
+                onPress={() => void handleSyncAfterReturn()}
+              >
+                <Text style={pStyles.refreshLinkText}>Refresh status</Text>
               </Pressable>
             )}
           </View>
@@ -954,6 +1187,8 @@ const pStyles = StyleSheet.create({
   setupSub: { fontSize: 14, color: colors.textMuted, textAlign: 'center', lineHeight: 20, maxWidth: 280 },
   setupBtn: { backgroundColor: colors.accentPink, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 32, marginTop: 8 },
   setupBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  refreshLink: { paddingVertical: 8, paddingHorizontal: 12 },
+  refreshLinkText: { color: colors.accentPink, fontSize: 14, fontWeight: '600' },
 
   sectionLabel: { fontSize: 12, fontWeight: '700', color: colors.textMuted, textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12 },
   howRow: { flexDirection: 'row', gap: 12, marginBottom: 14, alignItems: 'flex-start' },

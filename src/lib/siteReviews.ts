@@ -39,6 +39,17 @@ export async function loadSiteReviews(userId: string): Promise<SiteReview[]> {
     .filter((review): review is SiteReview => review !== null && review.published);
 }
 
+export async function deleteSiteReview(userId: string, recordId: string): Promise<void> {
+  const { error } = await supabase
+    .from(HOSTED_SITE_TABLE)
+    .delete()
+    .eq('user_id', userId)
+    .eq('record_type', 'review')
+    .eq('id', recordId);
+
+  if (error) throw new Error(error.message);
+}
+
 export async function requestReviewEmail(bookingId: string): Promise<void> {
   const { data, error } = await supabase.functions.invoke<{ ok?: boolean; skipped?: boolean; error?: string }>(
     'review-request-email',

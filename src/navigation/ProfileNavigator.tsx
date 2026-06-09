@@ -14,10 +14,6 @@ import ProfileScreen from '../screens/ProfileScreen';
 import ConnectedAccountsScreen from '../screens/ConnectedAccountsScreen';
 import AccountSettingsScreen from '../screens/AccountSettingsScreen';
 import PaywallScreen from '../screens/PaywallScreen';
-import EmailPreviewsScreen from '../screens/dev/EmailPreviewsScreen';
-import EmailPreviewDetailScreen from '../screens/dev/EmailPreviewDetailScreen';
-import type { EmailPreviewId } from '../lib/emailPreviews';
-
 export type ProfileStackParamList = {
   ProfileHome: undefined;
   Styles: undefined;
@@ -34,8 +30,6 @@ export type ProfileStackParamList = {
   ConnectedAccounts: undefined;
   AccountSettings: undefined;
   Paywall: undefined;
-  EmailPreviews: undefined;
-  EmailPreviewDetail: { previewId: EmailPreviewId };
 };
 
 const Stack = createNativeStackNavigator<ProfileStackParamList>();
@@ -58,8 +52,6 @@ export default function ProfileNavigator() {
       <Stack.Screen name="ConnectedAccounts" component={ConnectedAccountsScreen} />
       <Stack.Screen name="AccountSettings" component={AccountSettingsScreen} />
       <Stack.Screen name="Paywall" component={PaywallScreen} />
-      <Stack.Screen name="EmailPreviews" component={EmailPreviewsScreen} />
-      <Stack.Screen name="EmailPreviewDetail" component={EmailPreviewDetailScreen} />
     </Stack.Navigator>
   );
 }

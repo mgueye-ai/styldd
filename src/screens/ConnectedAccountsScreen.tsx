@@ -19,6 +19,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import {
   fetchStripeConnectStatus,
   formatUsdFromCents,
+  resolveStripeConnectUrl,
   startStripeConnectOnboarding,
   syncStripeConnect,
   type StripeConnectSummary,
@@ -70,14 +71,9 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
     setBusy(true);
     try {
       const result = await startStripeConnectOnboarding();
-      if ('alreadyOnboarded' in result && result.alreadyOnboarded) {
-        Alert.alert(
-          'Already set up',
-          'Your payout account is active. You can withdraw earnings from the Earnings section on your dashboard.',
-        );
-        return;
-      }
-      setConnectUrl(result.onboardingUrl);
+      const url = resolveStripeConnectUrl(result);
+      if (!url) throw new Error('Could not open Stripe Connect');
+      setConnectUrl(url);
     } catch (err) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Try again');
     } finally {
@@ -150,7 +146,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
                     </Text>
                     <Text style={styles.statusSub}>
                       {isPending
-                        ? "We're verifying your information. This usually takes a few minutes."
+                        ? 'Open Stripe to finish any remaining profile steps or check verification status.'
                         : !isReady
                           ? 'Complete setup to start receiving online payments.'
                           : 'Your account is active and ready to receive payments.'}
@@ -190,7 +186,7 @@ export default function ConnectedAccountsScreen({ navigation }: Props) {
                       <>
                         <Ionicons name="card-outline" size={18} color="#fff" />
                         <Text style={styles.setupBtnText}>
-                          {hasAccount ? 'Continue setup' : 'Set up Styld Pay'}
+                          {hasAccount ? 'Continue in Stripe' : 'Set up Styld Pay'}
                         </Text>
                       </>
                     )}

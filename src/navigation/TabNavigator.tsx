@@ -24,22 +24,25 @@ export type TabParamList = {
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
-const HIDDEN_TAB_BAR_SCREENS: Record<string, string[] | 'all-but-home'> = {
-  Dashboard: ['EarningDetails', 'AppointmentDetail', 'AllUpcoming', 'AllBookings', 'BookingDetail'],
-  Profile: 'all-but-home',
-  Client: ['ClientDetail'],
-  Site: ['SiteEditor', 'SiteSetup', 'SiteDeploy', 'HeroContent'],
+/** Root screen per tab — tab bar stays visible only on these. */
+const TAB_HOME_SCREENS: Record<keyof TabParamList, string> = {
+  Dashboard: 'DashboardHome',
+  Calendar: 'CalendarHome',
+  Site: 'SiteHome',
+  Client: 'ClientList',
+  Profile: 'ProfileHome',
 };
 
 function shouldHideTabBar(state: BottomTabBarProps['state']): boolean {
   const currentRoute = state.routes[state.index ?? 0];
-  const hiddenScreens = HIDDEN_TAB_BAR_SCREENS[currentRoute.name];
-  if (!hiddenScreens) return false;
+  const homeScreen = TAB_HOME_SCREENS[currentRoute.name as keyof TabParamList];
+  if (!homeScreen) return false;
+
   const nestedState = currentRoute.state;
   if (!nestedState?.routes.length) return false;
+
   const nestedRoute = nestedState.routes[nestedState.index ?? nestedState.routes.length - 1];
-  if (hiddenScreens === 'all-but-home') return nestedRoute?.name !== 'ProfileHome';
-  return hiddenScreens.includes(nestedRoute.name);
+  return nestedRoute?.name !== homeScreen;
 }
 
 const TAB_CONFIG: Record<

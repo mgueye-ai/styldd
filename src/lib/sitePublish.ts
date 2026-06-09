@@ -7,6 +7,7 @@ import {
   SitePublishConfig,
 } from '../data/sitePublish';
 import { saveSiteSetting, syncUserSiteRegistry } from './siteRecords';
+import { forceCheckSubscriptionStatus } from './subscriptionGuard';
 import { supabase } from './supabase';
 import { triggerVercelRedeploy, VercelRedeployResult } from './vercelDeploy';
 
@@ -120,6 +121,11 @@ export async function publishSiteSubdomain(
   const isRepublishingSameSubdomain = existing?.subdomain === slug;
   const isChangingSubdomain = existing?.subdomain && existing.subdomain !== slug;
   const isNewSubdomain = !existing?.subdomain;
+
+  const entitled = await forceCheckSubscriptionStatus();
+  if (!entitled) {
+    throw new Error('An active Styld subscription is required to publish your site.');
+  }
 
   // Only run the availability check when the slug is truly new or being changed.
   if (isNewSubdomain || isChangingSubdomain) {

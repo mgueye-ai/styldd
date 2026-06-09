@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import Stripe from 'https://esm.sh/stripe@17.4.0?target=deno';
 
 const cors = { 'Access-Control-Allow-Origin': '*' };
 
@@ -13,13 +14,32 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'Method not allowed' }, 405);
 
-  const body = await req.text();
-  let event: Record<string, unknown>;
+  const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
+  const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET');
+  if (!stripeKey) {
+    return new Response('Webhook not configured', { status: 503, headers: cors });
+  }
 
-  try {
-    event = JSON.parse(body);
-  } catch {
-    return json({ error: 'Invalid JSON' }, 400);
+  const body = await req.text();
+  let event: Stripe.Event;
+
+  if (webhookSecret) {
+    const signature = req.headers.get('stripe-signature');
+    if (!signature) return new Response('Missing stripe-signature', { status: 400, headers: cors });
+    const stripe = new Stripe(stripeKey, { httpClient: Stripe.createFetchHttpClient() });
+    try {
+      event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+    } catch (err) {
+      console.error('Webhook signature verification failed:', err);
+      return new Response('Invalid signature', { status: 400, headers: cors });
+    }
+  } else {
+    console.warn('STRIPE_WEBHOOK_SECRET not set — accepting unsigned webhook (set secret for live)');
+    try {
+      event = JSON.parse(body) as Stripe.Event;
+    } catch {
+      return new Response('Invalid JSON', { status: 400, headers: cors });
+    }
   }
 
   const supabase = createClient(
@@ -27,11 +47,9 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
   );
 
-  const type = event.type as string;
-  const data = (event.data as Record<string, unknown>)?.object as Record<string, unknown>;
+  const data = event.data.object as Record<string, unknown>;
 
-  // Handle Stripe Connect account updates
-  if (type === 'account.updated') {
+  if (event.type === 'account.updated') {
     const accountId = data?.id as string;
     if (!accountId) return json({ received: true });
 
@@ -44,8 +62,7 @@ Deno.serve(async (req) => {
     }).eq('stripe_account_id', accountId);
   }
 
-  // Handle successful payments → mark booking paid + sync connected account balance
-  if (type === 'payment_intent.succeeded') {
+  if (event.type === 'payment_intent.succeeded') {
     const metadata = (data?.metadata as Record<string, string>) || {};
     const subdomain = metadata.subdomain;
     const bookingId = metadata.bookingId;
@@ -59,12 +76,10 @@ Deno.serve(async (req) => {
       }).catch((err: unknown) => console.warn('mark_booking_paid:', err));
     }
 
-    // Sync the connected account's balance into styld_stripe_accounts
-    const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
     const transferAccountId = (data?.transfer_data as Record<string, string>)?.destination;
-    if (stripeKey && transferAccountId) {
+    if (transferAccountId) {
       try {
-        const balRes = await fetch(`https://api.stripe.com/v1/balance`, {
+        const balRes = await fetch('https://api.stripe.com/v1/balance', {
           headers: {
             Authorization: `Bearer ${stripeKey}`,
             'Stripe-Account': transferAccountId,

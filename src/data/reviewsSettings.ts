@@ -43,7 +43,7 @@ export function normalizeSiteReview(
   const createdAt = createdRaw ? new Date(createdRaw) : new Date();
 
   return {
-    id: typeof data.id === 'string' && data.id ? data.id : recordId,
+    id: recordId,
     bookingId: typeof data.booking_id === 'string' ? data.booking_id : '',
     clientName:
       typeof data.client_name === 'string' && data.client_name.trim()

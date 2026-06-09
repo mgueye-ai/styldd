@@ -6,7 +6,9 @@ import BrandLogo from '../components/BrandLogo';
 import WalletBalanceSection from '../components/WalletBalanceSection';
 import { useAuth } from '../context/AuthContext';
 import { usePrivacyMode } from '../context/PrivacyContext';
+import { usePurchases } from '../context/PurchasesContext';
 import { useSiteData } from '../context/SiteDataContext';
+import { handleManageSubscriptionPress, subscriptionPlanLabel } from '../lib/manageSubscription';
 import { ProfileStackParamList } from '../navigation/ProfileNavigator';
 import { colors, fonts } from '../theme';
 import { maskMoney } from '../utils/money';
@@ -82,6 +84,8 @@ function timeSince(isoDate: string | null | undefined): string {
 export default function ProfileScreen({ navigation }: Props) {
   const { profile, user, signOut } = useAuth();
   const { privacyMode } = usePrivacyMode();
+  const { hasActiveSubscription, isConfigured, customerInfo, refresh } = usePurchases();
+  const subscriptionLabel = subscriptionPlanLabel(customerInfo);
   const {
     clients, appointments, bookings,
     hasLinkedSite, isLoading,
@@ -236,29 +240,29 @@ export default function ProfileScreen({ navigation }: Props) {
             <Text style={styles.menuLabel}>Reviews</Text>
             <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
           </Pressable>
-          {__DEV__ ? (
-            <>
-              <Pressable
-                style={[styles.menuRow, styles.menuRowBorder]}
-                onPress={() => navigation.navigate('EmailPreviews')}
-              >
-                <View style={styles.menuIconWrap}>
-                  <Ionicons name="mail-outline" size={18} color={colors.accentPink} />
-                </View>
-                <Text style={styles.menuLabel}>Preview emails</Text>
-                <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
-              </Pressable>
-              <Pressable
-                style={[styles.menuRow, styles.menuRowBorder]}
-                onPress={() => navigation.navigate('Paywall')}
-              >
-                <View style={styles.menuIconWrap}>
-                  <Ionicons name="card-outline" size={18} color={colors.accentPink} />
-                </View>
-                <Text style={styles.menuLabel}>Preview paywall</Text>
-                <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
-              </Pressable>
-            </>
+          {isConfigured ? (
+            <Pressable
+              style={[styles.menuRow, styles.menuRowBorder]}
+              onPress={() =>
+                void handleManageSubscriptionPress({
+                  isConfigured,
+                  hasActiveSubscription,
+                  onSubscribe: () => navigation.navigate('Paywall'),
+                  onAfterManage: refresh,
+                })
+              }
+            >
+              <View style={styles.menuIconWrap}>
+                <Ionicons name="card-outline" size={18} color={colors.accentPink} />
+              </View>
+              <View style={styles.menuLabelWrap}>
+                <Text style={styles.menuLabel}>Manage subscription</Text>
+                {subscriptionLabel ? (
+                  <Text style={styles.menuSubLabel}>{subscriptionLabel}</Text>
+                ) : null}
+              </View>
+              <Ionicons name="chevron-forward" size={15} color={colors.textMuted} />
+            </Pressable>
           ) : null}
           <Pressable
             style={[styles.menuRow, styles.menuRowBorder]}
@@ -468,10 +472,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 12,
   },
+  menuLabelWrap: {
+    flex: 1,
+    gap: 2,
+  },
   menuLabel: {
     flex: 1,
     color: colors.text,
     fontSize: 15,
+    fontWeight: '500',
+  },
+  menuSubLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
     fontWeight: '500',
   },
 

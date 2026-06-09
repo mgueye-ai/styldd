@@ -2,7 +2,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -12,28 +14,110 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import Svg, { Defs, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../../context/AuthContext';
 import { useOnboarding } from '../../context/OnboardingContext';
-import { useSiteContent } from '../../context/SiteContentContext';
-import { buildSiteContentFromOnboarding } from '../../data/onboarding';
-import { syncUserSiteRegistry, saveSiteSetting } from '../../lib/siteRecords';
-import { colors } from '../../theme';
+import { buildSiteContentFromOnboarding, OnboardingSurvey } from '../../data/onboarding';
+import OnboardingConfetti from '../../components/OnboardingConfetti';
+import {
+  buildAccountOnboardingResponses,
+  saveAccountOnboardingResponses,
+} from '../../lib/accountOnboarding';
+import { isStaleAuthUserDbError, resolveLiveAuthUser } from '../../lib/authSession';
+import { ensureUserSiteSeeded, syncUserSiteRegistry, saveSiteSetting } from '../../lib/siteRecords';
+import { colors, fonts } from '../../theme';
+
+const BRAND_ICON = require('../../../assets/icon.png');
 
 type Props = {
   onComplete: () => void;
+  previewOnly?: boolean;
 };
 
 const STEPS = [
   'Welcome',
+  'Why',
+  'Heard',
+  'Excited',
+  'Dream',
   'Business',
-  'Specialty',
   'Contact',
   'Location',
   'Done',
 ] as const;
 
-type Step = (typeof STEPS)[number];
+const WHY_STYLD_OPTIONS = [
+  'Get more bookings',
+  'Look professional online',
+  'Stop chasing DMs',
+  'Take deposits & get paid',
+  'Organize my calendar',
+  'Grow my client list',
+] as const;
+
+const HEARD_FROM_OPTIONS = [
+  'Instagram',
+  'TikTok',
+  'Friend or colleague',
+  'Google',
+  'Another stylist',
+  'Salon or shop',
+  'Other',
+] as const;
+
+const EXCITED_OPTIONS = [
+  'My booking website',
+  'Online payments',
+  'Calendar & appointments',
+  'Client list',
+  'Reviews on my site',
+  'Booking notifications',
+] as const;
+
+const DREAM_OPTIONS = [
+  'Finally breathing room',
+  'Proof my brand is growing',
+  'Less stress, more creativity',
+  'Money hitting my account',
+] as const;
+
+function OnboardingBackground() {
+  return (
+    <View style={StyleSheet.absoluteFill} pointerEvents="none">
+      <Svg style={StyleSheet.absoluteFillObject} width="100%" height="100%">
+        {[0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875].map((x) => (
+          <Rect
+            key={x}
+            x={`${x * 100}%`}
+            y="0"
+            width="1"
+            height="100%"
+            fill="rgba(255,255,255,0.035)"
+          />
+        ))}
+      </Svg>
+      <Svg style={StyleSheet.absoluteFillObject} width="100%" height="100%">
+        <Defs>
+          <RadialGradient id="onboardGlow" cx="50%" cy="40%" r="58%">
+            <Stop offset="0" stopColor={colors.accentPink} stopOpacity="0.2" />
+            <Stop offset="1" stopColor={colors.accentPink} stopOpacity="0" />
+          </RadialGradient>
+        </Defs>
+        <Rect width="100%" height="65%" fill="url(#onboardGlow)" />
+      </Svg>
+    </View>
+  );
+}
+
+function BrandLockup() {
+  return (
+    <View style={styles.brandLockup}>
+      <Image source={BRAND_ICON} style={styles.brandIcon} resizeMode="cover" />
+      <Text style={styles.brandName}>Styld</Text>
+    </View>
+  );
+}
 
 function StepQuestion({ question, hint }: { question: string; hint?: string }) {
   return (
@@ -45,51 +129,104 @@ function StepQuestion({ question, hint }: { question: string; hint?: string }) {
 }
 
 function Field({
+  label,
   value,
   onChangeText,
   placeholder,
-  multiline,
   keyboardType,
   autoFocus,
+  flex,
 }: {
+  label?: string;
   value: string;
   onChangeText: (v: string) => void;
   placeholder?: string;
-  multiline?: boolean;
-  keyboardType?: 'default' | 'email-address' | 'phone-pad';
+  keyboardType?: 'default' | 'email-address' | 'phone-pad' | 'number-pad';
   autoFocus?: boolean;
+  flex?: boolean;
 }) {
   return (
-    <TextInput
-      style={[styles.input, multiline && styles.inputMultiline]}
-      value={value}
-      onChangeText={onChangeText}
-      placeholder={placeholder}
-      placeholderTextColor={colors.textMuted}
-      multiline={multiline}
-      keyboardType={keyboardType}
-      autoFocus={autoFocus}
-      autoCapitalize={keyboardType === 'email-address' ? 'none' : 'sentences'}
-      textAlign="center"
-    />
+    <View style={[styles.field, flex && styles.fieldFlex]}>
+      {label ? <Text style={styles.label}>{label}</Text> : null}
+      <TextInput
+        style={styles.input}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={placeholder}
+        placeholderTextColor={colors.textMuted}
+        keyboardType={keyboardType}
+        autoFocus={autoFocus}
+        autoCapitalize={keyboardType === 'email-address' ? 'none' : 'sentences'}
+      />
+    </View>
   );
 }
 
-export default function AccountOnboardingFlow({ onComplete }: Props) {
-  const { profile, updateProfile, user, clearNewSignUp } = useAuth();
-  const { completeSetup } = useOnboarding();
-  const { saveContentNow } = useSiteContent();
+function ChoiceChips({
+  options,
+  selected,
+  onSelect,
+}: {
+  options: readonly string[];
+  selected: string[];
+  onSelect: (value: string) => void;
+}) {
+  return (
+    <View style={styles.chipGrid}>
+      {options.map((option) => {
+        const active = selected.includes(option);
+        return (
+          <Pressable
+            key={option}
+            style={[styles.chip, active && styles.chipActive]}
+            onPress={() => onSelect(option)}
+          >
+            <View style={styles.chipIconSlot}>
+              <Ionicons
+                name="checkmark"
+                size={14}
+                color={active ? colors.accentPink : 'transparent'}
+              />
+            </View>
+            <Text style={[styles.chipText, active && styles.chipTextActive]}>{option}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+function toggleChip(list: string[], value: string, multi: boolean): string[] {
+  if (!multi) return [value];
+  return list.includes(value) ? list.filter((item) => item !== value) : [...list, value];
+}
+
+export default function AccountOnboardingFlow({ onComplete, previewOnly = false }: Props) {
+  const { profile, updateProfile, user, clearNewSignUp, signOut } = useAuth();
+  const { refresh, markAccountOnboardingSaved } = useOnboarding();
 
   const [step, setStep] = useState(0);
   const [busy, setBusy] = useState(false);
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
-  const firstName = profile?.full_name?.split(' ')[0] ?? 'there';
+  const firstName = useMemo(() => {
+    const full =
+      profile?.full_name?.trim() ||
+      (typeof user?.user_metadata?.full_name === 'string'
+        ? user.user_metadata.full_name.trim()
+        : '');
+    return full.split(/\s+/).filter(Boolean)[0] ?? null;
+  }, [profile?.full_name, user?.user_metadata?.full_name]);
+
+  const [whyStyld, setWhyStyld] = useState<string[]>([]);
+  const [heardFrom, setHeardFrom] = useState('');
+  const [excitedAbout, setExcitedAbout] = useState<string[]>([]);
+  const [dreamOutcome, setDreamOutcome] = useState('');
+  const [dreamNote, setDreamNote] = useState('');
 
   const [businessName, setBusinessName] = useState(
     profile?.business_name ?? profile?.full_name ?? '',
   );
-  const [specialty, setSpecialty] = useState('');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState(profile?.email ?? user?.email ?? '');
   const [instagram, setInstagram] = useState('');
@@ -98,8 +235,25 @@ export default function AccountOnboardingFlow({ onComplete }: Props) {
   const [state, setState] = useState('');
   const [zip, setZip] = useState('');
 
+  const survey = useMemo<OnboardingSurvey>(
+    () => ({
+      whyStyld,
+      heardFrom,
+      excitedAbout,
+      dreamOutcome,
+      dreamNote: dreamNote.trim(),
+    }),
+    [whyStyld, heardFrom, excitedAbout, dreamOutcome, dreamNote],
+  );
+
+  const excitementLine = useMemo(() => {
+    if (excitedAbout.length > 0) return excitedAbout[0];
+    if (whyStyld.length > 0) return whyStyld[0].toLowerCase();
+    return 'your new booking home';
+  }, [excitedAbout, whyStyld]);
+
   const canContinue = useMemo(() => {
-    if (step === 1) return businessName.trim().length > 0;
+    if (step === 5) return businessName.trim().length > 0;
     return true;
   }, [step, businessName]);
 
@@ -113,9 +267,7 @@ export default function AccountOnboardingFlow({ onComplete }: Props) {
 
   const goNext = () => {
     if (!canContinue) return;
-    if (step < STEPS.length - 1) {
-      animateStep(step + 1);
-    }
+    if (step < STEPS.length - 1) animateStep(step + 1);
   };
 
   const goBack = () => {
@@ -123,12 +275,26 @@ export default function AccountOnboardingFlow({ onComplete }: Props) {
   };
 
   const finish = async () => {
-    if (!user?.id) return;
+    if (previewOnly) {
+      onComplete();
+      return;
+    }
+    const liveUser = await resolveLiveAuthUser();
+    if (!liveUser?.id) {
+      Alert.alert(
+        'Session expired',
+        'Your login is no longer valid (often after a database reset). Sign out, then sign up or sign in again.',
+        [{ text: 'Sign out', style: 'destructive', onPress: () => void signOut() }],
+      );
+      return;
+    }
+    const userId = liveUser.id;
     setBusy(true);
     try {
+      await ensureUserSiteSeeded(userId, businessName.trim());
       const content = buildSiteContentFromOnboarding({
         businessName: businessName.trim(),
-        specialty,
+        specialty: '',
         phoneDisplay: phone,
         email,
         instagramHandle: instagram,
@@ -142,18 +308,52 @@ export default function AccountOnboardingFlow({ onComplete }: Props) {
         taglineRightLine1: businessName.trim().split(' ')[0] || 'your',
         taglineRightLine2: 'stylist',
       });
-      await saveContentNow(content);
-      await saveSiteSetting(user.id, 'site_theme', {
+      await saveSiteSetting(userId, 'site_content', content);
+      await saveSiteSetting(userId, 'site_theme', {
         heroLayout: 'split',
         heroImagePath: null,
         logoImagePath: null,
       });
+      const fullName =
+        profile?.full_name?.trim() ||
+        (typeof liveUser.user_metadata?.full_name === 'string'
+          ? liveUser.user_metadata.full_name.trim()
+          : '');
+
+      await saveAccountOnboardingResponses(
+        userId,
+        buildAccountOnboardingResponses({
+          userId,
+          accountEmail: liveUser.email ?? profile?.email ?? '',
+          fullName,
+          survey,
+          businessName: businessName.trim(),
+          phone,
+          email,
+          instagram,
+          addressLine1,
+          city,
+          state,
+          zip,
+        }),
+      );
+      markAccountOnboardingSaved(survey);
       await updateProfile({ business_name: businessName.trim() });
-      await syncUserSiteRegistry(user.id, businessName.trim());
-      await completeSetup();
+      await syncUserSiteRegistry(userId, businessName.trim());
       clearNewSignUp();
       onComplete();
-    } catch {
+      void refresh();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not save onboarding. Try again.';
+      if (isStaleAuthUserDbError(message)) {
+        Alert.alert(
+          'Account not found',
+          'This login no longer exists in the database. Sign out, then create a new account or sign in again.',
+          [{ text: 'Sign out', style: 'destructive', onPress: () => void signOut() }],
+        );
+      } else {
+        Alert.alert('Something went wrong', message);
+      }
       setBusy(false);
     }
   };
@@ -163,24 +363,32 @@ export default function AccountOnboardingFlow({ onComplete }: Props) {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      {/* Header */}
+      <OnboardingBackground />
+
       <View style={styles.header}>
         {step > 0 && !isLastStep ? (
-          <Pressable style={styles.backBtn} onPress={goBack}>
+          <Pressable style={styles.headerBtn} onPress={goBack} hitSlop={8}>
             <Ionicons name="chevron-back" size={22} color={colors.text} />
           </Pressable>
         ) : (
-          <View style={styles.backBtn} />
+          <View style={styles.headerBtn} />
         )}
         {!isLastStep ? (
           <Text style={styles.stepLabel}>
             {step + 1} of {STEPS.length - 1}
           </Text>
-        ) : null}
-        <View style={styles.backBtn} />
+        ) : (
+          <BrandLockup />
+        )}
+        {previewOnly ? (
+          <Pressable style={styles.headerBtn} onPress={onComplete} hitSlop={8}>
+            <Ionicons name="close" size={20} color={colors.textMuted} />
+          </Pressable>
+        ) : (
+          <View style={styles.headerBtn} />
+        )}
       </View>
 
-      {/* Progress bar */}
       {!isLastStep ? (
         <View style={styles.progressTrack}>
           <View style={[styles.progressFill, { width: `${progressFill}%` as `${number}%` }]} />
@@ -197,26 +405,25 @@ export default function AccountOnboardingFlow({ onComplete }: Props) {
           showsVerticalScrollIndicator={false}
         >
           <Animated.View style={[styles.stepContent, { opacity: fadeAnim }]}>
-            {/* Step 0: Welcome */}
             {step === 0 ? (
               <View style={styles.welcomeBlock}>
-                <View style={styles.welcomeIconWrap}>
-                  <Ionicons name="sparkles" size={32} color={colors.accentPink} />
-                </View>
-                <Text style={styles.welcomeTitle}>Hey {firstName}!</Text>
+                <BrandLockup />
+                <Text style={styles.welcomeTitle}>
+                  {firstName ? `Hey ${firstName},` : 'Welcome —'}
+                  {'\n'}
+                  <Text style={styles.welcomeAccent}>your chair is about to get busier.</Text>
+                </Text>
                 <Text style={styles.welcomeSubtitle}>
-                  Let's get your Styld profile set up.{'\n'}It only takes a minute.
+                  A few fun questions, then we'll set up your business — takes about two minutes.
                 </Text>
                 <View style={styles.welcomeFeatures}>
                   {[
                     { icon: 'globe-outline' as const, text: 'Your own booking website' },
-                    { icon: 'calendar-outline' as const, text: 'Manage appointments with ease' },
-                    { icon: 'people-outline' as const, text: 'Grow your client base' },
+                    { icon: 'card-outline' as const, text: 'Deposits & payments built in' },
+                    { icon: 'notifications-outline' as const, text: 'Know the second someone books' },
                   ].map((f) => (
                     <View key={f.text} style={styles.featureRow}>
-                      <View style={styles.featureIconWrap}>
-                        <Ionicons name={f.icon} size={16} color={colors.accentPink} />
-                      </View>
+                      <Ionicons name={f.icon} size={15} color={colors.accentPink} />
                       <Text style={styles.featureText}>{f.text}</Text>
                     </View>
                   ))}
@@ -224,14 +431,80 @@ export default function AccountOnboardingFlow({ onComplete }: Props) {
               </View>
             ) : null}
 
-            {/* Step 1: Business name */}
             {step === 1 ? (
               <>
                 <StepQuestion
+                  question="Why did you download Styld?"
+                  hint="Pick everything that sounds like you — no wrong answers."
+                />
+                <ChoiceChips
+                  options={WHY_STYLD_OPTIONS}
+                  selected={whyStyld}
+                  onSelect={(value) => setWhyStyld((prev) => toggleChip(prev, value, true))}
+                  multi
+                />
+              </>
+            ) : null}
+
+            {step === 2 ? (
+              <>
+                <StepQuestion
+                  question="Where did you hear about us?"
+                  hint="Helps us shout out the right people."
+                />
+                <ChoiceChips
+                  options={HEARD_FROM_OPTIONS}
+                  selected={heardFrom ? [heardFrom] : []}
+                  onSelect={setHeardFrom}
+                />
+              </>
+            ) : null}
+
+            {step === 3 ? (
+              <>
+                <StepQuestion
+                  question="What are you most excited to try?"
+                  hint="We'll prioritize this in your setup."
+                />
+                <ChoiceChips
+                  options={EXCITED_OPTIONS}
+                  selected={excitedAbout}
+                  onSelect={(value) => setExcitedAbout((prev) => toggleChip(prev, value, true))}
+                  multi
+                />
+              </>
+            ) : null}
+
+            {step === 4 ? (
+              <>
+                <StepQuestion
+                  question="A fully booked week would feel like…"
+                  hint="Dream a little — you're building toward this."
+                />
+                <ChoiceChips
+                  options={DREAM_OPTIONS}
+                  selected={dreamOutcome ? [dreamOutcome] : []}
+                  onSelect={setDreamOutcome}
+                />
+                <View style={styles.dreamNoteWrap}>
+                  <Field
+                    label="Anything else on your mind?"
+                    value={dreamNote}
+                    onChangeText={setDreamNote}
+                    placeholder="Optional — tell us what you're hoping for"
+                  />
+                </View>
+              </>
+            ) : null}
+
+            {step === 5 ? (
+              <>
+                <StepQuestion
                   question="What's your business called?"
-                  hint="This is the name clients will see when they book with you."
+                  hint="This is the name clients see when they book with you."
                 />
                 <Field
+                  label="Business name"
                   value={businessName}
                   onChangeText={setBusinessName}
                   placeholder="Your business name"
@@ -240,54 +513,38 @@ export default function AccountOnboardingFlow({ onComplete }: Props) {
               </>
             ) : null}
 
-            {/* Step 2: Specialty */}
-            {step === 2 ? (
-              <>
-                <StepQuestion
-                  question="What do you specialize in?"
-                  hint="Braids, locs, silk press — whatever you do best."
-                />
-                <Field
-                  value={specialty}
-                  onChangeText={setSpecialty}
-                  placeholder="Knotless braids, locs, silk press..."
-                  multiline
-                  autoFocus
-                />
-              </>
-            ) : null}
-
-            {/* Step 3: Contact */}
-            {step === 3 ? (
+            {step === 6 ? (
               <>
                 <StepQuestion
                   question="How can clients reach you?"
-                  hint="These will appear on your booking site. All optional."
+                  hint="These appear on your booking site. All optional."
                 />
                 <View style={styles.fieldStack}>
                   <Field
+                    label="Phone"
                     value={phone}
                     onChangeText={setPhone}
-                    placeholder="Phone number"
+                    placeholder="(555) 000-0000"
                     keyboardType="phone-pad"
                   />
                   <Field
+                    label="Email"
                     value={email}
                     onChangeText={setEmail}
-                    placeholder="Email address"
+                    placeholder="you@example.com"
                     keyboardType="email-address"
                   />
                   <Field
+                    label="Instagram"
                     value={instagram}
                     onChangeText={setInstagram}
-                    placeholder="Instagram @handle"
+                    placeholder="@yourhandle"
                   />
                 </View>
               </>
             ) : null}
 
-            {/* Step 4: Location */}
-            {step === 4 ? (
+            {step === 7 ? (
               <>
                 <StepQuestion
                   question="Where are you based?"
@@ -295,66 +552,72 @@ export default function AccountOnboardingFlow({ onComplete }: Props) {
                 />
                 <View style={styles.fieldStack}>
                   <Field
+                    label="Street address"
                     value={addressLine1}
                     onChangeText={setAddressLine1}
-                    placeholder="Street address (optional)"
+                    placeholder="Optional"
                   />
-                  <Field
-                    value={city}
-                    onChangeText={setCity}
-                    placeholder="City"
-                  />
+                  <Field label="City" value={city} onChangeText={setCity} placeholder="City" />
                   <View style={styles.rowFields}>
-                    <TextInput
-                      style={[styles.input, styles.rowInput]}
+                    <Field
+                      label="State"
                       value={state}
                       onChangeText={setState}
                       placeholder="State"
-                      placeholderTextColor={colors.textMuted}
-                      textAlign="center"
+                      flex
                     />
-                    <TextInput
-                      style={[styles.input, styles.rowInput]}
+                    <Field
+                      label="ZIP"
                       value={zip}
                       onChangeText={setZip}
                       placeholder="ZIP"
-                      placeholderTextColor={colors.textMuted}
-                      textAlign="center"
                       keyboardType="number-pad"
+                      flex
                     />
                   </View>
                 </View>
               </>
             ) : null}
 
-            {/* Step 5: All done */}
-            {step === 5 ? (
+            {step === 8 ? (
               <View style={styles.doneBlock}>
-                <View style={styles.doneIconWrap}>
-                  <Ionicons name="checkmark-circle" size={56} color={colors.accentPink} />
+                <OnboardingConfetti />
+                <View style={styles.doneGlow} pointerEvents="none" />
+                <View style={styles.doneBrandWrap}>
+                  <Image source={BRAND_ICON} style={styles.doneBrandIcon} resizeMode="cover" />
+                  <Text style={styles.doneBrandName}>Styld</Text>
                 </View>
-                <Text style={styles.doneTitle}>You're all set!</Text>
-                <Text style={styles.doneSubtitle}>
-                  Your Styld profile is ready. Head in and start building your booking site.
+                <Text style={styles.doneTitle}>
+                  You're <Text style={styles.doneTitleAccent}>in.</Text>
                 </Text>
-                <View style={styles.summaryCard}>
+                <Text style={styles.doneSubtitle}>
+                  {firstName ? `${firstName}, ` : ''}
+                  your booking site is next. We're here for {excitementLine}.
+                </Text>
+                <View style={styles.doneCard}>
                   {businessName.trim() ? (
-                    <View style={styles.summaryRow}>
-                      <Ionicons name="business-outline" size={14} color={colors.accentPink} />
-                      <Text style={styles.summaryText}>{businessName.trim()}</Text>
+                    <View style={styles.doneCardSection}>
+                      <Text style={styles.doneCardLabel}>Your business</Text>
+                      <Text style={styles.doneCardValue}>{businessName.trim()}</Text>
                     </View>
                   ) : null}
-                  {specialty.trim() ? (
-                    <View style={styles.summaryRow}>
-                      <Ionicons name="cut-outline" size={14} color={colors.accentPink} />
-                      <Text style={styles.summaryText}>{specialty.trim()}</Text>
+                  {whyStyld.length > 0 ? (
+                    <View style={styles.doneCardSection}>
+                      <Text style={styles.doneCardLabel}>You're here to</Text>
+                      <Text style={styles.doneCardValue}>{whyStyld.slice(0, 2).join(' · ')}</Text>
                     </View>
                   ) : null}
-                  {city.trim() ? (
-                    <View style={styles.summaryRow}>
-                      <Ionicons name="location-outline" size={14} color={colors.accentPink} />
-                      <Text style={styles.summaryText}>
-                        {[city.trim(), state.trim()].filter(Boolean).join(', ')}
+                  {city.trim() || heardFrom ? (
+                    <View style={styles.doneCardSection}>
+                      <Text style={styles.doneCardMuted}>
+                        {[
+                          heardFrom ? `Found us on ${heardFrom}` : null,
+                          city.trim()
+                            ? [city.trim(), state.trim()].filter(Boolean).join(', ')
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(' · ')}
                       </Text>
                     </View>
                   ) : null}
@@ -365,22 +628,17 @@ export default function AccountOnboardingFlow({ onComplete }: Props) {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Footer */}
       <View style={styles.footer}>
         {step === 0 ? (
           <Pressable style={styles.primaryBtn} onPress={goNext}>
-            <Text style={styles.primaryBtnText}>Let's get started</Text>
-            <Ionicons name="arrow-forward" size={18} color="#fff" style={{ marginLeft: 6 }} />
+            <Text style={styles.primaryBtnText}>Let's go</Text>
           </Pressable>
         ) : isLastStep ? (
           <Pressable style={styles.primaryBtn} onPress={finish} disabled={busy}>
             {busy ? (
-              <ActivityIndicator color="#fff" />
+              <ActivityIndicator color="#0a0a0a" />
             ) : (
-              <>
-                <Text style={styles.primaryBtnText}>Go to my dashboard</Text>
-                <Ionicons name="arrow-forward" size={18} color="#fff" style={{ marginLeft: 6 }} />
-              </>
+              <Text style={styles.primaryBtnText}>Build my site</Text>
             )}
           </Pressable>
         ) : (
@@ -412,16 +670,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 4,
     paddingBottom: 8,
+    zIndex: 1,
   },
-  backBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  stepLabel: { color: colors.textMuted, fontSize: 13, fontWeight: '600' },
+  headerBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  stepLabel: {
+    color: colors.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
   progressTrack: {
-    height: 3,
-    marginHorizontal: 24,
+    height: 2,
+    marginHorizontal: 20,
     borderRadius: 999,
-    backgroundColor: colors.cardBorder,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     marginBottom: 8,
     overflow: 'hidden',
+    zIndex: 1,
   },
   progressFill: {
     height: '100%',
@@ -431,104 +697,179 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
-    paddingHorizontal: 28,
+    paddingHorizontal: 24,
     paddingVertical: 24,
   },
   stepContent: {
     width: '100%',
     maxWidth: 360,
     alignSelf: 'center',
-    alignItems: 'center',
   },
 
-  // Welcome step
-  welcomeBlock: { alignItems: 'center', gap: 16 },
-  welcomeIconWrap: {
-    width: 72,
-    height: 72,
-    borderRadius: 24,
-    backgroundColor: colors.accentPinkMuted,
-    borderWidth: 1,
-    borderColor: colors.accentPinkBorder,
+  brandLockup: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
+    gap: 10,
   },
+  brandIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+  },
+  brandName: {
+    color: colors.text,
+    fontSize: 20,
+    fontWeight: '800',
+    letterSpacing: -0.8,
+    fontFamily: fonts.number,
+  },
+
+  welcomeBlock: { gap: 18 },
   welcomeTitle: {
     color: colors.text,
-    fontSize: 32,
-    fontWeight: '700',
-    textAlign: 'center',
+    fontSize: 28,
+    fontWeight: '800',
+    letterSpacing: -0.8,
+    lineHeight: 34,
+    fontFamily: fonts.number,
+  },
+  welcomeAccent: {
+    color: colors.accentPink,
   },
   welcomeSubtitle: {
     color: colors.textMuted,
-    fontSize: 16,
-    lineHeight: 24,
-    textAlign: 'center',
+    fontSize: 15,
+    lineHeight: 22,
   },
-  welcomeFeatures: {
-    width: '100%',
-    marginTop: 8,
-    gap: 12,
-    backgroundColor: colors.card,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    padding: 20,
-  },
-  featureRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  featureIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: colors.accentPinkMuted,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  featureText: { color: colors.text, fontSize: 14, fontWeight: '500' },
+  welcomeFeatures: { gap: 10, marginTop: 4 },
+  featureRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  featureText: { color: colors.text, fontSize: 14, fontWeight: '500', flex: 1 },
 
-  // Question blocks
-  questionBlock: { alignItems: 'center', marginBottom: 28, gap: 10 },
+  questionBlock: { marginBottom: 22, gap: 8 },
   question: {
     color: colors.text,
-    fontSize: 26,
-    fontWeight: '700',
-    textAlign: 'center',
-    lineHeight: 32,
+    fontSize: 24,
+    fontWeight: '800',
+    letterSpacing: -0.6,
+    lineHeight: 30,
+    fontFamily: fonts.number,
   },
   hint: {
     color: colors.textMuted,
-    fontSize: 15,
-    lineHeight: 22,
-    textAlign: 'center',
-    maxWidth: 300,
+    fontSize: 14,
+    lineHeight: 20,
+    maxWidth: 320,
   },
 
-  // Fields
-  input: {
-    width: '100%',
+  chipGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  chip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 10,
+    paddingRight: 14,
+    paddingVertical: 11,
+    borderRadius: 999,
     borderWidth: 1,
     borderColor: colors.cardBorder,
-    borderRadius: 16,
-    paddingHorizontal: 18,
-    paddingVertical: 16,
-    color: colors.text,
-    fontSize: 16,
     backgroundColor: colors.card,
   },
-  inputMultiline: { minHeight: 110, textAlignVertical: 'top' },
-  fieldStack: { width: '100%', gap: 12 },
-  rowFields: { width: '100%', flexDirection: 'row', gap: 10 },
-  rowInput: { flex: 1 },
+  chipActive: {
+    borderColor: colors.accentPinkBorder,
+    backgroundColor: colors.accentPinkMuted,
+  },
+  chipIconSlot: {
+    width: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 2,
+  },
+  chipText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '600',
+    lineHeight: 18,
+  },
+  chipTextActive: {
+    color: colors.accentPink,
+  },
 
-  // Done step
-  doneBlock: { alignItems: 'center', gap: 16 },
-  doneIconWrap: { marginBottom: 4 },
+  dreamNoteWrap: { marginTop: 24 },
+
+  field: { gap: 6 },
+  fieldFlex: { flex: 1 },
+  label: {
+    color: colors.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  input: {
+    width: '100%',
+    paddingVertical: 10,
+    paddingHorizontal: 0,
+    color: colors.text,
+    fontSize: 17,
+    fontWeight: '500',
+    backgroundColor: 'transparent',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(255,255,255,0.18)',
+  },
+  fieldStack: { width: '100%', gap: 20 },
+  rowFields: { width: '100%', flexDirection: 'row', gap: 16 },
+
+  doneBlock: {
+    alignItems: 'center',
+    gap: 14,
+    position: 'relative',
+    paddingTop: 8,
+    paddingBottom: 8,
+  },
+  doneGlow: {
+    position: 'absolute',
+    top: 40,
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: colors.accentPink,
+    opacity: 0.12,
+    zIndex: 0,
+  },
+  doneBrandWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    zIndex: 1,
+  },
+  doneBrandIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: colors.accentPinkBorder,
+  },
+  doneBrandName: {
+    color: colors.text,
+    fontSize: 26,
+    fontWeight: '800',
+    letterSpacing: -0.9,
+    fontFamily: fonts.number,
+  },
   doneTitle: {
     color: colors.text,
-    fontSize: 30,
-    fontWeight: '700',
+    fontSize: 34,
+    fontWeight: '800',
     textAlign: 'center',
+    letterSpacing: -1,
+    fontFamily: fonts.number,
+    zIndex: 1,
+  },
+  doneTitleAccent: {
+    color: colors.accentPink,
   },
   doneSubtitle: {
     color: colors.textMuted,
@@ -536,49 +877,81 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     textAlign: 'center',
     maxWidth: 300,
+    zIndex: 1,
   },
-  summaryCard: {
+  doneCard: {
     width: '100%',
     backgroundColor: colors.card,
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: colors.cardBorder,
-    padding: 18,
-    gap: 12,
+    borderColor: colors.accentPinkBorder,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    gap: 14,
     marginTop: 4,
+    zIndex: 1,
+    shadowColor: colors.accentPink,
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
   },
-  summaryRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  summaryText: { color: colors.text, fontSize: 14, fontWeight: '500', flex: 1 },
+  doneCardSection: {
+    gap: 4,
+  },
+  doneCardLabel: {
+    color: colors.accentPink,
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    marginBottom: 4,
+  },
+  doneCardValue: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: '600',
+    lineHeight: 21,
+  },
+  doneCardMuted: {
+    color: colors.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
+  },
 
-  // Footer
   footer: {
-    paddingHorizontal: 24,
-    paddingTop: 12,
-    paddingBottom: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.cardBorder,
-  },
-  footerRow: { flexDirection: 'row', gap: 10 },
-  skipBtn: {
     paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 12,
+    zIndex: 1,
+  },
+  footerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  skipBtn: {
+    paddingHorizontal: 8,
     paddingVertical: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  skipBtnText: { color: colors.textMuted, fontSize: 15, fontWeight: '600' },
+  skipBtnText: { color: colors.textMuted, fontSize: 14, fontWeight: '600' },
   primaryBtn: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 16,
-    borderRadius: 14,
+    paddingVertical: 15,
+    borderRadius: 999,
     backgroundColor: colors.accentPink,
+    shadowColor: colors.accentPink,
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
   },
   primaryBtnFlex: { flex: 1 },
   primaryBtnDisabled: { opacity: 0.45 },
-  primaryBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  primaryBtnText: {
+    color: '#0a0a0a',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: -0.2,
+  },
 });

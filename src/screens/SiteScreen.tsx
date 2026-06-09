@@ -24,6 +24,7 @@ import { formatStylePrice } from '../data/siteStyles';
 import { DEFAULT_STYLE_DURATION_MINUTES, formatStyleDuration } from '../data/siteStyles';
 import { SitePreviewTheme } from '../lib/sitePreviewHtml';
 import { getSiteRootDomain, normalizeSubdomain } from '../data/sitePublish';
+import { useAppAccess } from '../context/AppAccessContext';
 import { useOnboarding } from '../context/OnboardingContext';
 import { useSiteData } from '../context/SiteDataContext';
 import { fetchAnalyticsSummary, friendlyPath, type AnalyticsSummary } from '../lib/siteAnalytics';
@@ -152,6 +153,7 @@ type AnalyticsPeriod = '7d' | '30d';
 
 export default function SiteScreen({ navigation }: Props) {
   const { isLoading, hasLinkedSite, getMoneyStatsForLastDays } = useSiteData();
+  const { isBuildSiteOnly } = useAppAccess();
   const { needsSetup, isLoading: onboardingLoading, sitePublish } = useOnboarding();
   const [activeTab, setActiveTab] = useState<SiteTab>('site');
   const [analyticsPeriod, setAnalyticsPeriod] = useState<AnalyticsPeriod>('7d');
@@ -214,11 +216,13 @@ export default function SiteScreen({ navigation }: Props) {
               Site
             </Text>
           </Pressable>
-          <Pressable style={styles.switcherTab} onPress={() => switchTab('analytics')}>
-            <Text style={[styles.switcherText, activeTab === 'analytics' && styles.switcherTextActive]}>
-              Analytics
-            </Text>
-          </Pressable>
+          {!isBuildSiteOnly ? (
+            <Pressable style={styles.switcherTab} onPress={() => switchTab('analytics')}>
+              <Text style={[styles.switcherText, activeTab === 'analytics' && styles.switcherTextActive]}>
+                Analytics
+              </Text>
+            </Pressable>
+          ) : null}
         </View>
       </View>
 
@@ -226,7 +230,7 @@ export default function SiteScreen({ navigation }: Props) {
         needsSetup && !onboardingLoading ? (
           <Pressable
             style={styles.emptyStatePressable}
-            onPress={() => navigation.navigate('SiteSetup')}
+            onPress={() => navigation.navigate('SiteEditor')}
             accessibilityRole="button"
           >
             {/* Ghosted fake site layout behind the blur */}

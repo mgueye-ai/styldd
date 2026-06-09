@@ -4,6 +4,7 @@ import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -20,7 +21,12 @@ import {
   DEFAULT_REVIEWS_SETTINGS,
   SiteReview,
 } from '../../data/reviewsSettings';
-import { loadSiteReviews, loadReviewsSettings, saveReviewsSettings } from '../../lib/siteReviews';
+import {
+  deleteSiteReview,
+  loadSiteReviews,
+  loadReviewsSettings,
+  saveReviewsSettings,
+} from '../../lib/siteReviews';
 import { ProfileStackParamList } from '../../navigation/ProfileNavigator';
 import { colors } from '../../theme';
 
@@ -59,7 +65,15 @@ function StarRating({ rating }: { rating: number }) {
   );
 }
 
-function ReviewCard({ review }: { review: SiteReview }) {
+function ReviewCard({
+  review,
+  deleting,
+  onDelete,
+}: {
+  review: SiteReview;
+  deleting: boolean;
+  onDelete: () => void;
+}) {
   return (
     <View style={styles.reviewCard}>
       <View style={styles.reviewHead}>
@@ -70,7 +84,22 @@ function ReviewCard({ review }: { review: SiteReview }) {
           <Text style={styles.reviewName}>{review.clientName}</Text>
           <StarRating rating={review.rating} />
         </View>
-        <Text style={styles.reviewDate}>{formatReviewDate(review.createdAt)}</Text>
+        <View style={styles.reviewActions}>
+          <Text style={styles.reviewDate}>{formatReviewDate(review.createdAt)}</Text>
+          <Pressable
+            onPress={onDelete}
+            disabled={deleting}
+            style={styles.deleteBtn}
+            hitSlop={8}
+            accessibilityLabel="Delete review"
+          >
+            {deleting ? (
+              <ActivityIndicator size="small" color={colors.textMuted} />
+            ) : (
+              <Ionicons name="trash-outline" size={18} color="#f87171" />
+            )}
+          </Pressable>
+        </View>
       </View>
       <Text style={styles.reviewMessage}>{review.message}</Text>
     </View>
@@ -84,6 +113,7 @@ export default function ReviewsSettingsScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const averageRating = useMemo(() => averageReviewRating(reviews), [reviews]);
 
@@ -109,6 +139,37 @@ export default function ReviewsSettingsScreen({ navigation }: Props) {
       void load();
     }, [load]),
   );
+
+  const handleDeleteReview = (review: SiteReview) => {
+    if (!user?.id) return;
+    Alert.alert(
+      'Delete review',
+      `Remove ${review.clientName}'s review from your site? This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              setDeletingId(review.id);
+              try {
+                await deleteSiteReview(user.id, review.id);
+                setReviews((current) => current.filter((item) => item.id !== review.id));
+              } catch (err) {
+                Alert.alert(
+                  'Delete failed',
+                  err instanceof Error ? err.message : 'Could not delete this review.',
+                );
+              } finally {
+                setDeletingId(null);
+              }
+            })();
+          },
+        },
+      ],
+    );
+  };
 
   const handleToggle = async (next: boolean) => {
     if (!user?.id) return;
@@ -204,7 +265,14 @@ export default function ReviewsSettingsScreen({ navigation }: Props) {
                 </Text>
               </View>
             ) : (
-              reviews.map((review) => <ReviewCard key={review.id} review={review} />)
+              reviews.map((review) => (
+                <ReviewCard
+                  key={review.id}
+                  review={review}
+                  deleting={deletingId === review.id}
+                  onDelete={() => handleDeleteReview(review)}
+                />
+              ))
             )}
           </ScrollView>
         )}
@@ -282,7 +350,14 @@ const styles = StyleSheet.create({
   reviewAvatarText: { color: colors.accentPink, fontSize: 14, fontWeight: '800' },
   reviewMeta: { flex: 1, gap: 4 },
   reviewName: { color: colors.text, fontSize: 15, fontWeight: '700' },
+  reviewActions: { alignItems: 'flex-end', gap: 8 },
   reviewDate: { color: colors.textMuted, fontSize: 12, fontWeight: '500' },
+  deleteBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   reviewMessage: { color: colors.text, fontSize: 14, lineHeight: 21 },
   starsRow: { flexDirection: 'row', gap: 2 },
   emptyCard: {

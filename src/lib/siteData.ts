@@ -27,6 +27,10 @@ type FlatBookingRecord = Record<string, unknown> & {
 
 export type SiteBookingRecord = {
   id: string;
+  /** Client booking UUID used for storage paths (may differ from styld_site_records.id) */
+  storageBookingId: string;
+  photoHairPath: string;
+  photoRefPath: string;
   fullName: string;
   email: string;
   phone: string;
@@ -177,8 +181,13 @@ function parseUnifiedBooking(record: UnifiedSiteRecord): SiteBookingRecord | nul
     parseDate(data.appointment_starts_at) ??
     parseDate(data.appointment_date ? `${data.appointment_date}T12:00:00` : null);
 
+  const storageBookingId = asString(data.id) || record.id;
+
   return {
     id: record.id,
+    storageBookingId,
+    photoHairPath: asString(data.photo_hair_path),
+    photoRefPath: asString(data.photo_ref_path),
     fullName: asString(data.full_name, 'Unknown client'),
     email: asString(data.email),
     phone: asString(data.phone),
@@ -247,8 +256,13 @@ function parseFlatBooking(record: FlatBookingRecord): SiteBookingRecord | null {
     parseDate(record.appointment_starts_at) ??
     parseDate(record.appointment_date ? `${record.appointment_date}T12:00:00` : null);
 
+  const storageBookingId = asString(record.id);
+
   return {
     id: String(record.id),
+    storageBookingId,
+    photoHairPath: asString(record.photo_hair_path),
+    photoRefPath: asString(record.photo_ref_path),
     fullName: asString(record.full_name, 'Unknown client'),
     email: asString(record.email),
     phone: asString(record.phone),

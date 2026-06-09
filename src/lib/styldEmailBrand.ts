@@ -39,6 +39,12 @@ export type StyldEmailBranding = {
   textColor: string;
   mutedColor: string;
   softTextColor: string;
+  headerTextColor: string;
+  headerMutedColor: string;
+  footerTextColor: string;
+  footerMutedColor: string;
+  ctaGradient: string;
+  ctaTextColor: string;
   borderColor: string;
   rowBorderColor: string;
   logoUrl: string | null;
@@ -104,6 +110,34 @@ function inkRgba(hex: string, alpha: number): string {
   return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${alpha})`;
 }
 
+function surfaceLuminance(hex: string): number {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return 1;
+  return (0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b) / 255;
+}
+
+function darkenHex(hex: string, factor: number): string {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return hex;
+  return rgbToHex(rgb.r * factor, rgb.g * factor, rgb.b * factor);
+}
+
+function contrastingTextColor(surfaceHex: string, preferredInk: string): string {
+  const surfaceDark = surfaceLuminance(surfaceHex) < 0.45;
+  const inkLight = surfaceLuminance(preferredInk) > 0.62;
+  if (surfaceDark) return inkLight ? preferredInk : '#f5f5f4';
+  return inkLight ? '#0a0a0a' : preferredInk;
+}
+
+function textPaletteForSurface(surfaceHex: string, preferredInk: string) {
+  const text = contrastingTextColor(surfaceHex, preferredInk);
+  return {
+    text,
+    muted: inkRgba(text, 0.62),
+    soft: inkRgba(text, 0.78),
+  };
+}
+
 function isValidHex(value: unknown): value is string {
   return typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value.trim());
 }
@@ -123,16 +157,29 @@ export function resolveStyldEmailBranding(input: StyldEmailBrandingInput): Styld
   const theme = normalizeSiteTheme(input.theme);
   const primaryColor = theme.primaryColor || DEFAULT_SITE_THEME.primaryColor;
   const secondaryColor = theme.secondaryColor || DEFAULT_SITE_THEME.secondaryColor;
-  const ink = secondaryColor;
-  const pageBg =
+
+  let pageBg =
     theme.backgroundColor && isValidHex(theme.backgroundColor)
       ? theme.backgroundColor.trim()
       : DEFAULT_CREAM;
+  if (!theme.backgroundColor && surfaceLuminance(secondaryColor) > 0.62) {
+    pageBg = '#0a0a0a';
+  }
+
+  const darkSite = surfaceLuminance(pageBg) < 0.45;
+  const cardBg = darkSite ? mixHex(pageBg, '#ffffff', 0.1) : '#ffffff';
+  const innerCardBg = darkSite ? mixHex(pageBg, '#ffffff', 0.14) : mixHex(pageBg, '#000000', 0.04);
   const headerBg =
     theme.navbarColor && isValidHex(theme.navbarColor)
       ? theme.navbarColor.trim()
       : primaryColor;
   const fonts = fontStacks(theme.fontFamily);
+
+  const body = textPaletteForSurface(cardBg, secondaryColor);
+  const header = textPaletteForSurface(headerBg, secondaryColor);
+  const footer = textPaletteForSurface(innerCardBg, secondaryColor);
+  const ctaGradient = `linear-gradient(135deg,${primaryColor},${darkenHex(primaryColor, 0.72)})`;
+  const ctaTextColor = surfaceLuminance(primaryColor) > 0.55 ? '#0a0a0a' : '#ffffff';
 
   return {
     businessName: input.businessName.trim() || 'Your business',
@@ -141,18 +188,24 @@ export function resolveStyldEmailBranding(input: StyldEmailBrandingInput): Styld
     primaryColor,
     secondaryColor,
     pageBg,
-    cardBg: '#ffffff',
-    innerCardBg: mixHex(pageBg, '#000000', 0.04),
+    cardBg,
+    innerCardBg,
     headerBg,
-    textColor: ink,
-    mutedColor: inkRgba(ink, 0.62),
-    softTextColor: inkRgba(ink, 0.78),
-    borderColor: primaryRgba(primaryColor, 0.2),
-    rowBorderColor: inkRgba(ink, 0.12),
+    textColor: body.text,
+    mutedColor: body.muted,
+    softTextColor: body.soft,
+    headerTextColor: header.text,
+    headerMutedColor: header.muted,
+    footerTextColor: footer.text,
+    footerMutedColor: footer.muted,
+    ctaGradient,
+    ctaTextColor,
+    borderColor: darkSite ? 'rgba(255,255,255,0.12)' : primaryRgba(primaryColor, 0.2),
+    rowBorderColor: inkRgba(body.text, 0.12),
     logoUrl: input.logoUrl?.trim() || null,
     headingFont: fonts.heading,
     bodyFont: fonts.body,
-    isLight: true,
+    isLight: !darkSite,
   };
 }
 
@@ -172,13 +225,13 @@ export function buildEmailLogoBlock(branding: StyldEmailBranding): string {
 
 export function buildEmailHeaderBlock(branding: StyldEmailBranding): string {
   const cityLine = branding.businessCity
-    ? `<p style="margin:0;color:${branding.mutedColor};font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">${esc(branding.businessCity)}</p>`
+    ? `<p style="margin:0;color:${branding.headerMutedColor};font-size:12px;letter-spacing:0.08em;text-transform:uppercase;">${esc(branding.businessCity)}</p>`
     : '';
 
   return `<tr>
     <td style="padding:32px 28px 24px;text-align:center;background:${branding.headerBg};border-bottom:1px solid ${branding.borderColor};">
       ${buildEmailLogoBlock(branding)}
-      <h1 style="margin:0 0 6px;color:${branding.textColor};font-family:${branding.headingFont};font-size:22px;font-weight:700;letter-spacing:-0.3px;">${esc(branding.businessName)}</h1>
+      <h1 style="margin:0 0 6px;color:${branding.headerTextColor};font-family:${branding.headingFont};font-size:22px;font-weight:700;letter-spacing:-0.3px;">${esc(branding.businessName)}</h1>
       ${cityLine}
     </td>
   </tr>`;
@@ -188,7 +241,7 @@ export function buildEmailFooterBlock(branding: StyldEmailBranding): string {
   return `<tr>
     <td style="padding:16px 28px 22px;text-align:center;border-top:1px solid ${branding.borderColor};background:${branding.innerCardBg};">
       <a href="${STYLD_SITE_URL}" style="display:inline-block;text-decoration:none;">
-        <p style="margin:0 0 10px;color:${branding.mutedColor};font-size:11px;letter-spacing:0.06em;text-transform:uppercase;">Powered by</p>
+        <p style="margin:0 0 10px;color:${branding.footerMutedColor};font-size:11px;letter-spacing:0.06em;text-transform:uppercase;">Powered by</p>
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center">
           <tr>
             <td style="padding-right:8px;vertical-align:middle;">
@@ -196,7 +249,7 @@ export function buildEmailFooterBlock(branding: StyldEmailBranding): string {
             </td>
             <td style="vertical-align:middle;">
               <span style="font-family:${branding.bodyFont};font-size:16px;font-weight:900;letter-spacing:-0.5px;">
-                <span style="color:${branding.textColor};">Styl</span><span style="color:${branding.primaryColor};">d</span>
+                <span style="color:${branding.footerTextColor};">Styl</span><span style="color:${branding.primaryColor};">d</span>
               </span>
             </td>
           </tr>
@@ -221,23 +274,25 @@ export function buildConfirmationCancellationNote(
 }
 
 export function wrapStyldEmail(branding: StyldEmailBranding, innerBodyRows: string, title: string): string {
+  const colorScheme = branding.isLight ? 'light' : 'light dark';
+  const cardShadow = branding.isLight ? '0 16px 48px rgba(0,0,0,0.08)' : '0 16px 48px rgba(0,0,0,0.35)';
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<meta name="color-scheme" content="light only" />
-<meta name="supported-color-schemes" content="light" />
+<meta name="color-scheme" content="${colorScheme}" />
+<meta name="supported-color-schemes" content="${colorScheme}" />
 <title>${esc(title)}</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="${GOOGLE_FONTS_URL}" rel="stylesheet" />
-<style>:root{color-scheme:light only;}body,h1,h2,h3,p,td,span,a{color:inherit;}</style>
 </head>
-<body style="margin:0;padding:0;background:${branding.pageBg};color:${branding.textColor};font-family:${branding.bodyFont};">
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:${branding.pageBg};">
+<body style="margin:0;padding:0;background-color:${branding.pageBg};color:${branding.textColor};font-family:${branding.bodyFont};">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:${branding.pageBg};">
 <tr><td align="center" style="padding:32px 16px 40px;">
-  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="520" style="max-width:520px;width:100%;background:${branding.cardBg};color:${branding.textColor};border-radius:20px;overflow:hidden;border:1px solid ${branding.borderColor};box-shadow:0 16px 48px rgba(0,0,0,0.08);">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="520" style="max-width:520px;width:100%;background-color:${branding.cardBg};color:${branding.textColor};border-radius:20px;overflow:hidden;border:1px solid ${branding.borderColor};box-shadow:${cardShadow};">
     ${buildEmailHeaderBlock(branding)}
     ${innerBodyRows}
     ${buildEmailFooterBlock(branding)}

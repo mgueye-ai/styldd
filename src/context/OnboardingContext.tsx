@@ -24,6 +24,8 @@ type OnboardingContextValue = {
   isLoading: boolean;
   needsSetup: boolean;
   completeSetup: () => Promise<void>;
+  /** Immediately marks account onboarding done in local state (after DB save). */
+  markAccountOnboardingSaved: (survey?: OnboardingState['survey']) => void;
   publishSite: (subdomain: string) => Promise<PublishSiteResult>;
   saveDraftSubdomain: (subdomain: string) => Promise<void>;
   refresh: () => Promise<void>;
@@ -90,6 +92,17 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  const markAccountOnboardingSaved = useCallback((survey?: OnboardingState['survey']) => {
+    const completedAt = new Date().toISOString();
+    setState({
+      completed: true,
+      completedAt,
+      responsesSavedAt: completedAt,
+      survey,
+    });
+    setHasStoredState(true);
+  }, []);
 
   const completeSetup = useCallback(async () => {
     if (!user?.id) return;
@@ -161,11 +174,22 @@ export function OnboardingProvider({ children }: { children: React.ReactNode }) 
       isLoading,
       needsSetup: needsSetupValue,
       completeSetup,
+      markAccountOnboardingSaved,
       publishSite,
       saveDraftSubdomain,
       refresh,
     }),
-    [state, sitePublish, isLoading, needsSetupValue, completeSetup, publishSite, saveDraftSubdomain, refresh],
+    [
+      state,
+      sitePublish,
+      isLoading,
+      needsSetupValue,
+      completeSetup,
+      markAccountOnboardingSaved,
+      publishSite,
+      saveDraftSubdomain,
+      refresh,
+    ],
   );
 
   return <OnboardingContext.Provider value={value}>{children}</OnboardingContext.Provider>;

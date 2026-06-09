@@ -6,7 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useFonts } from 'expo-font';
 import { AuthProvider, useAuth } from './src/context/AuthContext';
 import { PrivacyProvider } from './src/context/PrivacyContext';
-import { PurchasesAuthSync, PurchasesProvider } from './src/context/PurchasesContext';
+import { PurchasesProvider } from './src/context/PurchasesContext';
 import AuthenticatedApp from './src/navigation/AuthenticatedApp';
 import LoginScreen from './src/screens/LoginScreen';
 import { colors } from './src/theme';
@@ -59,17 +59,16 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <PurchasesProvider>
-        <AuthProvider>
-          <PurchasesAuthSync />
+      <AuthProvider>
+        <PurchasesProvider>
           <PrivacyProvider>
             <NavigationContainer ref={navigationRef} theme={theme}>
               <AppRoutes />
               <StatusBar style="light" />
             </NavigationContainer>
           </PrivacyProvider>
-        </AuthProvider>
-      </PurchasesProvider>
+        </PurchasesProvider>
+      </AuthProvider>
     </SafeAreaProvider>
   );
 }

@@ -1,10 +1,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   Alert,
-  Dimensions,
-  Image,
   Linking,
   Pressable,
   ScrollView,
@@ -14,6 +12,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import BookingPhotoGallery from '../components/BookingPhotoGallery';
 import ScreenGradient from '../components/ScreenGradient';
 import ServiceImage from '../components/ServiceImage';
 import { useSiteData } from '../context/SiteDataContext';
@@ -22,7 +21,6 @@ import { useSiteContent } from '../context/SiteContentContext';
 import { formatSiteAddress } from '../data/siteContent';
 import { cancelBooking, completeBooking } from '../lib/siteAdmin';
 import { requestReviewEmail } from '../lib/siteReviews';
-import { supabase } from '../lib/supabase';
 import { CalendarStackParamList } from '../navigation/CalendarNavigator';
 import { DashboardStackParamList } from '../navigation/DashboardNavigator';
 import { colors } from '../theme';
@@ -41,9 +39,6 @@ type Props = NativeStackScreenProps<
   DashboardStackParamList | CalendarStackParamList,
   'AppointmentDetail'
 >;
-
-const SCREEN_W = Dimensions.get('window').width;
-const PHOTO_SIZE = SCREEN_W / 2 - 28;
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -179,74 +174,6 @@ function PaymentBreakdown({
           </>
         )}
       </View>
-    </View>
-  );
-}
-
-function PhotoGallery({ bookingId }: { bookingId: string }) {
-  const [photos, setPhotos] = useState<{ uri: string; label: string }[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const { data: files } = await supabase.storage
-          .from('booking-photos')
-          .list(bookingId);
-
-        if (!files?.length || cancelled) { setLoading(false); return; }
-
-        const signed = await Promise.all(
-          files.map(async (f) => {
-            const path = `${bookingId}/${f.name}`;
-            const { data } = await supabase.storage
-              .from('booking-photos')
-              .createSignedUrl(path, 3600);
-            const label = f.name.startsWith('hair') ? 'Hair photo' : 'Reference';
-            return data?.signedUrl ? { uri: data.signedUrl, label } : null;
-          }),
-        );
-
-        if (!cancelled) {
-          setPhotos(signed.filter((x): x is { uri: string; label: string } => x !== null));
-          setLoading(false);
-        }
-      } catch {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    load();
-    return () => { cancelled = true; };
-  }, [bookingId]);
-
-  if (loading) {
-    return (
-      <View style={styles.photoLoading}>
-        <ActivityIndicator size="small" color={colors.textMuted} />
-      </View>
-    );
-  }
-
-  if (!photos.length) {
-    return (
-      <View style={styles.photoEmpty}>
-        <Ionicons name="image-outline" size={24} color={colors.textMuted} />
-        <Text style={styles.photoEmptyText}>No photos uploaded</Text>
-      </View>
-    );
-  }
-
-  return (
-    <View style={styles.photoGrid}>
-      {photos.map((p, i) => (
-        <View key={i} style={styles.photoItem}>
-          <Image source={{ uri: p.uri }} style={styles.photoImage} resizeMode="cover" />
-          <View style={styles.photoLabel}>
-            <Text style={styles.photoLabelText}>{p.label}</Text>
-          </View>
-        </View>
-      ))}
     </View>
   );
 }
@@ -484,7 +411,11 @@ export default function AppointmentDetailScreen({ navigation, route }: Props) {
 
           {/* ── Client photos ── */}
           <SectionCard title="Photos">
-            <PhotoGallery bookingId={appointmentId} />
+            <BookingPhotoGallery
+              photoHairPath={rawBooking?.photoHairPath}
+              photoRefPath={rawBooking?.photoRefPath}
+              storageBookingId={rawBooking?.storageBookingId}
+            />
           </SectionCard>
 
           {/* ── Notes ── */}
@@ -646,19 +577,6 @@ const styles = StyleSheet.create({
   },
   infoValue: { color: colors.text, fontSize: 14, fontWeight: '500' },
   infoValueLink: { color: colors.accentPink },
-
-  /* Photos */
-  photoLoading: { paddingVertical: 24, alignItems: 'center' },
-  photoEmpty: { paddingVertical: 20, alignItems: 'center', gap: 8 },
-  photoEmptyText: { color: colors.textMuted, fontSize: 13, fontWeight: '500' },
-  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  photoItem: { width: PHOTO_SIZE, borderRadius: 14, overflow: 'hidden', backgroundColor: colors.progressTrack },
-  photoImage: { width: PHOTO_SIZE, height: PHOTO_SIZE },
-  photoLabel: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    backgroundColor: 'rgba(0,0,0,0.5)', paddingVertical: 5, paddingHorizontal: 8,
-  },
-  photoLabelText: { color: '#fff', fontSize: 11, fontWeight: '600' },
 
   /* Notes */
   notesText: { color: colors.textMuted, fontSize: 14, lineHeight: 21 },

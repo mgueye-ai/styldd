@@ -5,6 +5,8 @@
   "outputDirectory": ".",
   "rewrites": [
     { "source": "/tenant", "destination": "/tenant/index.html" },
-    { "source": "/marketing", "destination": "/marketing/index.html" }
+    { "source": "/marketing", "destination": "/marketing/index.html" },
+    { "source": "/connect/return", "destination": "/connect/return.html" },
+    { "source": "/connect/refresh", "destination": "/connect/refresh.html" }
   ]
 }

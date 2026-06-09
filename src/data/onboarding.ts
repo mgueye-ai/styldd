@@ -1,14 +1,102 @@
 import { DEFAULT_SITE_CONTENT, SiteContent } from './siteContent';
 import { HeroLayout } from './siteTheme';
 
+export type OnboardingSurvey = {
+  whyStyld: string[];
+  heardFrom: string;
+  excitedAbout: string[];
+  dreamOutcome: string;
+  dreamNote: string;
+};
+
+export type AccountOnboardingBusiness = {
+  name: string;
+  phone: string;
+  email: string;
+  instagram: string;
+  addressLine1: string;
+  city: string;
+  state: string;
+  zip: string;
+};
+
+/** Full account onboarding payload stored in styld_site_records (onboarding_responses). */
+export type AccountOnboardingResponses = {
+  version: 1;
+  flow: 'account_onboarding';
+  completedAt: string;
+  userId: string;
+  accountEmail: string;
+  fullName: string;
+  survey: OnboardingSurvey;
+  business: AccountOnboardingBusiness;
+};
+
 export type OnboardingState = {
   completed: boolean;
   completedAt?: string;
+  survey?: OnboardingSurvey;
+  responsesSavedAt?: string;
 };
 
 export const DEFAULT_ONBOARDING_STATE: OnboardingState = {
   completed: false,
 };
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === 'string');
+}
+
+export function normalizeOnboardingSurvey(value: unknown): OnboardingSurvey {
+  if (!value || typeof value !== 'object') {
+    return { whyStyld: [], heardFrom: '', excitedAbout: [], dreamOutcome: '', dreamNote: '' };
+  }
+  const source = value as Record<string, unknown>;
+  return {
+    whyStyld: asStringArray(source.whyStyld),
+    heardFrom: typeof source.heardFrom === 'string' ? source.heardFrom : '',
+    excitedAbout: asStringArray(source.excitedAbout),
+    dreamOutcome: typeof source.dreamOutcome === 'string' ? source.dreamOutcome : '',
+    dreamNote: typeof source.dreamNote === 'string' ? source.dreamNote : '',
+  };
+}
+
+export function normalizeAccountOnboardingResponses(
+  value: unknown,
+): AccountOnboardingResponses | null {
+  if (!value || typeof value !== 'object') return null;
+  const source = value as Record<string, unknown>;
+  const business =
+    source.business && typeof source.business === 'object'
+      ? (source.business as Record<string, unknown>)
+      : null;
+  if (!business) return null;
+
+  const completedAt = typeof source.completedAt === 'string' ? source.completedAt : '';
+  const userId = typeof source.userId === 'string' ? source.userId : '';
+  if (!completedAt || !userId) return null;
+
+  return {
+    version: 1,
+    flow: 'account_onboarding',
+    completedAt,
+    userId,
+    accountEmail: typeof source.accountEmail === 'string' ? source.accountEmail : '',
+    fullName: typeof source.fullName === 'string' ? source.fullName : '',
+    survey: normalizeOnboardingSurvey(source.survey),
+    business: {
+      name: typeof business.name === 'string' ? business.name : '',
+      phone: typeof business.phone === 'string' ? business.phone : '',
+      email: typeof business.email === 'string' ? business.email : '',
+      instagram: typeof business.instagram === 'string' ? business.instagram : '',
+      addressLine1: typeof business.addressLine1 === 'string' ? business.addressLine1 : '',
+      city: typeof business.city === 'string' ? business.city : '',
+      state: typeof business.state === 'string' ? business.state : '',
+      zip: typeof business.zip === 'string' ? business.zip : '',
+    },
+  };
+}
 
 export function normalizeOnboardingState(value: unknown): OnboardingState {
   if (!value || typeof value !== 'object') return DEFAULT_ONBOARDING_STATE;
@@ -16,6 +104,9 @@ export function normalizeOnboardingState(value: unknown): OnboardingState {
   return {
     completed: source.completed === true,
     completedAt: typeof source.completedAt === 'string' ? source.completedAt : undefined,
+    survey: source.survey ? normalizeOnboardingSurvey(source.survey) : undefined,
+    responsesSavedAt:
+      typeof source.responsesSavedAt === 'string' ? source.responsesSavedAt : undefined,
   };
 }
 

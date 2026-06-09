@@ -296,16 +296,14 @@ function buildBookingConfirmationHtml(
 function buildReviewRequestHtml(ctx: EmailPreviewContext): string {
   const branding = buildPreviewBranding(ctx);
   const first = firstName(ctx.clientName);
-  const ctaGradient = `linear-gradient(135deg,${branding.primaryColor},${branding.secondaryColor})`;
-
-  const body = `<tr><td style="padding:28px;">
+  const body = `<tr><td style="padding:28px 28px 24px;color:${branding.textColor};">
 <h2 style="margin:0 0 12px;color:${branding.textColor};font-family:${branding.headingFont};font-size:24px;font-weight:700;">How did we do, ${esc(first)}?</h2>
 <p style="margin:0 0 16px;color:${branding.softTextColor};font-size:15px;line-height:1.6;">
   Thanks for visiting us for <strong style="color:${branding.textColor};">${esc(ctx.service)}</strong>.
   We'd love a quick review — it helps other clients find us and means a lot to our team.
 </p>
-<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="border-radius:999px;background:${ctaGradient};">
-<a href="${esc(ctx.reviewUrl)}" style="display:inline-block;padding:14px 28px;color:#fff;font-size:15px;font-weight:700;text-decoration:none;">Leave a review</a>
+<table role="presentation" cellpadding="0" cellspacing="0"><tr><td style="border-radius:999px;background:${branding.ctaGradient};">
+<a href="${esc(ctx.reviewUrl)}" style="display:inline-block;padding:14px 28px;color:${branding.ctaTextColor};font-size:15px;font-weight:700;text-decoration:none;">Leave a review</a>
 </td></tr></table>
 <p style="margin:18px 0 0;color:${branding.mutedColor};font-size:13px;">Or visit <a href="${esc(ctx.siteUrl)}" style="color:${branding.primaryColor};text-decoration:none;">${esc(ctx.siteUrl.replace(/^https?:\/\//, ''))}</a></p>
 </td></tr>`;
@@ -375,7 +373,6 @@ function buildClientOutreachHtml(
 ): string {
   const branding = buildPreviewBranding(ctx);
   const { headline, paragraphs, ctaLabel } = clientTemplateCopy(templateId, ctx);
-  const ctaGradient = `linear-gradient(135deg,${branding.primaryColor},${branding.secondaryColor})`;
   const bodyHtml = paragraphs
     .map(
       (p) =>
@@ -385,13 +382,13 @@ function buildClientOutreachHtml(
   const siteLabel = ctx.siteUrl.replace(/^https?:\/\//, '');
 
   const body = `<tr>
-      <td style="padding:28px 28px 8px;">
+      <td style="padding:28px 28px 8px;color:${branding.textColor};">
         <h2 style="margin:0 0 18px;color:${branding.textColor};font-family:${branding.headingFont};font-size:24px;font-weight:700;letter-spacing:-0.3px;">${esc(headline)}</h2>
         ${bodyHtml}
         <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 20px;">
           <tr>
-            <td style="border-radius:999px;background:${ctaGradient};">
-              <a href="${esc(ctx.siteUrl)}" style="display:inline-block;padding:14px 28px;color:#ffffff;font-size:15px;font-weight:700;text-decoration:none;letter-spacing:0.02em;">${esc(ctaLabel)}</a>
+            <td style="border-radius:999px;background:${branding.ctaGradient};">
+              <a href="${esc(ctx.siteUrl)}" style="display:inline-block;padding:14px 28px;color:${branding.ctaTextColor};font-size:15px;font-weight:700;text-decoration:none;letter-spacing:0.02em;">${esc(ctaLabel)}</a>
             </td>
           </tr>
         </table>

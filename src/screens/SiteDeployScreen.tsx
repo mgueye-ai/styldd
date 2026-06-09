@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { useOnboarding } from '../context/OnboardingContext';
+import { usePurchases } from '../context/PurchasesContext';
 import { useSiteContent } from '../context/SiteContentContext';
 import { useSiteTheme } from '../context/SiteThemeContext';
 import {
@@ -35,6 +36,7 @@ export default function SiteDeployScreen({ navigation }: Props) {
   const { content, saveContentNow } = useSiteContent();
   const { saveThemeNow } = useSiteTheme();
   const { user } = useAuth();
+  const { isConfigured, isSubscriptionReady, forceCheckSubscriptionStatus } = usePurchases();
   const { sitePublish, publishSite, isLoading: onboardingLoading } = useOnboarding();
   const [subdomain, setSubdomain] = useState(sitePublish.subdomain || '');
   const [status, setStatus] = useState<string | null>(null);
@@ -88,10 +90,18 @@ export default function SiteDeployScreen({ navigation }: Props) {
   }, [subdomain, sitePublish.subdomain, user?.id]);
 
   const handlePublish = async () => {
+    const slug = normalizeSubdomain(subdomain);
+    if (!isAlreadyLive && isConfigured && isSubscriptionReady) {
+      const entitled = await forceCheckSubscriptionStatus();
+      if (!entitled) {
+        navigation.navigate('MandatoryPaywall', { pendingSubdomain: slug });
+        return;
+      }
+    }
+
     setStep('publishing');
     setErrorMsg(null);
     try {
-      // Flush any pending debounced saves so the live site reflects the latest edits
       await Promise.all([saveContentNow(content), saveThemeNow()]);
       const result = await publishSite(subdomain);
       const url = result.config.publicUrl ?? previewUrl;

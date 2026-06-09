@@ -113,8 +113,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    supabase.auth.getSession().then(({ data }) => {
+    supabase.auth.getSession().then(async ({ data }) => {
       if (!mounted) return;
+
+      if (data.session) {
+        const { data: userData, error: userError } = await supabase.auth.getUser();
+        if (userError || !userData.user) {
+          await supabase.auth.signOut();
+          if (!mounted) return;
+          setSession(null);
+          setProfile(null);
+          setIsReady(true);
+          return;
+        }
+      }
+
       setSession(data.session);
       setIsReady(true);
     });
@@ -178,7 +191,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         token: credential.identityToken,
       });
 
-      if (error) return { error: error.message };
+      if (error) {
+        const msg = error.message ?? 'Apple sign-in failed.';
+        if (/unacceptable audience/i.test(msg)) {
+          return {
+            error:
+              'Apple Sign In is misconfigured in Supabase. In Authentication → Providers → Apple, add this app bundle ID to Client IDs: com.crmstyld.app (not your Apple Services ID). If you also test in Expo Go, add host.exp.Exponent too.',
+          };
+        }
+        return { error: msg };
+      }
 
       // Detect new user: created_at within last 10 seconds
       if (data.user) {

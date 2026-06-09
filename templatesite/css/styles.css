@@ -5729,7 +5729,20 @@ ul.price-menu__policy-list {
 .review-form {
   max-width: 520px;
   margin: 0 auto;
-  padding-bottom: 1rem;
+  padding: 1.35rem 1.5rem 1.5rem;
+  border-radius: 16px;
+  border: 1px solid var(--card-border, rgba(0, 0, 0, 0.08));
+  background: color-mix(in srgb, var(--card-surface, var(--cream, #faf8f4)) 92%, var(--ink, #0a0a0a) 8%);
+  box-shadow: 0 8px 28px color-mix(in srgb, var(--ink, #0a0a0a) 8%, transparent);
+}
+
+:root[data-surface-mode='dark'] .review-form {
+  background: color-mix(in srgb, var(--card-surface, #0a0a0a) 88%, #ffffff 12%);
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.35);
+}
+
+.review-page .field label {
+  color: var(--ink);
 }
 
 .review-form .field-label-block {

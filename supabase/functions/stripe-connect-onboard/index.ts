@@ -5,6 +5,9 @@ const cors = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const RETURN_URL = 'https://styldd.com/connect/return';
+const REFRESH_URL = 'https://styldd.com/connect/refresh';
+
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -19,6 +22,39 @@ async function stripePost(path: string, params: URLSearchParams, key: string) {
     body: params.toString(),
   });
   return { data: await res.json(), ok: res.ok };
+}
+
+async function stripeGet(path: string, key: string) {
+  const res = await fetch(`https://api.stripe.com/v1${path}`, {
+    headers: { Authorization: `Bearer ${key}` },
+  });
+  return { data: await res.json(), ok: res.ok };
+}
+
+async function createExpressLoginLink(accountId: string, stripeKey: string): Promise<string | null> {
+  const { data: login, ok } = await stripePost(
+    `/accounts/${accountId}/login_links`,
+    new URLSearchParams(),
+    stripeKey,
+  );
+  if (!ok) return null;
+  return (login.url as string) ?? null;
+}
+
+async function createAccountLink(
+  accountId: string,
+  type: 'account_onboarding' | 'account_update',
+  stripeKey: string,
+): Promise<string | null> {
+  const linkParams = new URLSearchParams({
+    account: accountId,
+    return_url: RETURN_URL,
+    refresh_url: REFRESH_URL,
+    type,
+  });
+  const { data: link, ok } = await stripePost('/account_links', linkParams, stripeKey);
+  if (!ok) return null;
+  return (link.url as string) ?? null;
 }
 
 Deno.serve(async (req) => {
@@ -39,27 +75,38 @@ Deno.serve(async (req) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return json({ error: 'Not authenticated' }, 401);
 
-  // Check existing account
   const { data: existing } = await supabase
     .from('styld_stripe_accounts')
-    .select('stripe_account_id, payouts_enabled, charges_enabled')
+    .select('stripe_account_id, payouts_enabled, charges_enabled, details_submitted')
     .eq('user_id', user.id)
     .maybeSingle();
 
-  // If payouts already enabled → return Express dashboard link
-  if (existing?.payouts_enabled && existing.stripe_account_id) {
-    const { data: login, ok } = await stripePost(
-      `/accounts/${existing.stripe_account_id}/login_links`,
-      new URLSearchParams(),
-      stripeKey,
-    );
-    if (!ok) return json({ error: login.error?.message || 'Could not get dashboard' }, 400);
-    return json({ alreadyOnboarded: true, dashboardUrl: login.url });
+  let accountId = existing?.stripe_account_id ?? null;
+  let payoutsEnabled = existing?.payouts_enabled === true;
+  let detailsSubmitted = existing?.details_submitted === true;
+
+  if (accountId) {
+    const { data: acct, ok } = await stripeGet(`/accounts/${accountId}`, stripeKey);
+    if (ok) {
+      payoutsEnabled = acct.payouts_enabled === true;
+      detailsSubmitted = acct.details_submitted === true;
+
+      await supabase.from('styld_stripe_accounts').update({
+        payouts_enabled: payoutsEnabled,
+        charges_enabled: acct.charges_enabled === true,
+        details_submitted: detailsSubmitted,
+        onboarding_complete: detailsSubmitted,
+        updated_at: new Date().toISOString(),
+      }).eq('user_id', user.id);
+    }
   }
 
-  let accountId = existing?.stripe_account_id;
+  if (accountId && payoutsEnabled) {
+    const dashboardUrl = await createExpressLoginLink(accountId, stripeKey);
+    if (!dashboardUrl) return json({ error: 'Could not open Stripe dashboard' }, 400);
+    return json({ alreadyOnboarded: true, dashboardUrl });
+  }
 
-  // Create Express account if none exists
   if (!accountId) {
     const params = new URLSearchParams({
       type: 'express',
@@ -76,15 +123,26 @@ Deno.serve(async (req) => {
     );
   }
 
-  // Create Account Link for onboarding
-  const linkParams = new URLSearchParams({
-    account: accountId!,
-    return_url: 'https://styldd.com/connect/return',
-    refresh_url: 'https://styldd.com/connect/refresh',
-    type: 'account_onboarding',
-  });
-  const { data: link, ok: linkOk } = await stripePost('/account_links', linkParams, stripeKey);
-  if (!linkOk) return json({ error: link.error?.message || 'Could not create onboarding link' }, 400);
+  const linkTypes: Array<'account_onboarding' | 'account_update'> = detailsSubmitted
+    ? ['account_update', 'account_onboarding']
+    : ['account_onboarding'];
 
-  return json({ onboardingUrl: link.url, accountId });
+  let onboardingUrl: string | null = null;
+  for (const type of linkTypes) {
+    onboardingUrl = await createAccountLink(accountId, type, stripeKey);
+    if (onboardingUrl) break;
+  }
+
+  const dashboardUrl = await createExpressLoginLink(accountId, stripeKey);
+  const openUrl = onboardingUrl ?? dashboardUrl;
+
+  if (!openUrl) {
+    return json({ error: 'Could not open Stripe Connect. Try again in a moment.' }, 400);
+  }
+
+  return json({
+    onboardingUrl: openUrl,
+    dashboardUrl: dashboardUrl ?? openUrl,
+    accountId,
+  });
 });

@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ScrollView, StyleSheet, Text, View, Pressable } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import BookingPhotoGallery from '../components/BookingPhotoGallery';
 import ScreenGradient from '../components/ScreenGradient';
 import ServiceImage from '../components/ServiceImage';
 import { useSiteData } from '../context/SiteDataContext';
@@ -171,6 +172,15 @@ export default function BookingDetailScreen({ navigation, route }: Props) {
               <Text style={styles.notesText}>{booking.notes}</Text>
             </View>
           ) : null}
+
+          <View style={styles.card}>
+            <Text style={styles.notesLabel}>Photos</Text>
+            <BookingPhotoGallery
+              photoHairPath={booking.photoHairPath}
+              photoRefPath={booking.photoRefPath}
+              storageBookingId={booking.storageBookingId}
+            />
+          </View>
 
           {/* Footer */}
           <Text style={styles.footer}>Placed {createdStr}</Text>

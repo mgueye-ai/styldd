@@ -218,9 +218,180 @@
     }
   }
 
+  /** Same theme tokens as tenant-site.js — colors, fonts, dark/light surfaces. */
+  function applySiteTheme(theme) {
+    theme = theme || {};
+    var primary = theme.primaryColor || '#db2777';
+    var secondary = theme.secondaryColor || '#0a0a0a';
+
+    function hexToRgb(hex) {
+      var clean = String(hex).replace('#', '');
+      if (clean.length !== 6) return null;
+      return [
+        parseInt(clean.slice(0, 2), 16),
+        parseInt(clean.slice(2, 4), 16),
+        parseInt(clean.slice(4, 6), 16),
+      ];
+    }
+    function darken(hex, factor) {
+      var rgb = hexToRgb(hex);
+      if (!rgb) return hex;
+      return (
+        '#' +
+        rgb
+          .map(function (c) {
+            return Math.max(0, Math.round(c * factor)).toString(16).padStart(2, '0');
+          })
+          .join('')
+      );
+    }
+    function lighten(hex, factor) {
+      var rgb = hexToRgb(hex);
+      if (!rgb) return hex;
+      return (
+        '#' +
+        rgb
+          .map(function (c) {
+            return Math.min(255, Math.round(c + (255 - c) * factor)).toString(16).padStart(2, '0');
+          })
+          .join('')
+      );
+    }
+    function surfaceLuminance(hex) {
+      var rgb = hexToRgb(hex);
+      if (!rgb) return 1;
+      return (0.299 * rgb[0] + 0.587 * rgb[1] + 0.114 * rgb[2]) / 255;
+    }
+
+    var root = document.documentElement;
+    root.style.setProperty('--pink', primary);
+    root.style.setProperty('--pink-dark', darken(primary, 0.68));
+    root.style.setProperty('--pink-heading', lighten(primary, 0.1));
+    root.style.setProperty('--hero-pink', lighten(primary, 0.22));
+    root.style.setProperty('--hero-pink-deep', darken(primary, 0.68));
+    root.style.setProperty('--pink-light', lighten(primary, 0.22));
+    root.style.setProperty('--ink', secondary);
+    root.style.setProperty('--nav-text', secondary);
+
+    var secRgb = hexToRgb(secondary);
+    if (secRgb) {
+      root.style.setProperty(
+        '--muted',
+        'rgba(' + secRgb[0] + ',' + secRgb[1] + ',' + secRgb[2] + ',0.62)',
+      );
+      root.style.setProperty(
+        '--muted-soft',
+        'rgba(' + secRgb[0] + ',' + secRgb[1] + ',' + secRgb[2] + ',0.46)',
+      );
+    }
+
+    var bg = (theme.backgroundColor || '').trim();
+    if (!bg || !/^#[0-9a-fA-F]{6}$/.test(bg)) {
+      if (secRgb && surfaceLuminance(secondary) > 0.62) {
+        bg = '#0a0a0a';
+      }
+    }
+    if (bg && /^#[0-9a-fA-F]{6}$/.test(bg)) {
+      root.style.setProperty('--cream', bg);
+      root.style.setProperty('--white', bg);
+      root.style.setProperty('--card-surface', bg);
+      document.body.style.backgroundColor = bg;
+      var darkSurface = surfaceLuminance(bg) < 0.45;
+      root.style.setProperty(
+        '--card-border',
+        darkSurface ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)',
+      );
+      root.style.setProperty(
+        '--card-border-hover',
+        darkSurface ? 'rgba(255, 255, 255, 0.2)' : 'rgba(219, 39, 119, 0.22)',
+      );
+      root.dataset.surfaceMode = darkSurface ? 'dark' : 'light';
+    }
+
+    var primRgb = hexToRgb(primary);
+    if (primRgb) {
+      var lum = (0.299 * primRgb[0] + 0.587 * primRgb[1] + 0.114 * primRgb[2]) / 255;
+      root.style.setProperty('--filter-active-text', lum > 0.5 ? '#000000' : '#ffffff');
+    }
+
+    var navBg = (theme.navbarColor || '').trim();
+    if (navBg && /^#[0-9a-fA-F]{6}$/.test(navBg)) {
+      root.style.setProperty('--nav-bg', navBg);
+      root.style.setProperty('--nav-bg-solid', navBg);
+    }
+
+    var cardOutline = (theme.cardOutlineColor || '').trim();
+    if (cardOutline && /^#[0-9a-fA-F]{6}$/.test(cardOutline)) {
+      root.style.setProperty('--card-outline', cardOutline);
+    }
+
+    var fontDisplayMap = {
+      cormorant: '"Cormorant Garamond", Georgia, serif',
+      playfair: '"Playfair Display", Georgia, serif',
+      lora: '"Lora", Georgia, serif',
+      inter: 'Inter, system-ui, sans-serif',
+      'dm-sans': '"DM Sans", system-ui, sans-serif',
+      poppins: 'Poppins, system-ui, sans-serif',
+      nunito: '"Nunito", system-ui, sans-serif',
+      montserrat: 'Montserrat, system-ui, sans-serif',
+    };
+    var fontBodyMap = {
+      cormorant: '"Source Sans 3", system-ui, sans-serif',
+      playfair: '"Source Sans 3", system-ui, sans-serif',
+      lora: '"Source Sans 3", system-ui, sans-serif',
+      inter: 'Inter, system-ui, sans-serif',
+      'dm-sans': '"DM Sans", system-ui, sans-serif',
+      poppins: 'Poppins, system-ui, sans-serif',
+      nunito: '"Nunito", system-ui, sans-serif',
+      montserrat: 'Montserrat, system-ui, sans-serif',
+    };
+    var fontId = theme.fontFamily || 'cormorant';
+    root.style.setProperty('--font-display', fontDisplayMap[fontId] || fontDisplayMap.cormorant);
+    root.style.setProperty('--font-body', fontBodyMap[fontId] || fontBodyMap.cormorant);
+  }
+
+  function applyPageBranding(site, options) {
+    options = options || {};
+    var content = (site && site.content) || {};
+    var theme = (site && site.theme) || {};
+    var cfg = window.__STYLD_TENANT__ || {};
+    var brandName = content.brandName ? String(content.brandName).trim() : '';
+
+    var brandEl = options.brandNameEl || document.getElementById('profile-brand-name');
+    if (brandEl && brandName) brandEl.textContent = brandName;
+
+    if (options.documentTitleSuffix && brandName) {
+      document.title = brandName + ' | ' + options.documentTitleSuffix;
+    }
+
+    var logoEl = options.logoEl || document.getElementById('profile-logo-placeholder');
+    if (logoEl && theme.logoImagePath && cfg.supabaseUrl) {
+      var logoUrl =
+        cfg.supabaseUrl.replace(/\/$/, '') +
+        '/storage/v1/object/public/style-covers/' +
+        String(theme.logoImagePath).replace(/^\/+/, '');
+      logoEl.style.backgroundImage = 'url("' + logoUrl + '")';
+      logoEl.style.backgroundSize = 'cover';
+      logoEl.style.backgroundPosition = 'center';
+    }
+
+    var bookBtn = document.querySelector('.profile-book-btn');
+    if (bookBtn) bookBtn.hidden = theme.hideBookNowButton === true;
+
+    applySiteFooter(content);
+
+    var statusOverlay = document.getElementById('tenant-status');
+    if (statusOverlay) {
+      statusOverlay.style.background = 'var(--cream, #faf8f4)';
+      statusOverlay.style.color = 'var(--muted, #525252)';
+    }
+  }
+
   window.StyldTenant = {
     getSubdomain: getSubdomain,
     applySiteFooter: applySiteFooter,
+    applySiteTheme: applySiteTheme,
+    applyPageBranding: applyPageBranding,
     normalizeBookingHours: normalizeBookingHours,
 
     loadPublishedSite: function () {
@@ -253,7 +424,9 @@
         .then(function (rows) {
           var row = rows && rows[0];
           if (!row || !row.published_at) {
-            throw new Error('This site has not been published yet.');
+            throw new Error(
+              'This site is temporarily offline. The owner needs an active Styld subscription to keep their booking site live.',
+            );
           }
           return rest(
             'styld_site_records?user_id=eq.' +

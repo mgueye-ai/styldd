@@ -40,3 +40,6 @@ verify_jwt = false
 
 [functions.styld-push-notify]
 verify_jwt = false
+
+[functions.revenuecat-webhook]
+verify_jwt = false
